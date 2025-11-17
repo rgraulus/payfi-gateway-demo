@@ -1,46 +1,41 @@
-// src/crpClient.ts
-//
-// Thin HTTP client for talking to the CRP service from the
-// PayFi/x402 gateway.
-//
-// It wraps the three main endpoints:
-//
-//   GET  /v1/crp/payments/search
-//   POST /v1/crp/payments/match
-//   POST /v1/crp/payments/fulfill
-//
-// and exposes them as TypeScript functions.
-//
-// By default, CRP_BASE_URL is http://localhost:8080/v1/crp
-// but you can override it with the CRP_BASE_URL env var.
+/**
+ * Thin typed CRP HTTP client for the demo gateway.
+ *
+ * Exposes:
+ *   - searchPayments
+ *   - matchPayment
+ *   - fulfillPayment
+ */
 
-declare const fetch: any; // use Node 18+ global fetch without extra deps
+export interface CrpClientConfig {
+  baseUrl: string; // e.g. http://localhost:8080
+}
 
-// ---- Types ----
+export interface CrpAsset {
+  type: string;        // "PLT", etc.
+  tokenId: string;     // e.g. "usd:test"
+  decimals: number;    // e.g. 2
+}
 
-export type CrpAsset = {
-  type: string;
-  tokenId: string;
-  decimals: number;
-};
-
-export type CrpReceiptPayload = {
+export interface CrpReceiptPayload {
   asset: CrpAsset;
   nonce: string;
-  amount: string;
-  paidTo: string;
-  network: string;
-  finalizedAt: string;
-};
+  amount: string;      // decimal string
+  paidTo: string;      // ccd1...
+  network: string;     // "concordium:testnet"
+  finalizedAt: string; // ISO timestamp
+}
 
-export type CrpReceipt = {
+export interface CrpReceipt {
   jws: string;
   payload: CrpReceiptPayload;
-};
+}
 
-export type CrpPaymentStatus = "pending" | "fulfilled" | "expired" | string;
-
-export interface CrpPaymentRow {
+/**
+ * Shape returned by /v1/crp/payments/search.matches[]
+ * This reflects the DB row (snake_case).
+ */
+export interface CrpPaymentRecord {
   merchant_id: string;
   nonce: string;
   network: string;
@@ -50,28 +45,20 @@ export interface CrpPaymentRow {
   expiry: string;
   policy: Record<string, unknown>;
   metadata: Record<string, unknown>;
-  status: CrpPaymentStatus;
-  receipt: CrpReceipt | null;
+  status: string;
+  receipt?: CrpReceipt;
   created_at: string;
   updated_at: string;
 }
 
-export interface CrpSearchFilters {
-  merchantId?: string;
-  network?: string;
-  tokenId?: string;
-  payTo?: string;
-  status?: string;
-  limit?: number;
-}
-
-export interface CrpSearchResponse {
-  ok: boolean;
-  filters: Partial<CrpSearchFilters>;
-  matches: CrpPaymentRow[];
-}
-
-export interface GatewayPaymentTuple {
+/**
+ * Exact-tuple request shape expected by:
+ *   - POST /v1/crp/payments/match
+ *   - POST /v1/crp/payments/fulfill
+ *
+ * Note the camelCase keys: merchantId, payTo, ...
+ */
+export interface MatchPaymentRequest {
   merchantId: string;
   nonce: string;
   network: string;
@@ -80,95 +67,125 @@ export interface GatewayPaymentTuple {
   payTo: string;
 }
 
-export interface CrpMatchResponse {
+export interface SearchPaymentsParams {
+  merchantId?: string;
+  network?: string;
+  tokenId?: string;
+  payTo?: string;
+  status?: string;
+  limit?: number;
+}
+
+export interface SearchPaymentsResponse {
   ok: boolean;
-  reason: string;
+  filters: SearchPaymentsParams;
+  matches: CrpPaymentRecord[];
+}
+
+export interface MatchPaymentResponse {
+  ok: boolean;
+  reason: string;   // "exact_match", "no_match", etc.
   count: number;
-  match?: CrpPaymentRow;
+  match?: CrpPaymentRecord;
 }
 
-export interface CrpWebhookResult {
-  configured: boolean;
-  attempted: boolean;
-  ok: boolean;
-  status?: number;
-  error?: string;
+export interface FulfillPaymentResponse extends MatchPaymentResponse {
+  webhook?: {
+    configured: boolean;
+    attempted: boolean;
+    ok: boolean;
+    status?: number;
+  };
 }
 
-export interface CrpFulfillResponse extends CrpMatchResponse {
-  webhook: CrpWebhookResult;
-}
+export class CrpClient {
+  private readonly baseUrl: string;
 
-// ---- HTTP helpers ----
+  constructor(config: CrpClientConfig) {
+    this.baseUrl = config.baseUrl.replace(/\/+$/, "");
+  }
 
-export const CRP_BASE_URL =
-  process.env.CRP_BASE_URL ?? "http://localhost:8080/v1/crp";
+  /**
+   * GET /v1/crp/payments/search
+   */
+  async searchPayments(
+    params: SearchPaymentsParams
+  ): Promise<SearchPaymentsResponse> {
+    const url = new URL("/v1/crp/payments/search", this.baseUrl);
 
-function buildUrl(path: string, query?: Record<string, unknown>): string {
-  const base = CRP_BASE_URL.endsWith("/") ? CRP_BASE_URL : CRP_BASE_URL + "/";
-  const url = new URL(path.replace(/^\//, ""), base);
-
-  if (query) {
-    for (const [key, value] of Object.entries(query)) {
-      if (value === undefined || value === null) continue;
-      url.searchParams.set(key, String(value));
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null) {
+        url.searchParams.set(key, String(value));
+      }
     }
+
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(
+        `searchPayments failed: ${res.status} ${res.statusText}`
+      );
+    }
+
+    const body = (await res.json()) as SearchPaymentsResponse;
+    return body;
   }
 
-  return url.toString();
-}
+  /**
+   * POST /v1/crp/payments/match
+   *
+   * Expects an exact-tuple request (camelCase fields).
+   */
+  async matchPayment(
+    tuple: MatchPaymentRequest
+  ): Promise<MatchPaymentResponse> {
+    const res = await fetch(`${this.baseUrl}/v1/crp/payments/match`, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(tuple),
+    });
 
-async function httpGet<T>(path: string, query?: Record<string, unknown>): Promise<T> {
-  const url = buildUrl(path, query);
-  const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`matchPayment failed: ${res.status} ${res.statusText}`);
+    }
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`GET ${url} -> ${res.status} ${res.statusText}: ${text}`);
+    const body = (await res.json()) as MatchPaymentResponse;
+    return body;
   }
 
-  return (await res.json()) as T;
-}
+  /**
+   * POST /v1/crp/payments/fulfill
+   *
+   * Uses the same exact-tuple request as matchPayment, but
+   * additionally attempts to fire any configured webhook.
+   */
+  async fulfillPayment(
+    tuple: MatchPaymentRequest
+  ): Promise<FulfillPaymentResponse> {
+    const res = await fetch(`${this.baseUrl}/v1/crp/payments/fulfill`, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(tuple),
+    });
 
-async function httpPost<T>(path: string, body: unknown): Promise<T> {
-  const url = buildUrl(path);
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body ?? {}),
-  });
+    if (!res.ok) {
+      throw new Error(
+        `fulfillPayment failed: ${res.status} ${res.statusText}`
+      );
+    }
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`POST ${url} -> ${res.status} ${res.statusText}: ${text}`);
+    const body = (await res.json()) as FulfillPaymentResponse;
+    return body;
   }
-
-  return (await res.json()) as T;
-}
-
-// ---- Public API ----
-
-export async function searchPayments(
-  filters: CrpSearchFilters
-): Promise<CrpSearchResponse> {
-  return httpGet<CrpSearchResponse>("/payments/search", {
-    merchantId: filters.merchantId,
-    network: filters.network,
-    tokenId: filters.tokenId,
-    payTo: filters.payTo,
-    status: filters.status,
-    limit: filters.limit,
-  });
-}
-
-export async function matchPayment(
-  tuple: GatewayPaymentTuple
-): Promise<CrpMatchResponse> {
-  return httpPost<CrpMatchResponse>("/payments/match", tuple);
-}
-
-export async function fulfillPayment(
-  tuple: GatewayPaymentTuple
-): Promise<CrpFulfillResponse> {
-  return httpPost<CrpFulfillResponse>("/payments/fulfill", tuple);
 }
