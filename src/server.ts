@@ -1,159 +1,212 @@
-import http, { IncomingMessage, ServerResponse } from "http";
-import { CrpClient } from "./crpClient";
+import express from 'express';
+import { CrpClient, MatchPaymentRequest } from './crpClient';
 
-const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
+// --------------------------------------------------
+// Local types (match what CrpClient.searchPayments expects)
+// --------------------------------------------------
 
-// Environment-driven defaults for filters
-const crpBaseUrl = process.env.CRP_BASE_URL ?? "http://localhost:8080";
-const merchantId = process.env.CRP_MERCHANT_ID ?? "demo-merchant";
-const network = process.env.CRP_NETWORK ?? "concordium:testnet";
-const tokenId = process.env.CRP_TOKEN_ID ?? "usd:test";
-const payTo = process.env.CRP_PAY_TO ?? "ccd1qexampleaddress";
-const status = process.env.CRP_STATUS ?? "fulfilled";
+type CrpSearchFilters = {
+  merchantId: string;
+  network: string;
+  tokenId?: string;
+  payTo?: string;
+  status?: string;
+  limit?: number;
+};
 
-// CrpClient config: currently only expects baseUrl
+// --------------------------------------------------
+// Configuration
+// --------------------------------------------------
+
+const CRP_BASE_URL =
+  process.env.CRP_BASE_URL || 'http://localhost:8080';
+
+const MERCHANT_ID =
+  process.env.CRP_MERCHANT_ID || 'demo-merchant';
+
+const NETWORK =
+  process.env.CRP_NETWORK || 'concordium:testnet';
+
+const TOKEN_ID =
+  process.env.CRP_TOKEN_ID || 'usd:test';
+
+const PAY_TO =
+  process.env.CRP_PAY_TO || 'ccd1qexampleaddress';
+
+const STATUS_OVERRIDE =
+  process.env.CRP_STATUS_OVERRIDE || 'fulfilled';
+
+const PORT = Number(process.env.PORT || 3000);
+
+// --------------------------------------------------
+// CRP client
+// --------------------------------------------------
+
 const crpClient = new CrpClient({
-  baseUrl: crpBaseUrl,
+  baseUrl: CRP_BASE_URL,
 });
 
-function sendJson(
-  res: ServerResponse,
-  statusCode: 200 | 400 | 404 | 500,
-  payload: unknown
-) {
-  const body = JSON.stringify(payload, null, 2);
-  res.writeHead(statusCode, {
-    "Content-Type": "application/json; charset=utf-8",
+// --------------------------------------------------
+// Express app
+// --------------------------------------------------
+
+const app = express();
+app.use(express.json());
+
+// --------------------------------------------------
+// /healthz
+// --------------------------------------------------
+
+app.get('/healthz', (_req, res) => {
+  res.json({
+    ok: true,
+    status: 'up',
+    crpBaseUrl: CRP_BASE_URL,
+    merchantId: MERCHANT_ID,
+    network: NETWORK,
+    tokenId: TOKEN_ID,
+    payTo: PAY_TO,
+    statusOverride: STATUS_OVERRIDE,
   });
-  res.end(body);
-}
+});
 
-function readJsonBody(req: IncomingMessage): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
+// --------------------------------------------------
+// POST /demo/crp/check
+// - Calls CRP search → match → fulfill
+// - Returns all three blocks
+// --------------------------------------------------
 
-    req.on("data", (chunk) => {
-      chunks.push(chunk as Buffer);
-    });
-
-    req.on("end", () => {
-      if (chunks.length === 0) {
-        resolve({});
-        return;
-      }
-      try {
-        const raw = Buffer.concat(chunks).toString("utf8");
-        const json = JSON.parse(raw);
-        resolve(json);
-      } catch (err) {
-        reject(err);
-      }
-    });
-
-    req.on("error", (err) => {
-      reject(err);
-    });
-  });
-}
-
-const server = http.createServer(async (req, res) => {
+app.post('/demo/crp/check', async (req, res) => {
   try {
-    const method = req.method || "GET";
-    const url = req.url || "/";
+    const body = (req.body ?? {}) as Partial<CrpSearchFilters>;
 
-    // Simple health check
-    if (method === "GET" && url === "/healthz") {
-      return sendJson(res, 200, {
-        ok: true,
-        status: "up",
-        crpBaseUrl,
-        merchantId,
-        network,
-        tokenId,
-        payTo,
-        statusOverride: status,
-      });
-    }
+    const filters: CrpSearchFilters = {
+      merchantId: body.merchantId ?? MERCHANT_ID,
+      network: body.network ?? NETWORK,
+      tokenId: body.tokenId ?? TOKEN_ID,
+      payTo: body.payTo ?? PAY_TO,
+      status: body.status ?? STATUS_OVERRIDE,
+      limit: body.limit ?? 1,
+    };
 
-    // Demo route: end-to-end CRP check
-    if (method === "POST" && url === "/demo/crp/check") {
-      const body = await readJsonBody(req);
+    const search = await crpClient.searchPayments(filters);
 
-      // Build full filters object with env defaults + optional overrides from body
-      const filters = {
-        merchantId: body.merchantId ?? merchantId,
-        network: body.network ?? network,
-        tokenId: body.tokenId ?? tokenId,
-        payTo: body.payTo ?? payTo,
-        status: body.status ?? status,
-        limit: body.limit ?? 1,
+    let match: unknown = null;
+    let fulfill: unknown = null;
+
+    if (search.ok && search.matches && search.matches.length > 0) {
+      const record: any = search.matches[0];
+
+      const matchReq: MatchPaymentRequest = {
+        merchantId: record.merchant_id,
+        network: record.network,
+        asset: record.asset,
+        amount: record.amount,
+        payTo: record.pay_to,
+        nonce: record.nonce,
       };
 
-      // 1) search payments
-      const searchRes = await crpClient.searchPayments(filters);
-      if (!searchRes.ok || !searchRes.matches || searchRes.matches.length === 0) {
-        return sendJson(res, 404, {
-          ok: false,
-          reason: "no_matches",
-          search: searchRes,
-        });
-      }
-
-      const payment = searchRes.matches[0];
-
-      // Map CrpPaymentRecord -> MatchPaymentRequest
-      const matchReq = {
-        merchantId: payment.merchant_id,
-        network: payment.network,
-        tokenId: payment.asset.tokenId,
-        payTo: payment.pay_to,
-        amount: payment.amount,
-        nonce: payment.nonce,
-        status: payment.status,
-        asset: payment.asset,
-      };
-
-      // 2) match payment
-      const matchRes = await crpClient.matchPayment(matchReq);
-      if (!matchRes.ok) {
-        return sendJson(res, 400, {
-          ok: false,
-          reason: "match_failed",
-          match: matchRes,
-        });
-      }
-
-      // 3) fulfill payment (no external webhook here; CRP handles its own webhooks)
-      const fulfillRes = await crpClient.fulfillPayment(matchReq);
-
-      return sendJson(res, 200, {
-        ok: true,
-        filters,
-        search: searchRes,
-        match: matchRes,
-        fulfill: fulfillRes,
-      });
+      match = await crpClient.matchPayment(matchReq);
+      fulfill = await crpClient.fulfillPayment(matchReq);
     }
 
-    // Fallback for unknown routes
-    sendJson(res, 404, {
-      ok: false,
-      error: "Not found",
-      method,
-      url,
+    res.json({
+      ok: true,
+      filters,
+      search,
+      match,
+      fulfill,
     });
-  } catch (err: any) {
-    console.error("Server error:", err);
-    sendJson(res, 500, {
+  } catch (err) {
+    console.error('Error in /demo/crp/check', err);
+    res.status(500).json({
       ok: false,
-      error: "internal_error",
-      details: err?.message ?? String(err),
+      error: err instanceof Error ? err.message : String(err),
     });
   }
 });
 
-server.listen(PORT, () => {
+// --------------------------------------------------
+// GET /demo/402
+// - Simple x402-style demo endpoint
+// - Returns HTTP 402 when a matching payment exists
+// --------------------------------------------------
+
+app.get('/demo/402', async (_req, res) => {
+  try {
+    const filters: CrpSearchFilters = {
+      merchantId: MERCHANT_ID,
+      network: NETWORK,
+      tokenId: TOKEN_ID,
+      payTo: PAY_TO,
+      status: STATUS_OVERRIDE,
+      limit: 1,
+    };
+
+    // 1) Search for a fulfilled payment matching the demo tuple
+    const search = await crpClient.searchPayments(filters);
+
+    if (!search.ok || !search.matches || search.matches.length === 0) {
+      res.status(404).json({
+        ok: false,
+        error: 'No matching payment found for demo 402',
+        filters,
+        search,
+      });
+      return;
+    }
+
+    const record: any = search.matches[0];
+
+    // 2) Exact-tuple request for match/fulfill
+    const matchReq: MatchPaymentRequest = {
+      merchantId: record.merchant_id,
+      network: record.network,
+      asset: record.asset,
+      amount: record.amount,
+      payTo: record.pay_to,
+      nonce: record.nonce,
+    };
+
+    const match = await crpClient.matchPayment(matchReq);
+    const fulfill = await crpClient.fulfillPayment(matchReq);
+
+    // 3) Return HTTP 402 with CRP-derived info
+    res.status(402).json({
+      ok: true,
+      kind: 'demo.402',
+      filters,
+      match,
+      fulfill,
+    });
+  } catch (err) {
+    console.error('Error in /demo/402', err);
+    res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+// --------------------------------------------------
+// Fallback 404
+// --------------------------------------------------
+
+app.use((req, res) => {
+  res.status(404).json({
+    ok: false,
+    error: 'Not found',
+    method: req.method,
+    url: req.url,
+  });
+});
+
+// --------------------------------------------------
+// Start server
+// --------------------------------------------------
+
+app.listen(PORT, () => {
   console.log(
-    `payfi-gateway-demo HTTP server listening on http://localhost:${PORT}`
+    `payfi-gateway-demo HTTP server listening on http://localhost:${PORT}`,
   );
 });
