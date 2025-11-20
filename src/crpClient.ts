@@ -5,6 +5,7 @@
  *   - searchPayments
  *   - matchPayment
  *   - fulfillPayment
+ *   - exactMatchPayment (GET alias)
  */
 
 export interface CrpClientConfig {
@@ -65,6 +66,24 @@ export interface MatchPaymentRequest {
   asset: CrpAsset;
   amount: string;
   payTo: string;
+}
+
+/**
+ * Exact-tuple request shape for:
+ *   - GET /v1/crp/payments/exact-match
+ *
+ * This mirrors the tuple required by the alias plugin:
+ *   merchantId, nonce, network, tokenId, amount, payTo, (decimals, assetType)
+ */
+export interface ExactMatchPaymentRequest {
+  merchantId: string;
+  nonce: string;
+  network: string;
+  tokenId: string;
+  amount: string;
+  payTo: string;
+  decimals?: number;
+  assetType?: string;
 }
 
 export interface SearchPaymentsParams {
@@ -186,6 +205,49 @@ export class CrpClient {
     }
 
     const body = (await res.json()) as FulfillPaymentResponse;
+    return body;
+  }
+
+  /**
+   * GET /v1/crp/payments/exact-match
+   *
+   * Thin alias over the same tuple semantics as matchPayment,
+   * but using query parameters instead of a JSON body.
+   */
+  async exactMatchPayment(
+    params: ExactMatchPaymentRequest
+  ): Promise<MatchPaymentResponse> {
+    const url = new URL("/v1/crp/payments/exact-match", this.baseUrl);
+
+    url.searchParams.set("merchantId", params.merchantId);
+    url.searchParams.set("nonce", params.nonce);
+    url.searchParams.set("network", params.network);
+    url.searchParams.set("tokenId", params.tokenId);
+    url.searchParams.set("amount", params.amount);
+    url.searchParams.set("payTo", params.payTo);
+
+    if (params.decimals !== undefined) {
+      url.searchParams.set("decimals", String(params.decimals));
+    }
+
+    if (params.assetType !== undefined) {
+      url.searchParams.set("assetType", params.assetType);
+    }
+
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(
+        `exactMatchPayment failed: ${res.status} ${res.statusText}`
+      );
+    }
+
+    const body = (await res.json()) as MatchPaymentResponse;
     return body;
   }
 }

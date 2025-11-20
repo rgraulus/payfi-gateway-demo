@@ -4,9 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
     "demo:crp-client": "ts-node src/demo-crp-client.ts",
-    "dev": "ts-node src/server.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "demo:proto-x402": "ts-node src/demo-proto-x402-client.ts",
+    "dev": "ts-node src/server.ts"
   },
   "repository": {
     "type": "git",

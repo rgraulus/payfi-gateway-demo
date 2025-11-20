@@ -1,6 +1,10 @@
 import express from 'express';
 import bodyParser from 'body-parser';
-import { CrpClient, MatchPaymentRequest } from './crpClient';
+import {
+  CrpClient,
+  MatchPaymentRequest,
+  ExactMatchPaymentRequest,
+} from './crpClient';
 
 const app = express();
 app.use(bodyParser.json());
@@ -94,6 +98,66 @@ app.post('/demo/crp/check', async (_req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Internal error during CRP demo check',
+    });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// Demo: exact-match via GET alias
+//
+// This uses the new GET /v1/crp/payments/exact-match endpoint on the
+// facilitator, but still derives the tuple from searchPayments so you
+// don’t have to type it by hand.
+// -----------------------------------------------------------------------------
+
+app.post('/demo/crp/exact-match', async (_req, res) => {
+  try {
+    const filters = {
+      merchantId,
+      network,
+      tokenId,
+      payTo,
+      status: statusOverride,
+      limit: 1,
+    };
+
+    const search = await crpClient.searchPayments(filters);
+
+    const record = search.matches?.[0];
+    if (!record) {
+      return res.status(404).json({
+        ok: false,
+        error: 'No matching payments found for demo filters',
+        filters,
+        search,
+      });
+    }
+
+    const exactReq: ExactMatchPaymentRequest = {
+      merchantId: record.merchant_id,
+      network: record.network,
+      tokenId: record.asset.tokenId,
+      amount: record.amount,
+      payTo: record.pay_to,
+      nonce: record.nonce,
+      decimals: record.asset.decimals,
+      assetType: record.asset.type,
+    };
+
+    const exact = await crpClient.exactMatchPayment(exactReq);
+
+    return res.json({
+      ok: true,
+      filters,
+      search,
+      exactMatchRequest: exactReq,
+      exactMatch: exact,
+    });
+  } catch (err) {
+    console.error('Error in /demo/crp/exact-match:', err);
+    return res.status(500).json({
+      ok: false,
+      error: 'Internal error during CRP exact-match demo',
     });
   }
 });
