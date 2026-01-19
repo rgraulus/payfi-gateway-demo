@@ -1,8 +1,11 @@
 // src/server.ts
 //
-// C4 polish: distinguish "invalid receipt / wrong kid / bad sig" from true gateway errors.
-// - 402 responses NEVER include PAYMENT-RESPONSE headers (C3)
-// - If payment exists but receipt verification fails: 402 + PAYMENT-REQUIRED with clearer error
+// x402 v2 alignment + C3/C4 enforcement:
+// - Default to standard headers only: PAYMENT-REQUIRED / PAYMENT-SIGNATURE / PAYMENT-RESPONSE
+// - Optional legacy X-* headers behind X402_LEGACY_HEADERS=true
+// - Parse PAYMENT-SIGNATURE (base64 JSON). If it contains `nonce`, we’ll reuse it.
+// - C3: NEVER emit PAYMENT-RESPONSE headers unless local receipt verify succeeds.
+// - C4: If payment exists but receipt verification fails: 402 + PAYMENT-REQUIRED with clearer error.
 // - If CRP calls fail: 402 + PAYMENT-REQUIRED with "Gateway error while checking payment"
 // - Debug details only when X402_DEBUG=true
 
@@ -25,6 +28,9 @@ const crpBaseUrl = (process.env.CRP_BASE_URL ?? 'http://localhost:8080').replace
 const jwksUrl = process.env.CRP_JWKS_URL ?? `${crpBaseUrl}/.well-known/jwks.json`;
 
 const merchantId = process.env.CRP_MERCHANT_ID ?? 'demo-merchant';
+
+// NOTE: Keep the historical default to avoid breaking existing facilitator matching.
+// For x402 v2 “CAIP-2 network id” alignment, set CRP_NETWORK explicitly (recommended).
 const network = process.env.CRP_NETWORK ?? 'concordium:testnet';
 
 const tokenId = process.env.CRP_TOKEN_ID ?? 'EUDemo';
@@ -32,6 +38,8 @@ const assetType = process.env.CRP_ASSET_TYPE ?? 'PLT';
 const decimals = Number(process.env.CRP_DECIMALS ?? 6);
 
 const amount = process.env.CRP_AMOUNT ?? '0.05';
+
+// Set this via env in real use (merchant/payee address). Default preserved from prior file.
 const payTo =
   process.env.CRP_PAY_TO ?? '4Wx1vpgAfpE6k9ksmtYaH6z4iQN61LFFRUgbbG6gDro1ziKNL7';
 
@@ -41,6 +49,9 @@ const expectedKid = process.env.X402_EXPECTED_KID;
 // Debug gating for response bodies (NOT headers)
 const x402Debug = String(process.env.X402_DEBUG ?? '').toLowerCase() === 'true';
 
+// Optional legacy header support (X-*)
+const legacyHeaders = String(process.env.X402_LEGACY_HEADERS ?? '').toLowerCase() === 'true';
+
 const crpClient = new CrpClient({ baseUrl: crpBaseUrl });
 
 // -----------------------------------------------------------------------------
@@ -49,22 +60,22 @@ const crpClient = new CrpClient({ baseUrl: crpBaseUrl });
 
 app.use((_req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
+
+  // Allow clients to send PAYMENT-SIGNATURE. Optionally allow X-PAYMENT-SIGNATURE.
   res.setHeader(
     'Access-Control-Allow-Headers',
-    'Content-Type,PAYMENT-SIGNATURE,X-PAYMENT-SIGNATURE',
+    legacyHeaders
+      ? 'Content-Type,PAYMENT-SIGNATURE,X-PAYMENT-SIGNATURE'
+      : 'Content-Type,PAYMENT-SIGNATURE',
   );
+
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader(
-    'Access-Control-Expose-Headers',
-    [
-      'PAYMENT-REQUIRED',
-      'PAYMENT-SIGNATURE',
-      'PAYMENT-RESPONSE',
-      'X-PAYMENT-REQUIRED',
-      'X-PAYMENT-SIGNATURE',
-      'X-PAYMENT-RESPONSE',
-    ].join(','),
-  );
+
+  // Expose response headers so browser clients can read PAYMENT-REQUIRED / PAYMENT-RESPONSE.
+  const exposed = ['PAYMENT-REQUIRED', 'PAYMENT-SIGNATURE', 'PAYMENT-RESPONSE'];
+  if (legacyHeaders) exposed.push('X-PAYMENT-REQUIRED', 'X-PAYMENT-SIGNATURE', 'X-PAYMENT-RESPONSE');
+
+  res.setHeader('Access-Control-Expose-Headers', exposed.join(','));
 
   // Prevent caching of challenge / receipt headers
   res.setHeader('Cache-Control', 'no-store');
@@ -82,7 +93,39 @@ app.options(/.*/, (_req, res) => res.status(204).end());
 // -----------------------------------------------------------------------------
 
 function b64json(obj: unknown): string {
+  // Spec/client interop: use standard base64 (not base64url) for header payloads.
   return Buffer.from(JSON.stringify(obj), 'utf8').toString('base64');
+}
+
+function normalizeB64(b64: string): string {
+  // Tolerate base64url inputs (from some clients), and missing padding.
+  let s = b64.trim().replace(/-/g, '+').replace(/_/g, '/');
+  const pad = s.length % 4;
+  if (pad === 2) s += '==';
+  else if (pad === 3) s += '=';
+  else if (pad !== 0) {
+    // pad === 1 is invalid, but we’ll let Buffer throw for clearer error
+  }
+  return s;
+}
+
+function parseB64Json<T = any>(b64: string): T {
+  const s = normalizeB64(b64);
+  const json = Buffer.from(s, 'base64').toString('utf8');
+  return JSON.parse(json) as T;
+}
+
+function getPaymentSignatureB64(req: express.Request): string | null {
+  // Express lower-cases header names
+  const h = req.headers['payment-signature'];
+  if (typeof h === 'string' && h.length > 0) return h;
+
+  if (legacyHeaders) {
+    const xh = req.headers['x-payment-signature'];
+    if (typeof xh === 'string' && xh.length > 0) return xh;
+  }
+
+  return null;
 }
 
 // --- jose (ESM-only) dynamic import helpers ---
@@ -161,6 +204,7 @@ app.get('/healthz', (_req, res) => {
     amount,
     payTo,
     x402Debug,
+    legacyHeaders,
     expectedKid: expectedKid ?? null,
   });
 });
@@ -181,6 +225,7 @@ app.get('/readyz', async (_req, res) => {
 // - If nonce provided and facilitator finds/fulfills: return 200 + PAYMENT-RESPONSE header
 // - On 200: verify receipt JWS locally via facilitator JWKS (NO /v1/verify call)
 //
+// x402 v2: client retries with PAYMENT-SIGNATURE. We parse it and reuse `nonce` if present.
 // C3: NEVER emit PAYMENT-RESPONSE headers unless local verify succeeds.
 // C4: If receipt verify fails, return 402 with clearer "Invalid payment receipt" error.
 // -----------------------------------------------------------------------------
@@ -188,10 +233,30 @@ app.get('/readyz', async (_req, res) => {
 app.get('/paid', async (req, res) => {
   const resource = '/paid';
 
-  const nonce =
-    typeof req.query.nonce === 'string' && req.query.nonce.length > 0
-      ? req.query.nonce
-      : `demo-${randomUUID()}`;
+  // Parse PAYMENT-SIGNATURE (base64 JSON). Not required for this demo flow,
+  // but improves v2 compatibility (nonce continuity without query params).
+  const paymentSignatureB64 = getPaymentSignatureB64(req);
+  let paymentSignature: any | null = null;
+  let paymentSignatureParseError: string | null = null;
+
+  if (paymentSignatureB64) {
+    try {
+      paymentSignature = parseB64Json(paymentSignatureB64);
+    } catch (e: any) {
+      paymentSignature = null;
+      paymentSignatureParseError = `invalid PAYMENT-SIGNATURE: ${String(e?.message ?? e)}`;
+    }
+  }
+
+  const nonceFromQuery =
+    typeof req.query.nonce === 'string' && req.query.nonce.length > 0 ? req.query.nonce : null;
+
+  const nonceFromSig =
+    typeof paymentSignature?.nonce === 'string' && paymentSignature.nonce.length > 0
+      ? paymentSignature.nonce
+      : null;
+
+  const nonce = nonceFromQuery ?? nonceFromSig ?? `demo-${randomUUID()}`;
 
   const paymentRequired = {
     merchantId,
@@ -220,9 +285,28 @@ app.get('/paid', async (req, res) => {
   // Helper to issue a "payment required" response consistently
   const reply402 = (body: any) => {
     res.setHeader('PAYMENT-REQUIRED', prB64);
-    res.setHeader('X-PAYMENT-REQUIRED', prB64);
+    if (legacyHeaders) res.setHeader('X-PAYMENT-REQUIRED', prB64);
     return res.status(402).json(body);
   };
+
+  // If a client sent a PAYMENT-SIGNATURE but it couldn't be parsed,
+  // return 402 with a clearer error (still include PAYMENT-REQUIRED).
+  if (paymentSignatureB64 && paymentSignatureParseError) {
+    return reply402({
+      ok: false,
+      paid: false,
+      paymentRequired,
+      error: 'Invalid payment signature header',
+      ...(x402Debug
+        ? {
+            debug: {
+              reason: paymentSignatureParseError,
+              paymentSignatureB64Present: true,
+            },
+          }
+        : {}),
+    });
+  }
 
   // 1) Call CRP (match + fulfill). If this fails, it's a gateway error.
   let match: any;
@@ -257,7 +341,16 @@ app.get('/paid', async (req, res) => {
       ok: false,
       paid: false,
       paymentRequired,
-      ...(x402Debug ? { debug: { match, fulfill, paymentSignature: null } } : {}),
+      ...(x402Debug
+        ? {
+            debug: {
+              match,
+              fulfill,
+              paymentSignature: paymentSignature ?? null,
+              paymentSignatureB64Present: !!paymentSignatureB64,
+            },
+          }
+        : {}),
     });
   }
 
@@ -281,6 +374,8 @@ app.get('/paid', async (req, res) => {
               match,
               fulfill,
               expectedKid: expectedKid ?? null,
+              paymentSignature: paymentSignature ?? null,
+              paymentSignatureB64Present: !!paymentSignatureB64,
             },
           }
         : {}),
@@ -295,7 +390,7 @@ app.get('/paid', async (req, res) => {
 
   const respB64 = b64json(paymentResponse);
   res.setHeader('PAYMENT-RESPONSE', respB64);
-  res.setHeader('X-PAYMENT-RESPONSE', respB64);
+  if (legacyHeaders) res.setHeader('X-PAYMENT-RESPONSE', respB64);
 
   return res.status(200).json({
     ok: true,
@@ -303,7 +398,16 @@ app.get('/paid', async (req, res) => {
     nonce,
     resource: 'secret-data',
     verify,
-    ...(x402Debug ? { debug: { match, fulfill, paymentSignature: null } } : {}),
+    ...(x402Debug
+      ? {
+          debug: {
+            match,
+            fulfill,
+            paymentSignature: paymentSignature ?? null,
+            paymentSignatureB64Present: !!paymentSignatureB64,
+          },
+        }
+      : {}),
   });
 });
 
