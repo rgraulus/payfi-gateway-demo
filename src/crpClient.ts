@@ -1,253 +1,73 @@
-/**
- * Thin typed CRP HTTP client for the demo gateway.
- *
- * Exposes:
- *   - searchPayments
- *   - matchPayment
- *   - fulfillPayment
- *   - exactMatchPayment (GET alias)
- */
+// src/crpClient.ts
+//
+// CRP client used by the demo gateway.
+// Key behavior change:
+// - Do NOT throw on non-2xx responses from CRP.
+// - Always return parsed JSON + httpStatus so the gateway can decide what to do.
+// - Only throw on network/transport errors or invalid JSON.
 
-export interface CrpClientConfig {
-  baseUrl: string; // e.g. http://localhost:8080
-}
-
-export interface CrpAsset {
-  type: string;        // "PLT", etc.
-  tokenId: string;     // e.g. "usd:test"
-  decimals: number;    // e.g. 2
-}
-
-export interface CrpReceiptPayload {
-  asset: CrpAsset;
-  nonce: string;
-  amount: string;      // decimal string
-  paidTo: string;      // ccd1...
-  network: string;     // "concordium:testnet"
-  finalizedAt: string; // ISO timestamp
-}
-
-export interface CrpReceipt {
-  jws: string;
-  payload: CrpReceiptPayload;
-}
-
-/**
- * Shape returned by /v1/crp/payments/search.matches[]
- * This reflects the DB row (snake_case).
- */
-export interface CrpPaymentRecord {
-  merchant_id: string;
-  nonce: string;
-  network: string;
-  asset: CrpAsset;
-  amount: string;
-  pay_to: string;
-  expiry: string;
-  policy: Record<string, unknown>;
-  metadata: Record<string, unknown>;
-  status: string;
-  receipt?: CrpReceipt;
-  created_at: string;
-  updated_at: string;
-}
-
-/**
- * Exact-tuple request shape expected by:
- *   - POST /v1/crp/payments/match
- *   - POST /v1/crp/payments/fulfill
- *
- * Note the camelCase keys: merchantId, payTo, ...
- */
-export interface MatchPaymentRequest {
-  merchantId: string;
-  nonce: string;
-  network: string;
-  asset: CrpAsset;
-  amount: string;
-  payTo: string;
-}
-
-/**
- * Exact-tuple request shape for:
- *   - GET /v1/crp/payments/exact-match
- *
- * This mirrors the tuple required by the alias plugin:
- *   merchantId, nonce, network, tokenId, amount, payTo, (decimals, assetType)
- */
-export interface ExactMatchPaymentRequest {
-  merchantId: string;
-  nonce: string;
-  network: string;
+export type Asset = {
+  type: string; // "PLT"
   tokenId: string;
-  amount: string;
+  decimals: number;
+};
+
+export type MatchPaymentRequest = {
+  merchantId: string;
+  nonce: string;
+  network: string;
   payTo: string;
-  decimals?: number;
-  assetType?: string;
-}
+  amount: string;
+  asset: Asset;
+};
 
-export interface SearchPaymentsParams {
-  merchantId?: string;
-  network?: string;
-  tokenId?: string;
-  payTo?: string;
-  status?: string;
-  limit?: number;
-}
-
-export interface SearchPaymentsResponse {
-  ok: boolean;
-  filters: SearchPaymentsParams;
-  matches: CrpPaymentRecord[];
-}
-
-export interface MatchPaymentResponse {
-  ok: boolean;
-  reason: string;   // "exact_match", "no_match", etc.
-  count: number;
-  match?: CrpPaymentRecord;
-}
-
-export interface FulfillPaymentResponse extends MatchPaymentResponse {
-  webhook?: {
-    configured: boolean;
-    attempted: boolean;
-    ok: boolean;
-    status?: number;
-  };
-}
+export type CrpResponse<T = any> = T & { httpStatus: number };
 
 export class CrpClient {
-  private readonly baseUrl: string;
+  private baseUrl: string;
 
-  constructor(config: CrpClientConfig) {
-    this.baseUrl = config.baseUrl.replace(/\/+$/, "");
+  constructor(opts: { baseUrl: string }) {
+    this.baseUrl = opts.baseUrl.replace(/\/$/, "");
   }
 
-  /**
-   * GET /v1/crp/payments/search
-   */
-  async searchPayments(
-    params: SearchPaymentsParams
-  ): Promise<SearchPaymentsResponse> {
-    const url = new URL("/v1/crp/payments/search", this.baseUrl);
+  private async postJson<T>(path: string, body: unknown): Promise<CrpResponse<T>> {
+    const url = `${this.baseUrl}${path}`;
+    let resp: Response;
 
-    for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== null) {
-        url.searchParams.set(key, String(value));
+    try {
+      resp = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch (e: any) {
+      // Network/transport error (gateway truly cannot reach CRP)
+      throw new Error(`CRP fetch failed: ${String(e?.message ?? e)}`);
+    }
+
+    const text = await resp.text();
+    let json: any = null;
+
+    if (text && text.trim().length > 0) {
+      try {
+        json = JSON.parse(text);
+      } catch (e: any) {
+        throw new Error(
+          `CRP returned non-JSON (${resp.status}): ${String(e?.message ?? e)}; body=${text.slice(0, 200)}`
+        );
       }
     }
 
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        accept: "application/json",
-      },
-    });
-
-    if (!res.ok) {
-      throw new Error(
-        `searchPayments failed: ${res.status} ${res.statusText}`
-      );
-    }
-
-    const body = (await res.json()) as SearchPaymentsResponse;
-    return body;
+    return { ...(json ?? {}), httpStatus: resp.status };
   }
 
-  /**
-   * POST /v1/crp/payments/match
-   *
-   * Expects an exact-tuple request (camelCase fields).
-   */
-  async matchPayment(
-    tuple: MatchPaymentRequest
-  ): Promise<MatchPaymentResponse> {
-    const res = await fetch(`${this.baseUrl}/v1/crp/payments/match`, {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(tuple),
-    });
-
-    if (!res.ok) {
-      throw new Error(`matchPayment failed: ${res.status} ${res.statusText}`);
-    }
-
-    const body = (await res.json()) as MatchPaymentResponse;
-    return body;
+  async matchPayment(req: MatchPaymentRequest): Promise<CrpResponse<any>> {
+    // Facilitator routes are mounted at /v1/crp/...
+    return this.postJson("/v1/crp/payments/match", req);
   }
 
-  /**
-   * POST /v1/crp/payments/fulfill
-   *
-   * Uses the same exact-tuple request as matchPayment, but
-   * additionally attempts to fire any configured webhook.
-   */
-  async fulfillPayment(
-    tuple: MatchPaymentRequest
-  ): Promise<FulfillPaymentResponse> {
-    const res = await fetch(`${this.baseUrl}/v1/crp/payments/fulfill`, {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(tuple),
-    });
-
-    if (!res.ok) {
-      throw new Error(
-        `fulfillPayment failed: ${res.status} ${res.statusText}`
-      );
-    }
-
-    const body = (await res.json()) as FulfillPaymentResponse;
-    return body;
-  }
-
-  /**
-   * GET /v1/crp/payments/exact-match
-   *
-   * Thin alias over the same tuple semantics as matchPayment,
-   * but using query parameters instead of a JSON body.
-   */
-  async exactMatchPayment(
-    params: ExactMatchPaymentRequest
-  ): Promise<MatchPaymentResponse> {
-    const url = new URL("/v1/crp/payments/exact-match", this.baseUrl);
-
-    url.searchParams.set("merchantId", params.merchantId);
-    url.searchParams.set("nonce", params.nonce);
-    url.searchParams.set("network", params.network);
-    url.searchParams.set("tokenId", params.tokenId);
-    url.searchParams.set("amount", params.amount);
-    url.searchParams.set("payTo", params.payTo);
-
-    if (params.decimals !== undefined) {
-      url.searchParams.set("decimals", String(params.decimals));
-    }
-
-    if (params.assetType !== undefined) {
-      url.searchParams.set("assetType", params.assetType);
-    }
-
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        accept: "application/json",
-      },
-    });
-
-    if (!res.ok) {
-      throw new Error(
-        `exactMatchPayment failed: ${res.status} ${res.statusText}`
-      );
-    }
-
-    const body = (await res.json()) as MatchPaymentResponse;
-    return body;
+  async fulfillPayment(req: MatchPaymentRequest): Promise<CrpResponse<any>> {
+    // Same body shape as match + extra optional flags handled server-side.
+    return this.postJson("/v1/crp/payments/fulfill", req);
   }
 }

@@ -6,7 +6,8 @@
 // - Parse PAYMENT-SIGNATURE (base64 JSON). If it contains `nonce`, we’ll reuse it.
 // - C3: NEVER emit PAYMENT-RESPONSE headers unless local receipt verify succeeds.
 // - C4: If payment exists but receipt verification fails: 402 + PAYMENT-REQUIRED with clearer error.
-// - If CRP calls fail: 402 + PAYMENT-REQUIRED with "Gateway error while checking payment"
+// - If CRP calls fail (transport/JSON): 402 + PAYMENT-REQUIRED with "Gateway error while checking payment"
+// - If CRP returns event_claimed (409): 402 + PAYMENT-REQUIRED with "Payment already claimed (event_claimed)"
 // - Debug details only when X402_DEBUG=true
 
 import express from 'express';
@@ -229,6 +230,13 @@ app.get('/readyz', async (_req, res) => {
 // C3: NEVER emit PAYMENT-RESPONSE headers unless local verify succeeds.
 // C4: If receipt verify fails, return 402 with clearer "Invalid payment receipt" error.
 // -----------------------------------------------------------------------------
+//
+// IMPORTANT BEHAVIOR NOTE:
+// - CRP can legitimately return non-2xx such as 409 event_claimed.
+// - That is NOT a transport failure; we treat it as "not paid" and return 402 with a clearer error.
+// - Only network/transport/JSON errors are labeled "Gateway error while checking payment".
+//
+// -----------------------------------------------------------------------------
 
 app.get('/paid', async (req, res) => {
   const resource = '/paid';
@@ -308,7 +316,7 @@ app.get('/paid', async (req, res) => {
     });
   }
 
-  // 1) Call CRP (match + fulfill). If this fails, it's a gateway error.
+  // 1) Call CRP (match + fulfill). Transport/JSON errors are gateway errors.
   let match: any;
   let fulfill: any;
 
@@ -323,6 +331,18 @@ app.get('/paid', async (req, res) => {
       paymentRequired,
       error: 'Gateway error while checking payment',
       ...(x402Debug ? { debug: { message: String(err) } } : {}),
+    });
+  }
+
+  // 1b) If CRP indicates the chain event is already consumed (409 event_claimed),
+  // treat as a normal unpaid condition (NOT a gateway error).
+  if (fulfill?.httpStatus === 409 && fulfill?.reason === 'event_claimed') {
+    return reply402({
+      ok: false,
+      paid: false,
+      paymentRequired,
+      error: 'Payment already claimed (event_claimed)',
+      ...(x402Debug ? { debug: { fulfill, match } } : {}),
     });
   }
 
