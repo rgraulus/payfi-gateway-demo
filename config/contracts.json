@@ -1,0 +1,19 @@
+{
+  "contracts": [
+    {
+      "contractId": "cid_TBD_AUTOGENERATE",
+      "contractVersion": "1.0.0",
+      "isFrozen": true,
+
+      "merchantId": "demo-merchant",
+      "resource": { "method": "GET", "path": "/paid" },
+
+      "network": "ccd:testnet",
+      "asset": { "type": "PLT", "tokenId": "EUDemo", "decimals": 6 },
+      "amount": "0.050101",
+      "payTo": "4jPLfUuSeFeP5SFLrf2eDeZEnT7ixbqXyQp9bg6qrgXyHReDfZ",
+
+      "attestations": []
+    }
+  ]
+}
