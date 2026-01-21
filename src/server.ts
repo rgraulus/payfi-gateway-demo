@@ -9,12 +9,24 @@
 // - If CRP calls fail (transport/JSON): 402 + PAYMENT-REQUIRED with "Gateway error while checking payment"
 // - If CRP returns event_claimed (409): 402 + PAYMENT-REQUIRED with "Payment already claimed (event_claimed)"
 // - Debug details only when X402_DEBUG=true
+//
+// Phase A wiring:
+// - Load contracts from config/contracts.json
+// - Resolve /paid -> ContractDefinition
+// - Build PAYMENT-REQUIRED header payload from contract (frozen shape)
 
 import express from 'express';
 import bodyParser from 'body-parser';
 import { randomUUID } from 'crypto';
 
 import { CrpClient, MatchPaymentRequest } from './crpClient';
+import {
+  loadContracts,
+  resolveContract,
+  buildPaymentRequiredPayload,
+  b64jsonHeader,
+  ContractDefinition,
+} from './contracts';
 
 const app = express();
 app.use(bodyParser.json());
@@ -28,22 +40,6 @@ const port = Number(process.env.PORT ?? 3005);
 const crpBaseUrl = (process.env.CRP_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 const jwksUrl = process.env.CRP_JWKS_URL ?? `${crpBaseUrl}/.well-known/jwks.json`;
 
-const merchantId = process.env.CRP_MERCHANT_ID ?? 'demo-merchant';
-
-// NOTE: Keep the historical default to avoid breaking existing facilitator matching.
-// For x402 v2 “CAIP-2 network id” alignment, set CRP_NETWORK explicitly (recommended).
-const network = process.env.CRP_NETWORK ?? 'concordium:testnet';
-
-const tokenId = process.env.CRP_TOKEN_ID ?? 'EUDemo';
-const assetType = process.env.CRP_ASSET_TYPE ?? 'PLT';
-const decimals = Number(process.env.CRP_DECIMALS ?? 6);
-
-const amount = process.env.CRP_AMOUNT ?? '0.05';
-
-// Set this via env in real use (merchant/payee address). Default preserved from prior file.
-const payTo =
-  process.env.CRP_PAY_TO ?? '4Wx1vpgAfpE6k9ksmtYaH6z4iQN61LFFRUgbbG6gDro1ziKNL7';
-
 // Optional: pin expected kid for demos (recommended)
 const expectedKid = process.env.X402_EXPECTED_KID;
 
@@ -52,6 +48,27 @@ const x402Debug = String(process.env.X402_DEBUG ?? '').toLowerCase() === 'true';
 
 // Optional legacy header support (X-*)
 const legacyHeaders = String(process.env.X402_LEGACY_HEADERS ?? '').toLowerCase() === 'true';
+
+// How long a PAYMENT-REQUIRED challenge is valid (seconds)
+const ttlSec = Number(process.env.X402_TTL_SEC ?? 300);
+
+// Contract registry path
+const contractsPath = process.env.X402_CONTRACTS_PATH ?? 'config/contracts.json';
+
+// Load contracts once at startup (fail fast if frozen mismatch)
+let contracts: ContractDefinition[] = [];
+try {
+  ({ contracts } = loadContracts(contractsPath));
+  console.log(`[contracts] loaded ${contracts.length} contract(s) from ${contractsPath}`);
+  for (const c of contracts) {
+    console.log(
+      `[contracts] ${c.resource.method.toUpperCase()} ${c.resource.path} -> ${c.contractId} (v${c.contractVersion}, frozen=${c.isFrozen})`,
+    );
+  }
+} catch (e: any) {
+  console.error(`[contracts] ERROR: ${String(e?.message ?? e)}`);
+  process.exit(1);
+}
 
 const crpClient = new CrpClient({ baseUrl: crpBaseUrl });
 
@@ -197,16 +214,24 @@ app.get('/healthz', (_req, res) => {
     ok: true,
     status: 'up',
     port,
-    merchantId,
-    network,
     crpBaseUrl,
     jwksUrl,
-    asset: { type: assetType, tokenId, decimals },
-    amount,
-    payTo,
     x402Debug,
     legacyHeaders,
     expectedKid: expectedKid ?? null,
+    contractsPath,
+    contractsLoaded: contracts.map((c) => ({
+      contractId: c.contractId,
+      contractVersion: c.contractVersion,
+      isFrozen: c.isFrozen,
+      merchantId: c.merchantId,
+      resource: c.resource,
+      network: c.network,
+      asset: c.asset,
+      amount: c.amount,
+      payTo: c.payTo,
+      attestations: c.attestations ?? [],
+    })),
   });
 });
 
@@ -229,6 +254,9 @@ app.get('/readyz', async (_req, res) => {
 // x402 v2: client retries with PAYMENT-SIGNATURE. We parse it and reuse `nonce` if present.
 // C3: NEVER emit PAYMENT-RESPONSE headers unless local verify succeeds.
 // C4: If receipt verify fails, return 402 with clearer "Invalid payment receipt" error.
+//
+// Phase A:
+// - Resolve contract from registry and build PAYMENT-REQUIRED header payload from contract
 // -----------------------------------------------------------------------------
 //
 // IMPORTANT BEHAVIOR NOTE:
@@ -239,7 +267,14 @@ app.get('/readyz', async (_req, res) => {
 // -----------------------------------------------------------------------------
 
 app.get('/paid', async (req, res) => {
-  const resource = '/paid';
+  // Resolve the contract for this request (method + pathname)
+  let contract: ContractDefinition;
+  try {
+    contract = resolveContract(contracts, { method: req.method, url: req.originalUrl || req.url });
+  } catch (e: any) {
+    // Should never happen for /paid if registry is correct
+    return res.status(500).json({ ok: false, error: String(e?.message ?? e) });
+  }
 
   // Parse PAYMENT-SIGNATURE (base64 JSON). Not required for this demo flow,
   // but improves v2 compatibility (nonce continuity without query params).
@@ -266,29 +301,33 @@ app.get('/paid', async (req, res) => {
 
   const nonce = nonceFromQuery ?? nonceFromSig ?? `demo-${randomUUID()}`;
 
-  const paymentRequired = {
-    merchantId,
+  // Build Phase A frozen PAYMENT-REQUIRED header payload from the contract
+  const nowSec = Math.floor(Date.now() / 1000);
+  const paymentRequiredHeaderPayload = buildPaymentRequiredPayload({
+    contract,
     nonce,
-    network,
-    payTo,
-    asset: { type: assetType, tokenId, decimals },
-    amount,
+    issuedAtSec: nowSec,
+    expiresAtSec: nowSec + ttlSec,
+  });
+
+  // For response bodies (DX), we can include extra info (NOT part of the frozen header)
+  const paymentRequiredBody = {
+    ...paymentRequiredHeaderPayload,
     facilitator: crpBaseUrl,
-    resource,
-    description: `Payment required for ${resource}`,
+    description: `Payment required for ${contract.resource.method.toUpperCase()} ${contract.resource.path}`,
   };
 
   const matchReq: MatchPaymentRequest = {
-    merchantId,
+    merchantId: contract.merchantId,
     nonce,
-    network,
-    payTo,
-    amount,
-    asset: { type: assetType, tokenId, decimals },
+    network: contract.network,
+    payTo: contract.payTo,
+    amount: contract.amount,
+    asset: contract.asset,
   };
 
   // Precompute header value so every 402 uses the same payload
-  const prB64 = b64json(paymentRequired);
+  const prB64 = b64jsonHeader(paymentRequiredHeaderPayload);
 
   // Helper to issue a "payment required" response consistently
   const reply402 = (body: any) => {
@@ -303,7 +342,7 @@ app.get('/paid', async (req, res) => {
     return reply402({
       ok: false,
       paid: false,
-      paymentRequired,
+      paymentRequired: paymentRequiredBody,
       error: 'Invalid payment signature header',
       ...(x402Debug
         ? {
@@ -328,7 +367,7 @@ app.get('/paid', async (req, res) => {
     return reply402({
       ok: false,
       paid: false,
-      paymentRequired,
+      paymentRequired: paymentRequiredBody,
       error: 'Gateway error while checking payment',
       ...(x402Debug ? { debug: { message: String(err) } } : {}),
     });
@@ -340,7 +379,7 @@ app.get('/paid', async (req, res) => {
     return reply402({
       ok: false,
       paid: false,
-      paymentRequired,
+      paymentRequired: paymentRequiredBody,
       error: 'Payment already claimed (event_claimed)',
       ...(x402Debug ? { debug: { fulfill, match } } : {}),
     });
@@ -360,7 +399,7 @@ app.get('/paid', async (req, res) => {
     return reply402({
       ok: false,
       paid: false,
-      paymentRequired,
+      paymentRequired: paymentRequiredBody,
       ...(x402Debug
         ? {
             debug: {
@@ -385,7 +424,7 @@ app.get('/paid', async (req, res) => {
     return reply402({
       ok: false,
       paid: false,
-      paymentRequired,
+      paymentRequired: paymentRequiredBody,
       error: 'Invalid payment receipt',
       ...(x402Debug
         ? {
@@ -404,8 +443,17 @@ app.get('/paid', async (req, res) => {
 
   // 4) Only after verification succeeds do we emit PAYMENT-RESPONSE headers.
   const paymentResponse = {
+    // Phase A spec: we only freeze that PAYMENT-RESPONSE is base64 JSON and includes settled fields.
+    // We keep your current JWS-based payload for backward compatibility.
     jws: receiptJws!,
     payload: m?.receipt?.payload ?? null,
+
+    // Additional Phase A stable identifiers (safe to include now)
+    version: 'x402-v2',
+    contractId: contract.contractId,
+    merchantId: contract.merchantId,
+    nonce,
+    settled: true,
   };
 
   const respB64 = b64json(paymentResponse);
@@ -417,6 +465,11 @@ app.get('/paid', async (req, res) => {
     paid: true,
     nonce,
     resource: 'secret-data',
+    contract: {
+      contractId: contract.contractId,
+      contractVersion: contract.contractVersion,
+      isFrozen: contract.isFrozen,
+    },
     verify,
     ...(x402Debug
       ? {
