@@ -1,0 +1,39 @@
+openapi: 3.0.3
+info:
+  title: PayFi Gateway Demo (x402 v2)
+  version: 0.1.0
+paths:
+  /paid:
+    get:
+      summary: Paid resource protected by x402 v2
+      parameters:
+        - in: query
+          name: nonce
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Payment satisfied
+          headers:
+            PAYMENT-RESPONSE:
+              required: true
+              schema:
+                type: string
+              description: Base64-encoded JSON payment response
+          content:
+            application/json:
+              schema:
+                type: object
+        "402":
+          description: Payment required
+          headers:
+            PAYMENT-REQUIRED:
+              required: true
+              schema:
+                type: string
+              description: Base64-encoded JSON payment requirements
+          content:
+            application/json:
+              schema:
+                type: object
