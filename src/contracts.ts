@@ -1,17 +1,15 @@
 // src/contracts.ts
 //
-// Phase A: Contract registry + freeze enforcement for x402 v2.
+// Phase B: Contract registry supports BOTH modes:
+// - mode="local": gateway serves content itself
+// - mode="proxy": gateway forwards to upstream (payment-unaware resource server)
 //
-// Key rules:
-// - Load ContractDefinitions from config/contracts.json
-// - Compute contractId = sha256(canonical_json(immutable_terms))
-//   where immutable_terms EXCLUDES lifecycle/metadata fields such as:
-//     - contractId
-//     - contractVersion
-//     - isFrozen
-// - If isFrozen=true, declared contractId MUST match computed contractId.
-// - Resolve incoming request -> contract by method + pathname.
-// - Build PAYMENT-REQUIRED header payload from contract + nonce + issuedAt/expiresAt.
+// ContractId hashing rules (immutable terms only):
+// - merchantId, resource(method/path), network, asset, amount, payTo, attestations
+// - PLUS mode and (if proxy) upstream.baseUrl + upstream.pathPrefix
+//
+// Excludes metadata/lifecycle fields:
+// - contractId, contractVersion, isFrozen
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,23 +22,36 @@ export type Attestation =
   | { type: 'concordium:web3id'; claim: string; value: unknown }
   | { type: string; [k: string]: unknown };
 
+export type Upstream = {
+  baseUrl: string; // e.g. http://127.0.0.1:3010
+  pathPrefix?: string; // optional prefix added before resource path
+};
+
+export type ContractMode = 'local' | 'proxy';
+
 export type ContractDefinition = {
-  // Identity/lifecycle metadata (NOT hashed)
+  // Metadata/lifecycle (NOT hashed)
   contractId: string; // cid_<sha256-hex>
-  contractVersion: string; // human-readable tag
+  contractVersion: string;
   isFrozen: boolean;
 
-  // Immutable business + routing (hashed)
+  // Mode (hashed)
+  mode: ContractMode;
+
+  // Business + routing (hashed)
   merchantId: string;
   resource: Resource;
 
-  // Immutable payment tuple (hashed)
-  network: string; // e.g. "ccd:testnet"
+  // Payment tuple (hashed)
+  network: string;
   asset: Asset;
-  amount: string; // decimal string (Phase A)
+  amount: string;
   payTo: string;
 
-  // Future Verify & Pay / identity requirements (hashed)
+  // Proxy mode only (hashed)
+  upstream?: Upstream;
+
+  // Future identity requirements (hashed)
   attestations?: Attestation[];
 };
 
@@ -54,20 +65,32 @@ function stableStringify(value: any): string {
   return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
 }
 
-/**
- * Compute contractId over immutable terms only.
- * IMPORTANT: Do NOT include contractVersion or isFrozen, otherwise toggling them changes the hash.
- */
 export function computeContractId(def: ContractDefinition): string {
-  const hashInput = {
+  const mode = def.mode ?? 'local';
+  const attestations = def.attestations ?? [];
+
+  const hashInput: any = {
     merchantId: def.merchantId,
     resource: def.resource,
     network: def.network,
     asset: def.asset,
     amount: def.amount,
     payTo: def.payTo,
-    attestations: def.attestations ?? [],
+    attestations,
+    mode,
   };
+
+  if (mode === 'proxy') {
+    if (!def.upstream?.baseUrl) {
+      throw new Error(
+        `[contracts] mode=proxy requires upstream.baseUrl for ${def.resource.method} ${def.resource.path}`,
+      );
+    }
+    hashInput.upstream = {
+      baseUrl: def.upstream.baseUrl,
+      pathPrefix: def.upstream.pathPrefix ?? '',
+    };
+  }
 
   const canonical = stableStringify(hashInput);
   const hex = crypto.createHash('sha256').update(canonical, 'utf8').digest('hex');
@@ -91,7 +114,6 @@ export function loadContracts(configPath = 'config/contracts.json'): { contracts
       );
     }
 
-    // In non-frozen mode, we auto-fill the computed contractId (so you can bootstrap).
     const effectiveId = c.isFrozen ? declared : computed;
     return { ...c, contractId: effectiveId };
   });
@@ -101,10 +123,9 @@ export function loadContracts(configPath = 'config/contracts.json'): { contracts
 
 export function resolveContract(
   contracts: ContractDefinition[],
-  req: { method: string; url: string },
+  req: { method: string; pathname: string },
 ): ContractDefinition {
-  const u = new URL(req.url, 'http://localhost');
-  const pathname = u.pathname;
+  const pathname = req.pathname;
   const method = (req.method || 'GET').toUpperCase();
 
   const found = contracts.find(
