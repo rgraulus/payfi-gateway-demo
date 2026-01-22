@@ -1,10 +1,11 @@
 {
   "contracts": [
     {
-      "contractId": "cid_58291ca3e2cd7c5d808fc5bc4a7ffacb1661533a9c954f91b095c3fd591b6516",
+      "contractId": "cid_5a7a69a125bdaa58fcab3c138ac5b02621a0feeaecef8c8ec8d56c9e39b20ff1",
       "contractVersion": "1.0.0",
       "isFrozen": true,
 
+      "mode": "local",
       "merchantId": "demo-merchant",
       "resource": { "method": "GET", "path": "/paid" },
 
@@ -12,6 +13,28 @@
       "asset": { "type": "PLT", "tokenId": "EUDemo", "decimals": 6 },
       "amount": "0.050101",
       "payTo": "4jPLfUuSeFeP5SFLrf2eDeZEnT7ixbqXyQp9bg6qrgXyHReDfZ",
+
+      "attestations": []
+    },
+
+    {
+      "contractId": "cid_da5121cffbd8b18f76ddcb5da840eab7a195b1bc8eac1accf9bcb02c1ff62b08",
+      "contractVersion": "1.0.0",
+      "isFrozen": true,
+
+      "mode": "proxy",
+      "merchantId": "demo-merchant",
+      "resource": { "method": "GET", "path": "/premium" },
+
+      "network": "ccd:testnet",
+      "asset": { "type": "PLT", "tokenId": "EUDemo", "decimals": 6 },
+      "amount": "0.050101",
+      "payTo": "4jPLfUuSeFeP5SFLrf2eDeZEnT7ixbqXyQp9bg6qrgXyHReDfZ",
+
+      "upstream": {
+        "baseUrl": "http://127.0.0.1:3010",
+        "pathPrefix": ""
+      },
 
       "attestations": []
     }
