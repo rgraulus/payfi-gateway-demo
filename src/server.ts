@@ -1,19 +1,16 @@
 // src/server.ts
 //
-// x402 v2 alignment + C3/C4 enforcement:
-// - Default to standard headers only: PAYMENT-REQUIRED / PAYMENT-SIGNATURE / PAYMENT-RESPONSE
-// - Optional legacy X-* headers behind X402_LEGACY_HEADERS=true
-// - Parse PAYMENT-SIGNATURE (base64 JSON). If it contains `nonce`, we’ll reuse it.
-// - C3: NEVER emit PAYMENT-RESPONSE headers unless local receipt verify succeeds.
-// - C4: If payment exists but receipt verification fails: 402 + PAYMENT-REQUIRED with clearer error.
-// - If CRP calls fail (transport/JSON): 402 + PAYMENT-REQUIRED with "Gateway error while checking payment"
-// - If CRP returns event_claimed (409): 402 + PAYMENT-REQUIRED with "Payment already claimed (event_claimed)"
-// - Debug details only when X402_DEBUG=true
+// Phase B: Gateway/Proxy (edge) model via /x402/... while keeping /paid local mode.
+// - Challenge: 402 + PAYMENT-REQUIRED (Phase A frozen via contract registry)
+// - Paid: 200 + PAYMENT-RESPONSE (Phase B frozen shape)
+// - Proxy mode: after verification, forward request to upstream (payment-unaware)
 //
-// Phase A wiring:
-// - Load contracts from config/contracts.json
-// - Resolve /paid -> ContractDefinition
-// - Build PAYMENT-REQUIRED header payload from contract (frozen shape)
+// C3/C4 still apply: NEVER emit PAYMENT-RESPONSE unless receipt verify succeeds.
+//
+// DEV-ONLY PAID-PATH HARNESS (off by default):
+// - If X402_DEV_RECEIPT_JWS is set, we skip CRP calls and use that receipt JWS.
+// - Still requires local JWKS verification and (by default) requires PAYMENT-SIGNATURE header.
+// - This lets us test "paid path" + proxying without automating chain payment yet.
 
 import express from 'express';
 import bodyParser from 'body-parser';
@@ -40,20 +37,20 @@ const port = Number(process.env.PORT ?? 3005);
 const crpBaseUrl = (process.env.CRP_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 const jwksUrl = process.env.CRP_JWKS_URL ?? `${crpBaseUrl}/.well-known/jwks.json`;
 
-// Optional: pin expected kid for demos (recommended)
 const expectedKid = process.env.X402_EXPECTED_KID;
 
-// Debug gating for response bodies (NOT headers)
 const x402Debug = String(process.env.X402_DEBUG ?? '').toLowerCase() === 'true';
-
-// Optional legacy header support (X-*)
 const legacyHeaders = String(process.env.X402_LEGACY_HEADERS ?? '').toLowerCase() === 'true';
 
-// How long a PAYMENT-REQUIRED challenge is valid (seconds)
 const ttlSec = Number(process.env.X402_TTL_SEC ?? 300);
-
-// Contract registry path
 const contractsPath = process.env.X402_CONTRACTS_PATH ?? 'config/contracts.json';
+
+// Dev-only paid-path harness: if set, skip CRP and use this receipt JWS (still verifies via JWKS).
+const devReceiptJws = process.env.X402_DEV_RECEIPT_JWS ?? null;
+
+// Require client to send PAYMENT-SIGNATURE even in dev bypass (keeps flow realistic)
+const devReceiptRequiresPaymentSignature =
+  String(process.env.X402_DEV_RECEIPT_REQUIRE_SIG ?? 'true').toLowerCase() === 'true';
 
 // Load contracts once at startup (fail fast if frozen mismatch)
 let contracts: ContractDefinition[] = [];
@@ -62,7 +59,7 @@ try {
   console.log(`[contracts] loaded ${contracts.length} contract(s) from ${contractsPath}`);
   for (const c of contracts) {
     console.log(
-      `[contracts] ${c.resource.method.toUpperCase()} ${c.resource.path} -> ${c.contractId} (v${c.contractVersion}, frozen=${c.isFrozen})`,
+      `[contracts] ${c.resource.method.toUpperCase()} ${c.resource.path} -> ${c.contractId} (v${c.contractVersion}, frozen=${c.isFrozen}, mode=${c.mode})`,
     );
   }
 } catch (e: any) {
@@ -79,7 +76,6 @@ const crpClient = new CrpClient({ baseUrl: crpBaseUrl });
 app.use((_req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
-  // Allow clients to send PAYMENT-SIGNATURE. Optionally allow X-PAYMENT-SIGNATURE.
   res.setHeader(
     'Access-Control-Allow-Headers',
     legacyHeaders
@@ -87,15 +83,13 @@ app.use((_req, res, next) => {
       : 'Content-Type,PAYMENT-SIGNATURE',
   );
 
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
 
-  // Expose response headers so browser clients can read PAYMENT-REQUIRED / PAYMENT-RESPONSE.
   const exposed = ['PAYMENT-REQUIRED', 'PAYMENT-SIGNATURE', 'PAYMENT-RESPONSE'];
   if (legacyHeaders) exposed.push('X-PAYMENT-REQUIRED', 'X-PAYMENT-SIGNATURE', 'X-PAYMENT-RESPONSE');
 
   res.setHeader('Access-Control-Expose-Headers', exposed.join(','));
 
-  // Prevent caching of challenge / receipt headers
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Pragma', 'no-cache');
 
@@ -121,9 +115,6 @@ function normalizeB64(b64: string): string {
   const pad = s.length % 4;
   if (pad === 2) s += '==';
   else if (pad === 3) s += '=';
-  else if (pad !== 0) {
-    // pad === 1 is invalid, but we’ll let Buffer throw for clearer error
-  }
   return s;
 }
 
@@ -205,6 +196,105 @@ async function verifyReceiptJwsLocal(jws: string) {
   };
 }
 
+function stripPaymentHeaders(headers: HeadersInit): Headers {
+  const h = new Headers(headers);
+  const toDelete = [
+    'payment-required',
+    'payment-response',
+    'payment-signature',
+    'x-payment-required',
+    'x-payment-response',
+    'x-payment-signature',
+  ];
+  for (const k of toDelete) h.delete(k);
+  return h;
+}
+
+function reqPathname(req: express.Request): string {
+  // pathname only (no query)
+  const u = new URL(req.originalUrl || req.url, 'http://localhost');
+  return u.pathname;
+}
+
+function reqQueryString(req: express.Request): string {
+  const u = new URL(req.originalUrl || req.url, 'http://localhost');
+  return u.search; // includes leading '?', or ''
+}
+
+function stripX402Prefix(pathname: string): string {
+  // /x402/premium -> /premium
+  if (pathname === '/x402') return '/';
+  if (pathname.startsWith('/x402/')) return pathname.slice('/x402'.length);
+  return pathname;
+}
+
+async function proxyToUpstream(args: {
+  req: express.Request;
+  res: express.Response;
+  contract: ContractDefinition;
+  resourcePathname: string;
+}) {
+  const { req, res, contract, resourcePathname } = args;
+
+  if (!contract.upstream?.baseUrl) {
+    return res.status(500).json({ ok: false, error: 'proxy mode missing upstream.baseUrl' });
+  }
+
+  const upstreamBase = contract.upstream.baseUrl.replace(/\/$/, '');
+  const prefix = contract.upstream.pathPrefix ?? '';
+  const targetUrl = `${upstreamBase}${prefix}${resourcePathname}${reqQueryString(req)}`;
+
+  // Build headers: forward safe subset (simple allowlist: all incoming string headers except payment)
+  const incoming = new Headers();
+  for (const [k, v] of Object.entries(req.headers)) {
+    if (typeof v === 'string') incoming.set(k, v);
+  }
+
+  // Remove payment headers before forwarding
+  const forwarded = stripPaymentHeaders(incoming);
+
+  // Avoid leaking Host etc; fetch will set Host
+  forwarded.delete('host');
+  forwarded.delete('content-length');
+
+  // Prepare body for non-GET/HEAD
+  const method = req.method.toUpperCase();
+  const hasBody = !(method === 'GET' || method === 'HEAD');
+  const body = hasBody ? JSON.stringify(req.body ?? {}) : undefined;
+
+  const upstreamResp = await fetch(targetUrl, {
+    method,
+    headers: forwarded,
+    body,
+    redirect: 'manual',
+  });
+
+  // Copy status + headers (but avoid hop-by-hop headers)
+  res.status(upstreamResp.status);
+
+  upstreamResp.headers.forEach((value, key) => {
+    const k = key.toLowerCase();
+    if (
+      [
+        'transfer-encoding',
+        'connection',
+        'keep-alive',
+        'proxy-authenticate',
+        'proxy-authorization',
+        'te',
+        'trailers',
+        'upgrade',
+      ].includes(k)
+    ) {
+      return;
+    }
+    res.setHeader(key, value);
+  });
+
+  const buf = await upstreamResp.arrayBuffer();
+  res.send(Buffer.from(buf));
+}
+
 // -----------------------------------------------------------------------------
 // Health / readiness
 // -----------------------------------------------------------------------------
@@ -220,16 +310,22 @@ app.get('/healthz', (_req, res) => {
     legacyHeaders,
     expectedKid: expectedKid ?? null,
     contractsPath,
+    devHarness: {
+      enabled: !!devReceiptJws,
+      requiresPaymentSignature: devReceiptRequiresPaymentSignature,
+    },
     contractsLoaded: contracts.map((c) => ({
       contractId: c.contractId,
       contractVersion: c.contractVersion,
       isFrozen: c.isFrozen,
+      mode: c.mode,
       merchantId: c.merchantId,
       resource: c.resource,
       network: c.network,
       asset: c.asset,
       amount: c.amount,
       payTo: c.payTo,
+      upstream: c.upstream ?? null,
       attestations: c.attestations ?? [],
     })),
   });
@@ -245,39 +341,18 @@ app.get('/readyz', async (_req, res) => {
 });
 
 // -----------------------------------------------------------------------------
-// Canonical-ish x402 demo endpoint: /paid
-//
-// - If no nonce (or no fulfilled receipt): return 402 + PAYMENT-REQUIRED header
-// - If nonce provided and facilitator finds/fulfills: return 200 + PAYMENT-RESPONSE header
-// - On 200: verify receipt JWS locally via facilitator JWKS (NO /v1/verify call)
-//
-// x402 v2: client retries with PAYMENT-SIGNATURE. We parse it and reuse `nonce` if present.
-// C3: NEVER emit PAYMENT-RESPONSE headers unless local verify succeeds.
-// C4: If receipt verify fails, return 402 with clearer "Invalid payment receipt" error.
-//
-// Phase A:
-// - Resolve contract from registry and build PAYMENT-REQUIRED header payload from contract
-// -----------------------------------------------------------------------------
-//
-// IMPORTANT BEHAVIOR NOTE:
-// - CRP can legitimately return non-2xx such as 409 event_claimed.
-// - That is NOT a transport failure; we treat it as "not paid" and return 402 with a clearer error.
-// - Only network/transport/JSON errors are labeled "Gateway error while checking payment".
-//
+// Unified x402 handler (used by /paid and /x402/...)
 // -----------------------------------------------------------------------------
 
-app.get('/paid', async (req, res) => {
-  // Resolve the contract for this request (method + pathname)
+async function handleX402(req: express.Request, res: express.Response, resourcePathname: string) {
+  // Resolve contract based on the underlying resource path (e.g. /premium)
   let contract: ContractDefinition;
   try {
-    contract = resolveContract(contracts, { method: req.method, url: req.originalUrl || req.url });
+    contract = resolveContract(contracts, { method: req.method, pathname: resourcePathname });
   } catch (e: any) {
-    // Should never happen for /paid if registry is correct
-    return res.status(500).json({ ok: false, error: String(e?.message ?? e) });
+    return res.status(404).json({ ok: false, error: String(e?.message ?? e) });
   }
 
-  // Parse PAYMENT-SIGNATURE (base64 JSON). Not required for this demo flow,
-  // but improves v2 compatibility (nonce continuity without query params).
   const paymentSignatureB64 = getPaymentSignatureB64(req);
   let paymentSignature: any | null = null;
   let paymentSignatureParseError: string | null = null;
@@ -301,8 +376,8 @@ app.get('/paid', async (req, res) => {
 
   const nonce = nonceFromQuery ?? nonceFromSig ?? `demo-${randomUUID()}`;
 
-  // Build Phase A frozen PAYMENT-REQUIRED header payload from the contract
   const nowSec = Math.floor(Date.now() / 1000);
+
   const paymentRequiredHeaderPayload = buildPaymentRequiredPayload({
     contract,
     nonce,
@@ -310,7 +385,6 @@ app.get('/paid', async (req, res) => {
     expiresAtSec: nowSec + ttlSec,
   });
 
-  // For response bodies (DX), we can include extra info (NOT part of the frozen header)
   const paymentRequiredBody = {
     ...paymentRequiredHeaderPayload,
     facilitator: crpBaseUrl,
@@ -344,14 +418,88 @@ app.get('/paid', async (req, res) => {
       paid: false,
       paymentRequired: paymentRequiredBody,
       error: 'Invalid payment signature header',
-      ...(x402Debug
-        ? {
-            debug: {
-              reason: paymentSignatureParseError,
-              paymentSignatureB64Present: true,
-            },
-          }
-        : {}),
+      ...(x402Debug ? { debug: { reason: paymentSignatureParseError } } : {}),
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // DEV BYPASS (Phase B harness): If X402_DEV_RECEIPT_JWS is set, skip CRP calls.
+  // Still enforces:
+  // - PAYMENT-SIGNATURE must be present (unless disabled)
+  // - receipt must verify locally via JWKS (C3/C4 behavior preserved)
+  // ---------------------------------------------------------------------------
+  if (devReceiptJws) {
+    if (devReceiptRequiresPaymentSignature && !paymentSignatureB64) {
+      return reply402({
+        ok: false,
+        paid: false,
+        paymentRequired: paymentRequiredBody,
+        error: 'PAYMENT-SIGNATURE required (dev harness)',
+        ...(x402Debug ? { debug: { devReceiptRequiresPaymentSignature: true } } : {}),
+      });
+    }
+
+    // Verify injected receipt FIRST (C3/C4)
+    let verify: any;
+    try {
+      verify = await verifyReceiptJwsLocal(devReceiptJws);
+    } catch (err: any) {
+      const message = err?.name === 'ReceiptVerifyError' ? String(err.message) : String(err);
+      return reply402({
+        ok: false,
+        paid: false,
+        paymentRequired: paymentRequiredBody,
+        error: 'Invalid payment receipt (dev harness)',
+        ...(x402Debug ? { debug: { reason: message } } : {}),
+      });
+    }
+
+    // Frozen PAYMENT-RESPONSE shape (Phase B)
+    const paymentResponseHeaderPayload = {
+      version: 'x402-v2',
+      contractId: contract.contractId,
+      contractVersion: contract.contractVersion,
+      merchantId: contract.merchantId,
+      resource: contract.resource,
+      nonce,
+      settled: true,
+      receipt: {
+        jws: devReceiptJws,
+        payload: null,
+      },
+    };
+
+    const respB64 = b64json(paymentResponseHeaderPayload);
+    res.setHeader('PAYMENT-RESPONSE', respB64);
+    if (legacyHeaders) res.setHeader('X-PAYMENT-RESPONSE', respB64);
+
+    if (contract.mode === 'proxy') {
+      try {
+        return await proxyToUpstream({ req, res, contract, resourcePathname });
+      } catch (e: any) {
+        console.error('Proxy error (dev harness):', e);
+        return res.status(502).json({
+          ok: false,
+          error: 'Upstream proxy error (dev harness)',
+          ...(x402Debug ? { debug: { message: String(e?.message ?? e) } } : {}),
+        });
+      }
+    }
+
+    // local mode
+    return res.status(200).json({
+      ok: true,
+      paid: true,
+      nonce,
+      resource: 'secret-data',
+      contract: {
+        contractId: contract.contractId,
+        contractVersion: contract.contractVersion,
+        isFrozen: contract.isFrozen,
+        mode: contract.mode,
+      },
+      verify,
+      devHarness: true,
     });
   }
 
@@ -363,7 +511,7 @@ app.get('/paid', async (req, res) => {
     match = await crpClient.matchPayment(matchReq);
     fulfill = await crpClient.fulfillPayment(matchReq);
   } catch (err) {
-    console.error('Error calling CRP in /paid:', err);
+    console.error('Error calling CRP:', err);
     return reply402({
       ok: false,
       paid: false,
@@ -400,16 +548,7 @@ app.get('/paid', async (req, res) => {
       ok: false,
       paid: false,
       paymentRequired: paymentRequiredBody,
-      ...(x402Debug
-        ? {
-            debug: {
-              match,
-              fulfill,
-              paymentSignature: paymentSignature ?? null,
-              paymentSignatureB64Present: !!paymentSignatureB64,
-            },
-          }
-        : {}),
+      ...(x402Debug ? { debug: { match, fulfill } } : {}),
     });
   }
 
@@ -418,7 +557,6 @@ app.get('/paid', async (req, res) => {
   try {
     verify = await verifyReceiptJwsLocal(receiptJws!);
   } catch (err: any) {
-    // Receipt verification failures are not "gateway errors" — just invalid/untrusted payment proof.
     const message = err?.name === 'ReceiptVerifyError' ? String(err.message) : String(err);
 
     return reply402({
@@ -426,40 +564,45 @@ app.get('/paid', async (req, res) => {
       paid: false,
       paymentRequired: paymentRequiredBody,
       error: 'Invalid payment receipt',
-      ...(x402Debug
-        ? {
-            debug: {
-              reason: message,
-              match,
-              fulfill,
-              expectedKid: expectedKid ?? null,
-              paymentSignature: paymentSignature ?? null,
-              paymentSignatureB64Present: !!paymentSignatureB64,
-            },
-          }
-        : {}),
+      ...(x402Debug ? { debug: { reason: message, match, fulfill } } : {}),
     });
   }
 
   // 4) Only after verification succeeds do we emit PAYMENT-RESPONSE headers.
-  const paymentResponse = {
-    // Phase A spec: we only freeze that PAYMENT-RESPONSE is base64 JSON and includes settled fields.
-    // We keep your current JWS-based payload for backward compatibility.
-    jws: receiptJws!,
-    payload: m?.receipt?.payload ?? null,
-
-    // Additional Phase A stable identifiers (safe to include now)
+  // Phase B: Frozen PAYMENT-RESPONSE shape.
+  const paymentResponseHeaderPayload = {
     version: 'x402-v2',
     contractId: contract.contractId,
+    contractVersion: contract.contractVersion,
     merchantId: contract.merchantId,
+    resource: contract.resource,
     nonce,
     settled: true,
+    receipt: {
+      jws: receiptJws!,
+      payload: m?.receipt?.payload ?? null,
+    },
   };
 
-  const respB64 = b64json(paymentResponse);
+  const respB64 = b64json(paymentResponseHeaderPayload);
   res.setHeader('PAYMENT-RESPONSE', respB64);
   if (legacyHeaders) res.setHeader('X-PAYMENT-RESPONSE', respB64);
 
+  // Serve locally or proxy upstream
+  if (contract.mode === 'proxy') {
+    try {
+      return await proxyToUpstream({ req, res, contract, resourcePathname });
+    } catch (e: any) {
+      console.error('Proxy error:', e);
+      return res.status(502).json({
+        ok: false,
+        error: 'Upstream proxy error',
+        ...(x402Debug ? { debug: { message: String(e?.message ?? e) } } : {}),
+      });
+    }
+  }
+
+  // local mode
   return res.status(200).json({
     ok: true,
     paid: true,
@@ -469,19 +612,26 @@ app.get('/paid', async (req, res) => {
       contractId: contract.contractId,
       contractVersion: contract.contractVersion,
       isFrozen: contract.isFrozen,
+      mode: contract.mode,
     },
     verify,
-    ...(x402Debug
-      ? {
-          debug: {
-            match,
-            fulfill,
-            paymentSignature: paymentSignature ?? null,
-            paymentSignatureB64Present: !!paymentSignatureB64,
-          },
-        }
-      : {}),
+    ...(x402Debug ? { debug: { match, fulfill } } : {}),
   });
+}
+
+// -----------------------------------------------------------------------------
+// Routes
+// -----------------------------------------------------------------------------
+
+// Existing local/demo endpoint (still supported)
+app.get('/paid', async (req, res) => handleX402(req, res, '/paid'));
+
+// New generic edge gateway route: /x402/... (regex because path-to-regexp v6 rejects '/x402/*')
+// Example: GET /x402/premium?nonce=...  -> resolves contract for GET /premium
+app.all(/^\/x402(?:\/.*)?$/, async (req, res) => {
+  const pathname = reqPathname(req);
+  const resourcePathname = stripX402Prefix(pathname);
+  return handleX402(req, res, resourcePathname);
 });
 
 // -----------------------------------------------------------------------------
