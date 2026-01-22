@@ -5,186 +5,270 @@ BASE="${BASE:-http://127.0.0.1:3005}"
 UPSTREAM_PORT="${UPSTREAM_PORT:-3010}"
 NONCE="${NONCE:-bb-test}"
 
-JWKS_PORT="${JWKS_PORT:-8088}"
 JWKS_HOST="${JWKS_HOST:-127.0.0.1}"
-
-# How long to wait for you to restart the gateway with dev harness enabled
+JWKS_PORT="${JWKS_PORT:-8088}"
 WAIT_SECS="${WAIT_SECS:-60}"
+
+# NEW: default is to pause after ACTION REQUIRED
+WAIT_FOR_USER="${WAIT_FOR_USER:-true}"
 
 echo "[harness] BASE=$BASE"
 echo "[harness] NONCE=$NONCE"
 echo "[harness] expecting upstream on :$UPSTREAM_PORT"
+echo "[harness] starting dev JWKS issuer on $JWKS_HOST:$JWKS_PORT ..."
 
 TMP_HEADERS_1="$(mktemp)"
 TMP_BODY_1="$(mktemp)"
 TMP_HEADERS_2="$(mktemp)"
 TMP_BODY_2="$(mktemp)"
 TMP_ISSUER_LOG="$(mktemp)"
+TMP_MINT_JSON="$(mktemp)"
+
+ISSUER_PID=""
 
 cleanup() {
-  rm -f "$TMP_HEADERS_1" "$TMP_BODY_1" "$TMP_HEADERS_2" "$TMP_BODY_2" "$TMP_ISSUER_LOG"
-  if [[ -n "${ISSUER_PID:-}" ]]; then
-    kill "$ISSUER_PID" >/dev/null 2>&1 || true
+  rm -f "$TMP_HEADERS_1" "$TMP_BODY_1" "$TMP_HEADERS_2" "$TMP_BODY_2" "$TMP_ISSUER_LOG" "$TMP_MINT_JSON" || true
+  if [[ -n "${ISSUER_PID}" ]]; then
+    kill "${ISSUER_PID}" >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
 
-decode_b64() {
-  if base64 --help 2>&1 | grep -q -- "-d"; then
-    printf "%s" "$1" | base64 -d
-  else
-    printf "%s" "$1" | base64 -D
-  fi
-}
+# Upstream must be running
+curl -sS "http://127.0.0.1:${UPSTREAM_PORT}/" >/dev/null
 
-# 0) Ensure upstream is up
-if ! (curl -sS "http://127.0.0.1:${UPSTREAM_PORT}/" >/dev/null 2>&1); then
-  echo "[harness] ERROR: upstream not reachable on http://127.0.0.1:${UPSTREAM_PORT}/"
-  echo "[harness] Start it in another terminal:"
-  echo "  node -e \"require('http').createServer((req,res)=>{res.setHeader('content-type','text/plain');res.end('UPSTREAM_OK '+req.url)}).listen(${UPSTREAM_PORT},()=>console.log('upstream on ${UPSTREAM_PORT}'))\""
-  exit 1
-fi
-
-# 1) Start JWKS + receipt issuer
-echo "[harness] starting dev JWKS issuer on ${JWKS_HOST}:${JWKS_PORT} ..."
-( HOST="$JWKS_HOST" PORT="$JWKS_PORT" NONCE="$NONCE" node scripts/dev_jwks_server.mjs >"$TMP_ISSUER_LOG" 2>&1 ) &
+# Start issuer in background
+HOST="${JWKS_HOST}" PORT="${JWKS_PORT}" NONCE="${NONCE}" \
+  node scripts/dev_jwks_server.mjs >"$TMP_ISSUER_LOG" 2>&1 &
 ISSUER_PID=$!
 
-# Wait for issuer to print vars
-for _ in $(seq 1 80); do
-  if grep -q '^JWKS_URL=' "$TMP_ISSUER_LOG" && grep -q '^RECEIPT_JWS=' "$TMP_ISSUER_LOG"; then
+JWKS_URL="http://${JWKS_HOST}:${JWKS_PORT}/.well-known/jwks.json"
+MINT_BASE="http://${JWKS_HOST}:${JWKS_PORT}/mint"
+
+# Wait for JWKS endpoint to respond
+for _ in $(seq 1 100); do
+  if curl -fsS "$JWKS_URL" >/dev/null 2>&1; then
     break
   fi
   sleep 0.1
 done
 
-JWKS_URL="$(grep '^JWKS_URL=' "$TMP_ISSUER_LOG" | head -n1 | sed 's/^JWKS_URL=//')"
-RECEIPT_JWS="$(grep '^RECEIPT_JWS=' "$TMP_ISSUER_LOG" | head -n1 | sed 's/^RECEIPT_JWS=//')"
-
-if [[ -z "${JWKS_URL:-}" || -z "${RECEIPT_JWS:-}" ]]; then
-  echo "[harness] ERROR: could not read JWKS_URL/RECEIPT_JWS from issuer"
-  echo "--- issuer log ---"
-  cat "$TMP_ISSUER_LOG"
+if ! curl -fsS "$JWKS_URL" >/dev/null 2>&1; then
+  echo
+  echo "[harness] ERROR: JWKS issuer did not become ready at $JWKS_URL"
+  echo "[harness] issuer log:"
+  sed 's/^/  /' "$TMP_ISSUER_LOG" || true
   exit 1
 fi
 
 echo "[harness] JWKS_URL=$JWKS_URL"
-echo "[harness] got RECEIPT_JWS (len=${#RECEIPT_JWS})"
 
-# 2) You MUST restart the gateway so it sees these env vars (they cannot be injected via curl)
-echo
-echo "[harness] ACTION REQUIRED:"
-echo "  Restart your gateway (Terminal A) with these env vars set:"
-echo
-echo "  CRP_JWKS_URL=\"$JWKS_URL\" \\"
-echo "  X402_ALLOW_DEV_HARNESS=true \\"
-echo "  X402_DEV_RECEIPT_JWS=\"$RECEIPT_JWS\" \\"
-echo "  X402_DEV_RECEIPT_REQUIRE_SIG=true \\"
-echo "  npm run dev"
-echo
-echo "[harness] Waiting up to ${WAIT_SECS}s for /healthz to report devHarness.enabled=true ..."
-echo
+# Helper: extract a header (case-insensitive) from a curl -i output headers file.
+get_header() {
+  local name="$1"
+  grep -i -m1 "^${name}:" "$2" | sed -E "s/^${name}:[[:space:]]*//I" | tr -d '\r'
+}
 
-# 3) Poll /healthz until devHarness.enabled is true
-deadline=$(( $(date +%s) + WAIT_SECS ))
-while :; do
-  now=$(date +%s)
-  if (( now > deadline )); then
-    echo "[harness] ERROR: timed out waiting for gateway devHarness.enabled=true"
-    echo "[harness] Hint: make sure you restarted the gateway process with the env vars printed above."
-    exit 1
-  fi
+# Helper: base64(JSON({nonce})) for PAYMENT-SIGNATURE
+payment_signature_b64() {
+  NONCE="$NONCE" node -e 'process.stdout.write(Buffer.from(JSON.stringify({nonce:process.env.NONCE}),"utf8").toString("base64"))'
+}
 
-  health="$(curl -sS "$BASE/healthz" 2>/dev/null || true)"
-  if [[ -n "$health" ]]; then
-    enabled="$(node -e 'try{const o=JSON.parse(process.argv[1]);process.stdout.write(String(!!(o.devHarness&&o.devHarness.enabled)))}catch{process.stdout.write("false")}' "$health")"
-    if [[ "$enabled" == "true" ]]; then
-      echo "[harness] OK: gateway devHarness.enabled=true"
-      break
-    fi
-  fi
-
-  sleep 1
-done
-
-# 4) First request should be 402 (no PAYMENT-SIGNATURE)
-URL1="$BASE/x402/premium?nonce=$NONCE"
+# --------------------------------------------------------------------
+# Request #1: expect 402 + PAYMENT-REQUIRED (this gives us the contract)
+# --------------------------------------------------------------------
+URL1="${BASE}/x402/premium?nonce=${NONCE}"
 echo "[harness] request #1 (expect 402): $URL1"
+curl -sS -i "$URL1" -D "$TMP_HEADERS_1" -o "$TMP_BODY_1" >/dev/null || true
 
-HTTP1="$(curl -sS -D "$TMP_HEADERS_1" -o "$TMP_BODY_1" -w "%{http_code}" "$URL1")"
-echo "[harness] status #1=$HTTP1"
-if [[ "$HTTP1" != "402" ]]; then
-  echo "Expected 402 on first request"
+STATUS1="$(head -n1 "$TMP_HEADERS_1" | awk '{print $2}' | tr -d '\r')"
+echo "[harness] status #1=$STATUS1"
+if [[ "$STATUS1" != "402" ]]; then
+  echo "Expected 402 on request #1"
   echo "--- headers ---"; cat "$TMP_HEADERS_1"
   echo "--- body ---"; cat "$TMP_BODY_1"
   exit 1
 fi
 
-PAYREQ_B64="$(grep -i '^PAYMENT-REQUIRED:' "$TMP_HEADERS_1" | head -n1 | sed -E 's/^[^:]+:\s*//')"
-if [[ -z "${PAYREQ_B64:-}" ]]; then
-  echo "Missing PAYMENT-REQUIRED header on first response"
+PR_B64="$(get_header "PAYMENT-REQUIRED" "$TMP_HEADERS_1")"
+if [[ -z "$PR_B64" ]]; then
+  echo "Missing PAYMENT-REQUIRED header on request #1"
+  echo "--- headers ---"; cat "$TMP_HEADERS_1"
   exit 1
 fi
 
-PAYREQ_JSON="$(decode_b64 "$PAYREQ_B64")"
-CONTRACT_ID="$(node -e 'const o=JSON.parse(process.argv[1]);process.stdout.write(o.contractId||"")' "$PAYREQ_JSON")"
-if [[ -z "${CONTRACT_ID:-}" ]]; then
-  echo "Could not extract contractId from PAYMENT-REQUIRED"
-  echo "$PAYREQ_JSON"
-  exit 1
-fi
-echo "[harness] contractId=$CONTRACT_ID"
-
-# 5) Second request should be 200 with PAYMENT-RESPONSE + upstream body, providing PAYMENT-SIGNATURE
-PAY_SIG_JSON="$(node -e 'console.log(JSON.stringify({nonce: process.env.NONCE}))' NONCE="$NONCE")"
-PAY_SIG_B64="$(printf "%s" "$PAY_SIG_JSON" | base64)"
-
-echo "[harness] request #2 (expect 200 + proxy content): $URL1"
-HTTP2="$(curl -sS -D "$TMP_HEADERS_2" -o "$TMP_BODY_2" -w "%{http_code}" -H "PAYMENT-SIGNATURE: $PAY_SIG_B64" "$URL1")"
-echo "[harness] status #2=$HTTP2"
-
-if [[ "$HTTP2" != "200" ]]; then
-  echo "Expected 200 on paid-path request"
-  echo "--- headers ---"; cat "$TMP_HEADERS_2"
-  echo "--- body ---"; cat "$TMP_BODY_2"
-  exit 1
-fi
-
-PAYRESP_B64="$(grep -i '^PAYMENT-RESPONSE:' "$TMP_HEADERS_2" | head -n1 | sed -E 's/^[^:]+:\s*//')"
-if [[ -z "${PAYRESP_B64:-}" ]]; then
-  echo "Missing PAYMENT-RESPONSE header on paid-path response"
-  echo "--- headers ---"; cat "$TMP_HEADERS_2"
-  exit 1
-fi
-
-PAYRESP_JSON="$(decode_b64 "$PAYRESP_B64")"
-
-# Validate PAYMENT-RESPONSE fields
-node - <<'NODE' "$PAYRESP_JSON" "$CONTRACT_ID" "$NONCE"
-const [json, expectedCid, expectedNonce] = process.argv.slice(2);
-let o;
-try { o = JSON.parse(json); } catch { console.error("PAYMENT-RESPONSE decoded not JSON"); process.exit(1); }
-
-const must = ["version","contractId","contractVersion","merchantId","resource","nonce","settled","receipt"];
-for (const k of must) if (!(k in o)) { console.error("Missing key:", k); process.exit(1); }
-
-if (o.version !== "x402-v2") { console.error("Bad version:", o.version); process.exit(1); }
-if (o.contractId !== expectedCid) { console.error("contractId mismatch:", o.contractId, expectedCid); process.exit(1); }
-if (o.nonce !== expectedNonce) { console.error("nonce mismatch:", o.nonce, expectedNonce); process.exit(1); }
-if (o.settled !== true) { console.error("settled must be true"); process.exit(1); }
-if (!o.receipt || typeof o.receipt.jws !== "string" || o.receipt.jws.length < 20) {
-  console.error("receipt.jws missing/short"); process.exit(1);
+# Decode PAYMENT-REQUIRED b64 -> JSON and build mint URL
+MINT_URL="$(
+  PR_B64="$PR_B64" MINT_BASE="$MINT_BASE" node - <<'NODE'
+function normalizeB64(s){
+  s = String(s||"").trim().replace(/-/g,'+').replace(/_/g,'/');
+  const pad = s.length % 4;
+  if (pad === 2) s += '==';
+  else if (pad === 3) s += '=';
+  return s;
 }
-console.log("[harness] PAYMENT-RESPONSE validated");
+const prB64 = process.env.PR_B64;
+const mintBase = process.env.MINT_BASE;
+
+const json = Buffer.from(normalizeB64(prB64), 'base64').toString('utf8');
+const pr = JSON.parse(json);
+
+const required = [
+  pr.contractId, pr.contractVersion,
+  pr.merchantId,
+  pr.resource?.method, pr.resource?.path,
+  pr.network,
+  pr.asset?.tokenId,
+  pr.asset?.decimals,
+  pr.amount,
+  pr.payTo,
+  pr.nonce,
+];
+if (required.some(v => v === undefined || v === null || v === "")) {
+  throw new Error("PAYMENT-REQUIRED missing required fields");
+}
+if (typeof pr.isFrozen !== "boolean") {
+  throw new Error("PAYMENT-REQUIRED missing isFrozen boolean");
+}
+
+const u = new URL(mintBase);
+u.searchParams.set('nonce', pr.nonce);
+u.searchParams.set('contractId', pr.contractId);
+u.searchParams.set('contractVersion', pr.contractVersion);
+u.searchParams.set('isFrozen', String(pr.isFrozen));
+u.searchParams.set('merchantId', pr.merchantId);
+u.searchParams.set('method', String(pr.resource.method).toUpperCase());
+u.searchParams.set('path', String(pr.resource.path));
+u.searchParams.set('network', pr.network);
+u.searchParams.set('tokenId', pr.asset.tokenId);
+u.searchParams.set('decimals', String(pr.asset.decimals));
+u.searchParams.set('amount', pr.amount);
+u.searchParams.set('payTo', pr.payTo);
+
+process.stdout.write(u.toString());
+NODE
+)"
+
+echo "[harness] minting receipt via: $MINT_URL"
+curl -fsS "$MINT_URL" > "$TMP_MINT_JSON"
+
+RECEIPT_JWS="$(node -e 'const fs=require("fs"); const o=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(o.jws||"")' "$TMP_MINT_JSON")"
+if [[ -z "$RECEIPT_JWS" ]]; then
+  echo "[harness] ERROR: mint did not return jws"
+  cat "$TMP_MINT_JSON"
+  exit 1
+fi
+echo "[harness] got RECEIPT_JWS (len=${#RECEIPT_JWS})"
+
+# --------------------------------------------------------------------
+# ACTION REQUIRED: restart gateway with dev harness enabled
+# --------------------------------------------------------------------
+echo
+echo "[harness] ACTION REQUIRED:"
+echo "  Restart your gateway (Terminal A) with these env vars set:"
+echo
+cat <<EOF
+  X402_ALLOW_DEV_HARNESS=true \\
+  CRP_JWKS_URL="$JWKS_URL" \\
+  X402_DEV_RECEIPT_JWS="$RECEIPT_JWS" \\
+  X402_DEV_RECEIPT_REQUIRE_SIG=true \\
+  npm run dev
+EOF
+echo
+
+# NEW: pause here so the gateway actually gets restarted with THIS receipt.
+if [[ "$WAIT_FOR_USER" == "true" ]]; then
+  echo "[harness] Pausing now. Restart the gateway in Terminal A, then press Enter to continue..."
+  read -r _
+fi
+
+echo "[harness] Waiting up to ${WAIT_SECS}s for /healthz to report devHarness.enabled=true ..."
+
+ok="false"
+for _ in $(seq 1 $((WAIT_SECS * 10))); do
+  if curl -fsS "${BASE}/healthz" 2>/dev/null | node -e '
+    let d=""; process.stdin.on("data",c=>d+=c);
+    process.stdin.on("end",()=>{ try{
+      const j=JSON.parse(d);
+      process.exit(j?.devHarness?.enabled===true ? 0 : 1);
+    }catch{process.exit(1)}});
+  ' >/dev/null 2>&1; then
+    ok="true"
+    break
+  fi
+  sleep 0.1
+done
+
+if [[ "$ok" != "true" ]]; then
+  echo "[harness] ERROR: gateway did not report devHarness.enabled=true in time."
+  exit 1
+fi
+
+echo "[harness] OK: gateway devHarness.enabled=true"
+
+# --------------------------------------------------------------------
+# Request #2: expect 200 + PAYMENT-RESPONSE + upstream body
+# --------------------------------------------------------------------
+SIG_B64="$(payment_signature_b64)"
+URL2="${BASE}/x402/premium?nonce=${NONCE}"
+echo "[harness] request #2 (expect 200 + proxy content): $URL2"
+curl -sS -i -H "PAYMENT-SIGNATURE: ${SIG_B64}" "$URL2" -D "$TMP_HEADERS_2" -o "$TMP_BODY_2" >/dev/null || true
+
+STATUS2="$(head -n1 "$TMP_HEADERS_2" | awk '{print $2}' | tr -d '\r')"
+echo "[harness] status #2=$STATUS2"
+if [[ "$STATUS2" != "200" ]]; then
+  echo "Expected 200 on paid-path request"
+  echo "--- headers ---"
+  cat "$TMP_HEADERS_2"
+  echo
+  echo "--- body ---"
+  cat "$TMP_BODY_2"
+  exit 1
+fi
+
+RESP_B64="$(get_header "PAYMENT-RESPONSE" "$TMP_HEADERS_2")"
+if [[ -z "$RESP_B64" ]]; then
+  echo "Missing PAYMENT-RESPONSE header on request #2"
+  echo "--- headers ---"; cat "$TMP_HEADERS_2"
+  exit 1
+fi
+
+# Validate PAYMENT-RESPONSE decodes and contains the receipt.jws we minted
+RESP_B64="$RESP_B64" RECEIPT_JWS="$RECEIPT_JWS" node - <<'NODE'
+function normalizeB64(s){
+  s = String(s||"").trim().replace(/-/g,'+').replace(/_/g,'/');
+  const pad = s.length % 4;
+  if (pad === 2) s += '==';
+  else if (pad === 3) s += '=';
+  return s;
+}
+const respB64 = process.env.RESP_B64;
+const want = process.env.RECEIPT_JWS;
+
+const json = Buffer.from(normalizeB64(respB64), 'base64').toString('utf8');
+const pr = JSON.parse(json);
+
+const got = pr?.receipt?.jws || pr?.jws;
+if (!got) {
+  console.error("PAYMENT-RESPONSE missing receipt.jws");
+  process.exit(1);
+}
+if (got !== want) {
+  console.error("PAYMENT-RESPONSE receipt.jws mismatch");
+  process.exit(1);
+}
+process.exit(0);
 NODE
 
-BODY2="$(cat "$TMP_BODY_2")"
-echo "[harness] body #2:"
-echo "$BODY2" | sed 's/^/  /'
+echo "[harness] PAYMENT-RESPONSE validated"
 
-if ! echo "$BODY2" | grep -q "UPSTREAM_OK"; then
-  echo "[harness] ERROR: expected upstream content (UPSTREAM_OK) in body"
+echo "[harness] body #2:"
+sed 's/^/  /' "$TMP_BODY_2"
+
+if ! grep -q "UPSTREAM_OK" "$TMP_BODY_2"; then
+  echo "Expected upstream body to contain UPSTREAM_OK"
   exit 1
 fi
 
 echo "[harness] PASS: paid-path proxy worked + PAYMENT-RESPONSE validated"
+echo "[harness] DONE"
