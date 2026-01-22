@@ -1,21 +1,28 @@
 // src/server.ts
 //
-// Phase B: Gateway/Proxy (edge) model via /x402/... while keeping /paid local mode.
-// - Challenge: 402 + PAYMENT-REQUIRED (Phase A frozen via contract registry)
-// - Paid: 200 + PAYMENT-RESPONSE (Phase B frozen shape)
-// - Proxy mode: after verification, forward request to upstream (payment-unaware)
+// Phase B (real): Concordium PLT proof payload verification.
+// - Verify JWS signature via facilitator JWKS (already done)
+// - THEN require receipt payload to be a valid ccd-plt-proof@v1,
+//   bound to the resolved frozen contract + nonce + amountRaw, and finalized.
 //
-// C3/C4 still apply: NEVER emit PAYMENT-RESPONSE unless receipt verify succeeds.
+// Supports both:
+// 1) local resource mode: GET /paid
+// 2) edge gateway/proxy mode: /x402/... forwards to upstream after verified payment
+//
+// C3/C4: NEVER emit PAYMENT-RESPONSE unless receipt verify + proof payload checks succeed.
 //
 // DEV-ONLY PAID-PATH HARNESS (hardened; off by default):
 // - Requires X402_ALLOW_DEV_HARNESS=true AND NODE_ENV != production
 // - If enabled and X402_DEV_RECEIPT_JWS is set, we skip CRP calls and use that receipt JWS.
-// - Still requires local JWKS verification and (by default) requires PAYMENT-SIGNATURE header.
-// - This lets us test "paid path" + proxying without automating chain payment yet.
+// - Still requires local JWKS verification + proof payload validation.
+//
+// OPTIONAL HARDENING:
+// - When X402_ALLOW_DEV_HARNESS=true, /healthz includes non-secret dev receipt metadata:
+//   jwksUrl, receipt sha256 prefix, kid, iat/exp — but NEVER the full receipt JWS.
 
 import express from 'express';
 import bodyParser from 'body-parser';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 
 import { CrpClient, MatchPaymentRequest } from './crpClient';
 import {
@@ -25,6 +32,13 @@ import {
   b64jsonHeader,
   ContractDefinition,
 } from './contracts';
+
+import type { ContractBinding, HttpMethod } from './proofPayload';
+import {
+  assertCcdPltProofV1,
+  validateCcdPltProofAgainstContract,
+  ProofPayloadError,
+} from './proofPayload';
 
 const app = express();
 app.use(bodyParser.json());
@@ -134,6 +148,20 @@ function parseB64Json<T = any>(b64: string): T {
   const s = normalizeB64(b64);
   const json = Buffer.from(s, 'base64').toString('utf8');
   return JSON.parse(json) as T;
+}
+
+function sha256HexPrefix(input: string, hexChars: number): string {
+  const hex = createHash('sha256').update(input, 'utf8').digest('hex');
+  return hex.slice(0, Math.max(0, Math.min(hex.length, hexChars)));
+}
+
+function parseJwsUnverified(jws: string): { header: any; payload: any } {
+  // NOTE: This is for /healthz metadata only. Verification happens elsewhere.
+  const parts = String(jws || '').split('.');
+  if (parts.length < 2) throw new Error('Invalid JWS: missing parts');
+  const header = parseB64Json(parts[0]); // base64url tolerated by normalizeB64()
+  const payload = parseB64Json(parts[1]);
+  return { header, payload };
 }
 
 function getPaymentSignatureB64(req: express.Request): string | null {
@@ -263,14 +291,13 @@ async function proxyToUpstream(args: {
 
   const forwarded = stripPaymentHeaders(incoming);
 
-  // Avoid leaking host / content-length; fetch will set them
   forwarded.delete('host');
   forwarded.delete('content-length');
 
   const method = req.method.toUpperCase();
   const hasBody = !(method === 'GET' || method === 'HEAD');
 
-  // NOTE: This demo assumes JSON bodies for non-GET requests.
+  // Demo assumption: JSON bodies for non-GET.
   const body = hasBody ? JSON.stringify(req.body ?? {}) : undefined;
 
   const upstreamResp = await fetch(targetUrl, {
@@ -305,11 +332,75 @@ async function proxyToUpstream(args: {
   res.send(Buffer.from(buf));
 }
 
+// Build the expected contract binding for proof payload checks.
+function toHttpMethod(s: string): HttpMethod {
+  const m = String(s || '').toUpperCase();
+  if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(m)) {
+    throw new Error(`Invalid HTTP method in contract: "${s}"`);
+  }
+  return m as HttpMethod;
+}
+
+function toContractBinding(c: ContractDefinition): ContractBinding {
+  return {
+    contractId: c.contractId,
+    contractVersion: c.contractVersion,
+    isFrozen: c.isFrozen,
+    merchantId: c.merchantId,
+    resource: { method: toHttpMethod(c.resource.method), path: c.resource.path },
+    network: c.network,
+    asset: {
+      type: 'PLT',
+      tokenId: c.asset.tokenId,
+      decimals: c.asset.decimals,
+    },
+    amount: c.amount,
+    payTo: c.payTo,
+  };
+}
+
+// Convert ProofPayloadError into a stable error string
+function proofErrorToString(e: any): string {
+  if (e?.name === 'ProofPayloadError' || e instanceof ProofPayloadError) return String(e.message ?? e);
+  return String(e?.message ?? e);
+}
+
 // -----------------------------------------------------------------------------
 // Health / readiness
 // -----------------------------------------------------------------------------
 
 app.get('/healthz', (_req, res) => {
+  // IMPORTANT: Never print full receipt JWS in /healthz.
+  // If X402_ALLOW_DEV_HARNESS=true, expose only non-secret metadata for debugging.
+  let devReceiptMeta:
+    | {
+        sha25612: string;
+        kid: string | null;
+        iat: number | null;
+        exp: number | null;
+      }
+    | null = null;
+
+  if (allowDevHarness && devReceiptJws) {
+    try {
+      const { header, payload } = parseJwsUnverified(devReceiptJws);
+      devReceiptMeta = {
+        sha25612: sha256HexPrefix(devReceiptJws, 12),
+        kid: typeof header?.kid === 'string' ? header.kid : null,
+        iat: typeof payload?.iat === 'number' ? payload.iat : null,
+        exp: typeof payload?.exp === 'number' ? payload.exp : null,
+      };
+    } catch {
+      // Keep healthz stable even if receipt env var is malformed.
+      devReceiptMeta = {
+        sha25612: sha256HexPrefix(devReceiptJws, 12),
+        kid: null,
+        iat: null,
+        exp: null,
+      };
+    }
+  }
+
   res.json({
     ok: true,
     status: 'up',
@@ -325,6 +416,13 @@ app.get('/healthz', (_req, res) => {
       allowDevHarness,
       nodeEnv: process.env.NODE_ENV ?? null,
       requiresPaymentSignature: devReceiptRequiresPaymentSignature,
+      // Only present when X402_ALLOW_DEV_HARNESS=true (and receipt is set).
+      ...(allowDevHarness
+        ? {
+            jwksUrl,
+            receipt: devReceiptMeta,
+          }
+        : {}),
     },
     contractsLoaded: contracts.map((c) => ({
       contractId: c.contractId,
@@ -434,6 +532,27 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     });
   }
 
+  // Helper: once we have a receipt JWS, verify signature + enforce proof payload semantics.
+  const verifyAndValidateProof = async (receiptJws: string) => {
+    const verify = await verifyReceiptJwsLocal(receiptJws);
+
+    // Phase B (real): require ccd-plt-proof@v1 in receipt payload
+    const payload = verify.payload;
+
+    assertCcdPltProofV1(payload);
+
+    validateCcdPltProofAgainstContract({
+      proof: payload,
+      expected: {
+        nonce,
+        contract: toContractBinding(contract),
+        nowSec,
+      },
+    });
+
+    return { verify, proof: payload };
+  };
+
   // ---------------------------------------------------------------------------
   // DEV BYPASS (Phase B harness): If devReceiptJws is set, skip CRP calls.
   // Hardened by:
@@ -441,7 +560,8 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   // - NODE_ENV != production
   // Still enforces:
   // - PAYMENT-SIGNATURE must be present (unless disabled)
-  // - receipt must verify locally via JWKS (C3/C4 behavior preserved)
+  // - receipt must verify locally via JWKS
+  // - receipt payload must be valid ccd-plt-proof@v1 bound to contract+nonce
   // ---------------------------------------------------------------------------
   if (devReceiptJws) {
     if (devReceiptRequiresPaymentSignature && !paymentSignatureB64) {
@@ -454,12 +574,20 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       });
     }
 
-    // Verify injected receipt FIRST (C3/C4)
     let verify: any;
+    let proof: any;
     try {
-      verify = await verifyReceiptJwsLocal(devReceiptJws);
+      const out = await verifyAndValidateProof(devReceiptJws);
+      verify = out.verify;
+      proof = out.proof;
     } catch (err: any) {
-      const message = err?.name === 'ReceiptVerifyError' ? String(err.message) : String(err);
+      const message =
+        err?.name === 'ReceiptVerifyError'
+          ? String(err.message)
+          : err?.name === 'ProofPayloadError' || err instanceof ProofPayloadError
+            ? proofErrorToString(err)
+            : String(err?.message ?? err);
+
       return reply402({
         ok: false,
         paid: false,
@@ -480,7 +608,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       settled: true,
       receipt: {
         jws: devReceiptJws,
-        payload: null,
+        payload: proof ?? null,
       },
     };
 
@@ -568,11 +696,20 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   }
 
   // 3) C3/C4: Verify FIRST. If verify fails, return 402 (invalid receipt) and DO NOT set PAYMENT-RESPONSE.
+  // Phase B (real): also enforce proof payload semantics.
   let verify: any;
+  let proof: any;
   try {
-    verify = await verifyReceiptJwsLocal(receiptJws!);
+    const out = await verifyAndValidateProof(receiptJws!);
+    verify = out.verify;
+    proof = out.proof;
   } catch (err: any) {
-    const message = err?.name === 'ReceiptVerifyError' ? String(err.message) : String(err);
+    const message =
+      err?.name === 'ReceiptVerifyError'
+        ? String(err.message)
+        : err?.name === 'ProofPayloadError' || err instanceof ProofPayloadError
+          ? proofErrorToString(err)
+          : String(err?.message ?? err);
 
     return reply402({
       ok: false,
@@ -595,7 +732,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     settled: true,
     receipt: {
       jws: receiptJws!,
-      payload: m?.receipt?.payload ?? null,
+      payload: proof ?? null,
     },
   };
 
