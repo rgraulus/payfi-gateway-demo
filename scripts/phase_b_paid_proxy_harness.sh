@@ -77,6 +77,7 @@ echo "[harness] ACTION REQUIRED:"
 echo "  Restart your gateway (Terminal A) with these env vars set:"
 echo
 echo "  CRP_JWKS_URL=\"$JWKS_URL\" \\"
+echo "  X402_ALLOW_DEV_HARNESS=true \\"
 echo "  X402_DEV_RECEIPT_JWS=\"$RECEIPT_JWS\" \\"
 echo "  X402_DEV_RECEIPT_REQUIRE_SIG=true \\"
 echo "  npm run dev"

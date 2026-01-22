@@ -7,8 +7,9 @@
 //
 // C3/C4 still apply: NEVER emit PAYMENT-RESPONSE unless receipt verify succeeds.
 //
-// DEV-ONLY PAID-PATH HARNESS (off by default):
-// - If X402_DEV_RECEIPT_JWS is set, we skip CRP calls and use that receipt JWS.
+// DEV-ONLY PAID-PATH HARNESS (hardened; off by default):
+// - Requires X402_ALLOW_DEV_HARNESS=true AND NODE_ENV != production
+// - If enabled and X402_DEV_RECEIPT_JWS is set, we skip CRP calls and use that receipt JWS.
 // - Still requires local JWKS verification and (by default) requires PAYMENT-SIGNATURE header.
 // - This lets us test "paid path" + proxying without automating chain payment yet.
 
@@ -45,12 +46,23 @@ const legacyHeaders = String(process.env.X402_LEGACY_HEADERS ?? '').toLowerCase(
 const ttlSec = Number(process.env.X402_TTL_SEC ?? 300);
 const contractsPath = process.env.X402_CONTRACTS_PATH ?? 'config/contracts.json';
 
-// Dev-only paid-path harness: if set, skip CRP and use this receipt JWS (still verifies via JWKS).
-const devReceiptJws = process.env.X402_DEV_RECEIPT_JWS ?? null;
+// ----------------------------------------------------------------------------
+// DEV HARNESS HARDENING
+// ----------------------------------------------------------------------------
+const allowDevHarness = String(process.env.X402_ALLOW_DEV_HARNESS ?? '').toLowerCase() === 'true';
+const isProd = String(process.env.NODE_ENV ?? '').toLowerCase() === 'production';
+
+const devReceiptJwsRaw = process.env.X402_DEV_RECEIPT_JWS ?? null;
 
 // Require client to send PAYMENT-SIGNATURE even in dev bypass (keeps flow realistic)
 const devReceiptRequiresPaymentSignature =
   String(process.env.X402_DEV_RECEIPT_REQUIRE_SIG ?? 'true').toLowerCase() === 'true';
+
+// Harden: dev harness only when explicitly allowed AND not production
+const devReceiptJws =
+  allowDevHarness && !isProd && devReceiptJwsRaw && devReceiptJwsRaw.length > 0
+    ? devReceiptJwsRaw
+    : null;
 
 // Load contracts once at startup (fail fast if frozen mismatch)
 let contracts: ContractDefinition[] = [];
@@ -59,7 +71,7 @@ try {
   console.log(`[contracts] loaded ${contracts.length} contract(s) from ${contractsPath}`);
   for (const c of contracts) {
     console.log(
-      `[contracts] ${c.resource.method.toUpperCase()} ${c.resource.path} -> ${c.contractId} (v${c.contractVersion}, frozen=${c.isFrozen}, mode=${c.mode})`,
+      `[contracts] ${c.resource.method.toUpperCase()} ${c.resource.path} -> ${c.contractId} (v${c.contractVersion}, frozen=${c.isFrozen}, mode=${c.mode ?? 'local'})`,
     );
   }
 } catch (e: any) {
@@ -211,7 +223,6 @@ function stripPaymentHeaders(headers: HeadersInit): Headers {
 }
 
 function reqPathname(req: express.Request): string {
-  // pathname only (no query)
   const u = new URL(req.originalUrl || req.url, 'http://localhost');
   return u.pathname;
 }
@@ -244,22 +255,22 @@ async function proxyToUpstream(args: {
   const prefix = contract.upstream.pathPrefix ?? '';
   const targetUrl = `${upstreamBase}${prefix}${resourcePathname}${reqQueryString(req)}`;
 
-  // Build headers: forward safe subset (simple allowlist: all incoming string headers except payment)
+  // Forward safe subset: all incoming string headers except payment ones
   const incoming = new Headers();
   for (const [k, v] of Object.entries(req.headers)) {
     if (typeof v === 'string') incoming.set(k, v);
   }
 
-  // Remove payment headers before forwarding
   const forwarded = stripPaymentHeaders(incoming);
 
-  // Avoid leaking Host etc; fetch will set Host
+  // Avoid leaking host / content-length; fetch will set them
   forwarded.delete('host');
   forwarded.delete('content-length');
 
-  // Prepare body for non-GET/HEAD
   const method = req.method.toUpperCase();
   const hasBody = !(method === 'GET' || method === 'HEAD');
+
+  // NOTE: This demo assumes JSON bodies for non-GET requests.
   const body = hasBody ? JSON.stringify(req.body ?? {}) : undefined;
 
   const upstreamResp = await fetch(targetUrl, {
@@ -269,7 +280,6 @@ async function proxyToUpstream(args: {
     redirect: 'manual',
   });
 
-  // Copy status + headers (but avoid hop-by-hop headers)
   res.status(upstreamResp.status);
 
   upstreamResp.headers.forEach((value, key) => {
@@ -312,13 +322,15 @@ app.get('/healthz', (_req, res) => {
     contractsPath,
     devHarness: {
       enabled: !!devReceiptJws,
+      allowDevHarness,
+      nodeEnv: process.env.NODE_ENV ?? null,
       requiresPaymentSignature: devReceiptRequiresPaymentSignature,
     },
     contractsLoaded: contracts.map((c) => ({
       contractId: c.contractId,
       contractVersion: c.contractVersion,
       isFrozen: c.isFrozen,
-      mode: c.mode,
+      mode: c.mode ?? 'local',
       merchantId: c.merchantId,
       resource: c.resource,
       network: c.network,
@@ -423,7 +435,10 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   }
 
   // ---------------------------------------------------------------------------
-  // DEV BYPASS (Phase B harness): If X402_DEV_RECEIPT_JWS is set, skip CRP calls.
+  // DEV BYPASS (Phase B harness): If devReceiptJws is set, skip CRP calls.
+  // Hardened by:
+  // - X402_ALLOW_DEV_HARNESS=true
+  // - NODE_ENV != production
   // Still enforces:
   // - PAYMENT-SIGNATURE must be present (unless disabled)
   // - receipt must verify locally via JWKS (C3/C4 behavior preserved)
@@ -473,7 +488,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     res.setHeader('PAYMENT-RESPONSE', respB64);
     if (legacyHeaders) res.setHeader('X-PAYMENT-RESPONSE', respB64);
 
-    if (contract.mode === 'proxy') {
+    if ((contract.mode ?? 'local') === 'proxy') {
       try {
         return await proxyToUpstream({ req, res, contract, resourcePathname });
       } catch (e: any) {
@@ -496,7 +511,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         contractId: contract.contractId,
         contractVersion: contract.contractVersion,
         isFrozen: contract.isFrozen,
-        mode: contract.mode,
+        mode: contract.mode ?? 'local',
       },
       verify,
       devHarness: true,
@@ -589,7 +604,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   if (legacyHeaders) res.setHeader('X-PAYMENT-RESPONSE', respB64);
 
   // Serve locally or proxy upstream
-  if (contract.mode === 'proxy') {
+  if ((contract.mode ?? 'local') === 'proxy') {
     try {
       return await proxyToUpstream({ req, res, contract, resourcePathname });
     } catch (e: any) {
@@ -612,7 +627,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       contractId: contract.contractId,
       contractVersion: contract.contractVersion,
       isFrozen: contract.isFrozen,
-      mode: contract.mode,
+      mode: contract.mode ?? 'local',
     },
     verify,
     ...(x402Debug ? { debug: { match, fulfill } } : {}),
@@ -626,7 +641,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
 // Existing local/demo endpoint (still supported)
 app.get('/paid', async (req, res) => handleX402(req, res, '/paid'));
 
-// New generic edge gateway route: /x402/... (regex because path-to-regexp v6 rejects '/x402/*')
+// Generic edge gateway route: /x402/... (regex because path-to-regexp v6 rejects '/x402/*')
 // Example: GET /x402/premium?nonce=...  -> resolves contract for GET /premium
 app.all(/^\/x402(?:\/.*)?$/, async (req, res) => {
   const pathname = reqPathname(req);
