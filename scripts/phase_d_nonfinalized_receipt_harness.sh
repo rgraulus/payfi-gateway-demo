@@ -9,36 +9,30 @@ JWKS_HOST="${JWKS_HOST:-127.0.0.1}"
 JWKS_PORT="${JWKS_PORT:-8088}"
 WAIT_SECS="${WAIT_SECS:-60}"
 
-# Default is to pause after ACTION REQUIRED
+# Default pause after ACTION REQUIRED
 WAIT_FOR_USER="${WAIT_FOR_USER:-true}"
 
-# Replay regression expectations
-REPLAY_EXPECT_ERROR_SUBSTR="${REPLAY_EXPECT_ERROR_SUBSTR:-Payment already claimed (replay)}"
-REPLAY_QUERY_EXTRA_KEY="${REPLAY_QUERY_EXTRA_KEY:-z}"
-REPLAY_QUERY_EXTRA_VAL="${REPLAY_QUERY_EXTRA_VAL:-1}"
+# Mint a non-finalized receipt
+SETTLEMENT_STATUS="${SETTLEMENT_STATUS:-pending}"
+TTL_SEC="${TTL_SEC:-300}"
 
-echo "[harness] BASE=$BASE"
-echo "[harness] NONCE=$NONCE"
-echo "[harness] expecting upstream on :$UPSTREAM_PORT"
-echo "[harness] starting dev JWKS issuer on $JWKS_HOST:$JWKS_PORT ..."
+echo "[phase-d] BASE=$BASE"
+echo "[phase-d] NONCE=$NONCE"
+echo "[phase-d] expecting upstream on :$UPSTREAM_PORT"
+echo "[phase-d] starting dev JWKS issuer on $JWKS_HOST:$JWKS_PORT ..."
+echo "[phase-d] settlementStatus=$SETTLEMENT_STATUS ttlSec=$TTL_SEC"
 
 TMP_HEADERS_1="$(mktemp)"
 TMP_BODY_1="$(mktemp)"
 TMP_HEADERS_2="$(mktemp)"
 TMP_BODY_2="$(mktemp)"
-TMP_HEADERS_3="$(mktemp)"
-TMP_BODY_3="$(mktemp)"
-TMP_HEADERS_4="$(mktemp)"
-TMP_BODY_4="$(mktemp)"
 TMP_ISSUER_LOG="$(mktemp)"
 TMP_MINT_JSON="$(mktemp)"
 
 ISSUER_PID=""
 
 cleanup() {
-  rm -f "$TMP_HEADERS_1" "$TMP_BODY_1" "$TMP_HEADERS_2" "$TMP_BODY_2" "$TMP_HEADERS_3" "$TMP_BODY_3" \
-        "$TMP_HEADERS_4" "$TMP_BODY_4" \
-        "$TMP_ISSUER_LOG" "$TMP_MINT_JSON" || true
+  rm -f "$TMP_HEADERS_1" "$TMP_BODY_1" "$TMP_HEADERS_2" "$TMP_BODY_2" "$TMP_ISSUER_LOG" "$TMP_MINT_JSON" || true
   if [[ -n "${ISSUER_PID}" ]]; then
     kill "${ISSUER_PID}" >/dev/null 2>&1 || true
   fi
@@ -66,26 +60,23 @@ done
 
 if ! curl -fsS "$JWKS_URL" >/dev/null 2>&1; then
   echo
-  echo "[harness] ERROR: JWKS issuer did not become ready at $JWKS_URL"
-  echo "[harness] issuer log:"
+  echo "[phase-d] ERROR: JWKS issuer did not become ready at $JWKS_URL"
+  echo "[phase-d] issuer log:"
   sed 's/^/  /' "$TMP_ISSUER_LOG" || true
   exit 1
 fi
 
-echo "[harness] JWKS_URL=$JWKS_URL"
+echo "[phase-d] JWKS_URL=$JWKS_URL"
 
-# Helper: extract a header (case-insensitive) from a curl headers file.
 get_header() {
   local name="$1"
   grep -i -m1 "^${name}:" "$2" | sed -E "s/^${name}:[[:space:]]*//I" | tr -d '\r'
 }
 
-# Helper: base64(JSON({nonce})) for PAYMENT-SIGNATURE
 payment_signature_b64() {
   NONCE="$NONCE" node -e 'process.stdout.write(Buffer.from(JSON.stringify({nonce:process.env.NONCE}),"utf8").toString("base64"))'
 }
 
-# Helper: assert status code for a given headers file
 assert_status() {
   local want="$1"
   local headers="$2"
@@ -94,7 +85,7 @@ assert_status() {
 
   local got
   got="$(head -n1 "$headers" | awk '{print $2}' | tr -d '\r')"
-  echo "[harness] status $label=$got"
+  echo "[phase-d] status $label=$got"
   if [[ "$got" != "$want" ]]; then
     echo "Expected $want on request $label"
     echo "--- headers ---"; cat "$headers"
@@ -103,32 +94,23 @@ assert_status() {
   fi
 }
 
-# Helper: assert 402 contains PAYMENT-REQUIRED and replay error substring
-assert_replay_402() {
-  local headers="$1"
-  local body="$2"
+assert_header_absent() {
+  local name="$1"
+  local headers="$2"
   local label="$3"
 
-  local pr
-  pr="$(get_header "PAYMENT-REQUIRED" "$headers")"
-  if [[ -z "$pr" ]]; then
-    echo "Missing PAYMENT-REQUIRED header on replay request ($label)"
+  if grep -qi "^${name}:" "$headers"; then
+    echo "[phase-d] ERROR: unexpected ${name} header present on $label (must be absent)"
     echo "--- headers ---"; cat "$headers"
-    exit 1
-  fi
-
-  if ! grep -q "$REPLAY_EXPECT_ERROR_SUBSTR" "$body"; then
-    echo "Expected replay response body to contain: $REPLAY_EXPECT_ERROR_SUBSTR"
-    echo "--- body ---"; cat "$body"
     exit 1
   fi
 }
 
 # --------------------------------------------------------------------
-# Request #1: expect 402 + PAYMENT-REQUIRED (this gives us the contract)
+# Request #1: expect 402 + PAYMENT-REQUIRED (this gives us contract fields)
 # --------------------------------------------------------------------
 URL1="${BASE}/x402/premium?nonce=${NONCE}"
-echo "[harness] request #1 (expect 402): $URL1"
+echo "[phase-d] request #1 (expect 402): $URL1"
 curl -sS "$URL1" -D "$TMP_HEADERS_1" -o "$TMP_BODY_1" >/dev/null || true
 assert_status "402" "$TMP_HEADERS_1" "#1" "$TMP_BODY_1"
 
@@ -139,7 +121,7 @@ if [[ -z "$PR_B64" ]]; then
   exit 1
 fi
 
-# Decode PAYMENT-REQUIRED b64 -> JSON and build mint URL
+# Build mint URL from PAYMENT-REQUIRED then append settlementStatus=pending
 MINT_URL="$(
   PR_B64="$PR_B64" MINT_BASE="$MINT_BASE" node - <<'NODE'
 function normalizeB64(s){
@@ -191,22 +173,25 @@ process.stdout.write(u.toString());
 NODE
 )"
 
-echo "[harness] minting receipt via: $MINT_URL"
+# Append Phase D flags
+MINT_URL="${MINT_URL}&settlementStatus=${SETTLEMENT_STATUS}&ttlSec=${TTL_SEC}"
+
+echo "[phase-d] minting NON-FINALIZED receipt via: $MINT_URL"
 curl -fsS "$MINT_URL" > "$TMP_MINT_JSON"
 
 RECEIPT_JWS="$(node -e 'const fs=require("fs"); const o=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(o.jws||"")' "$TMP_MINT_JSON")"
 if [[ -z "$RECEIPT_JWS" ]]; then
-  echo "[harness] ERROR: mint did not return jws"
+  echo "[phase-d] ERROR: mint did not return jws"
   cat "$TMP_MINT_JSON"
   exit 1
 fi
-echo "[harness] got RECEIPT_JWS (len=${#RECEIPT_JWS})"
+echo "[phase-d] got RECEIPT_JWS (len=${#RECEIPT_JWS})"
 
 # --------------------------------------------------------------------
-# ACTION REQUIRED: restart gateway with dev harness enabled
+# ACTION REQUIRED: restart gateway with dev harness enabled (using pending receipt)
 # --------------------------------------------------------------------
 echo
-echo "[harness] ACTION REQUIRED:"
+echo "[phase-d] ACTION REQUIRED:"
 echo "  Restart your gateway (Terminal A) with these env vars set:"
 echo
 printf "  X402_ALLOW_DEV_HARNESS=true \\\\\n"
@@ -217,11 +202,11 @@ printf "  npm run dev\n"
 echo
 
 if [[ "${WAIT_FOR_USER}" == "true" ]]; then
-  echo "[harness] Pausing now. Restart the gateway in Terminal A, then press Enter to continue..."
+  echo "[phase-d] Pausing now. Restart the gateway in Terminal A, then press Enter to continue..."
   read -r _
 fi
 
-echo "[harness] Waiting up to ${WAIT_SECS}s for /healthz to report devHarness.enabled=true ..."
+echo "[phase-d] Waiting up to ${WAIT_SECS}s for /healthz to report devHarness.enabled=true ..."
 
 ok="false"
 for _ in $(seq 1 $((WAIT_SECS * 10))); do
@@ -238,82 +223,34 @@ for _ in $(seq 1 $((WAIT_SECS * 10))); do
 done
 
 if [[ "$ok" != "true" ]]; then
-  echo "[harness] ERROR: gateway did not report devHarness.enabled=true in time."
+  echo "[phase-d] ERROR: gateway did not report devHarness.enabled=true in time."
   exit 1
 fi
 
-echo "[harness] OK: gateway devHarness.enabled=true"
+echo "[phase-d] OK: gateway devHarness.enabled=true"
 
 # --------------------------------------------------------------------
-# Request #2: expect 200 + PAYMENT-RESPONSE + upstream body
+# Request #2: paid attempt with pending receipt must be rejected:
+# - expect 402
+# - must include PAYMENT-REQUIRED
+# - MUST NOT include PAYMENT-RESPONSE
 # --------------------------------------------------------------------
 SIG_B64="$(payment_signature_b64)"
 URL2="${BASE}/x402/premium?nonce=${NONCE}"
-echo "[harness] request #2 (expect 200 + proxy content): $URL2"
+echo "[phase-d] request #2 (expect 402; NO PAYMENT-RESPONSE): $URL2"
 curl -sS -H "PAYMENT-SIGNATURE: ${SIG_B64}" "$URL2" -D "$TMP_HEADERS_2" -o "$TMP_BODY_2" >/dev/null || true
-assert_status "200" "$TMP_HEADERS_2" "#2" "$TMP_BODY_2"
+assert_status "402" "$TMP_HEADERS_2" "#2" "$TMP_BODY_2"
 
-RESP_B64="$(get_header "PAYMENT-RESPONSE" "$TMP_HEADERS_2")"
-if [[ -z "$RESP_B64" ]]; then
-  echo "Missing PAYMENT-RESPONSE header on request #2"
+PR2="$(get_header "PAYMENT-REQUIRED" "$TMP_HEADERS_2")"
+if [[ -z "$PR2" ]]; then
+  echo "[phase-d] ERROR: missing PAYMENT-REQUIRED on #2"
   echo "--- headers ---"; cat "$TMP_HEADERS_2"
   exit 1
 fi
 
-RESP_B64="$RESP_B64" RECEIPT_JWS="$RECEIPT_JWS" node - <<'NODE'
-function normalizeB64(s){
-  s = String(s||"").trim().replace(/-/g,'+').replace(/_/g,'/');
-  const pad = s.length % 4;
-  if (pad === 2) s += '==';
-  else if (pad === 3) s += '=';
-  return s;
-}
-const respB64 = process.env.RESP_B64;
-const want = process.env.RECEIPT_JWS;
+assert_header_absent "PAYMENT-RESPONSE" "$TMP_HEADERS_2" "#2"
+# (Legacy header should also be absent)
+assert_header_absent "X-PAYMENT-RESPONSE" "$TMP_HEADERS_2" "#2"
 
-const json = Buffer.from(normalizeB64(respB64), 'base64').toString('utf8');
-const pr = JSON.parse(json);
-
-const got = pr?.receipt?.jws || pr?.jws;
-if (!got) {
-  console.error("PAYMENT-RESPONSE missing receipt.jws");
-  process.exit(1);
-}
-if (got !== want) {
-  console.error("PAYMENT-RESPONSE receipt.jws mismatch");
-  process.exit(1);
-}
-process.exit(0);
-NODE
-
-echo "[harness] PAYMENT-RESPONSE validated"
-
-if ! grep -q "UPSTREAM_OK" "$TMP_BODY_2"; then
-  echo "Expected upstream body to contain UPSTREAM_OK"
-  echo "--- body ---"; cat "$TMP_BODY_2"
-  exit 1
-fi
-
-echo "[harness] PASS: paid-path proxy worked + PAYMENT-RESPONSE validated"
-
-# --------------------------------------------------------------------
-# Request #3: replay test (same URL, same signature)
-# --------------------------------------------------------------------
-URL3="$URL2"
-echo "[harness] request #3 (Phase C replay, expect 402): $URL3"
-curl -sS -H "PAYMENT-SIGNATURE: ${SIG_B64}" "$URL3" -D "$TMP_HEADERS_3" -o "$TMP_BODY_3" >/dev/null || true
-assert_status "402" "$TMP_HEADERS_3" "#3" "$TMP_BODY_3"
-assert_replay_402 "$TMP_HEADERS_3" "$TMP_BODY_3" "#3"
-echo "[harness] PASS: replay rejected with 402 + PAYMENT-REQUIRED"
-
-# --------------------------------------------------------------------
-# Request #4: query-decoration/reorder replay attempt
-# --------------------------------------------------------------------
-URL4="${BASE}/x402/premium?${REPLAY_QUERY_EXTRA_KEY}=${REPLAY_QUERY_EXTRA_VAL}&nonce=${NONCE}"
-echo "[harness] request #4 (query-reorder replay attempt, expect 402): $URL4"
-curl -sS -H "PAYMENT-SIGNATURE: ${SIG_B64}" "$URL4" -D "$TMP_HEADERS_4" -o "$TMP_BODY_4" >/dev/null || true
-assert_status "402" "$TMP_HEADERS_4" "#4" "$TMP_BODY_4"
-assert_replay_402 "$TMP_HEADERS_4" "$TMP_BODY_4" "#4"
-echo "[harness] PASS: query-reorder replay rejected (canonical tuple key)"
-
-echo "[harness] DONE"
+echo "[phase-d] PASS: pending/non-finalized receipt rejected (402) and PAYMENT-RESPONSE not emitted"
+echo "[phase-d] DONE"
