@@ -19,6 +19,16 @@
 // OPTIONAL HARDENING:
 // - When X402_ALLOW_DEV_HARNESS=true, /healthz includes non-secret dev receipt metadata:
 //   jwksUrl, receipt sha256 prefix, kid, iat/exp — but NEVER the full receipt JWS.
+//
+// Phase C:
+// - Deterministic tuple key + in-memory replay cache
+// - Enforce replay protection immediately after verifyAndValidateProof succeeds
+//   and BEFORE emitting PAYMENT-RESPONSE.
+//
+// Hardening (Phase C.1):
+// - Replay cache expiry uses the tightest bound:
+//     expSec = min(receipt.exp, proof.settlement.expiresAt, paymentRequired.expiresAtSec, now+ttlSec)
+// - If derived expSec <= nowSec, treat as expired and 402 (never emit PAYMENT-RESPONSE).
 
 import express from 'express';
 import bodyParser from 'body-parser';
@@ -39,6 +49,11 @@ import {
   validateCcdPltProofAgainstContract,
   ProofPayloadError,
 } from './proofPayload';
+
+// Phase C modules
+import { buildTupleKey } from './x402/tupleKey';
+import { ReplayCache } from './x402/replayCache';
+import { receiptSha12 as receiptSha12Fingerprint } from './x402/receiptFingerprint';
 
 const app = express();
 app.use(bodyParser.json());
@@ -77,6 +92,9 @@ const devReceiptJws =
   allowDevHarness && !isProd && devReceiptJwsRaw && devReceiptJwsRaw.length > 0
     ? devReceiptJwsRaw
     : null;
+
+// Phase C: replay cache (in-memory, lazy purge)
+const replayCache = new ReplayCache();
 
 // Load contracts once at startup (fail fast if frozen mismatch)
 let contracts: ContractDefinition[] = [];
@@ -365,6 +383,64 @@ function proofErrorToString(e: any): string {
   return String(e?.message ?? e);
 }
 
+// Phase C: extract amountRaw for tuple key from proof when possible, else from contract
+function amountRawFromProofOrContract(proof: any, contract: ContractDefinition): string {
+  const direct = proof?.amountRaw;
+  if (typeof direct === 'string' && direct.length > 0) return direct;
+
+  const nested = proof?.amount?.raw;
+  if (typeof nested === 'string' && nested.length > 0) return nested;
+
+  const evt = proof?.paymentEvent?.amountRaw;
+  if (typeof evt === 'string' && evt.length > 0) return evt;
+
+  const cAmt: any = (contract as any).amount;
+  if (typeof cAmt === 'string') return cAmt;
+  if (typeof cAmt === 'number') return String(cAmt);
+  if (cAmt && typeof cAmt === 'object') {
+    if (typeof cAmt.raw === 'string') return cAmt.raw;
+    if (typeof cAmt.value === 'string') return cAmt.value;
+    try {
+      return JSON.stringify(cAmt);
+    } catch {
+      return String(cAmt);
+    }
+  }
+  return String(cAmt ?? '');
+}
+
+// ------------------------------
+// Phase C hardening helpers
+// ------------------------------
+
+function minDefined(...vals: Array<number | null | undefined>): number | null {
+  const xs = vals.filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+  if (xs.length === 0) return null;
+  return Math.min(...xs);
+}
+
+function deriveReplayExpSec(args: {
+  nowSec: number;
+  ttlSec: number;
+  paymentRequiredExpSec: number;
+  proof: any; // ccd-plt-proof@v1 payload
+}): number {
+  const { nowSec, ttlSec, paymentRequiredExpSec, proof } = args;
+
+  const receiptExp = typeof proof?.exp === 'number' && Number.isFinite(proof.exp) ? proof.exp : null;
+
+  const settlementExp =
+    typeof proof?.settlement?.expiresAt === 'number' && Number.isFinite(proof.settlement.expiresAt)
+      ? proof.settlement.expiresAt
+      : null;
+
+  const fallback = nowSec + ttlSec;
+
+  // Tightest possible bound; also never exceed PAYMENT-REQUIRED expiry.
+  const m = minDefined(receiptExp, settlementExp, paymentRequiredExpSec, fallback);
+  return m ?? paymentRequiredExpSec;
+}
+
 // -----------------------------------------------------------------------------
 // Health / readiness
 // -----------------------------------------------------------------------------
@@ -438,6 +514,9 @@ app.get('/healthz', (_req, res) => {
       upstream: c.upstream ?? null,
       attestations: c.attestations ?? [],
     })),
+    replayCache: {
+      size: replayCache.size(),
+    },
   });
 });
 
@@ -553,6 +632,100 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     return { verify, proof: payload };
   };
 
+  // Phase C: enforce replay AFTER verify+validate and BEFORE PAYMENT-RESPONSE
+  const enforceReplay = (args: {
+    receiptJws: string;
+    verify: any;
+    proof: any;
+    match?: any;
+    fulfill?: any;
+  }): boolean => {
+    // Hardening: derive expSec from the tightest available bounds.
+    const expSec = deriveReplayExpSec({
+      nowSec,
+      ttlSec,
+      paymentRequiredExpSec: paymentRequiredHeaderPayload.expiresAt,
+      proof: args.proof,
+    });
+
+    // If receipt is already expired by our derived bound, treat it as invalid/expired.
+    if (expSec <= nowSec) {
+      reply402({
+        ok: false,
+        paid: false,
+        paymentRequired: paymentRequiredBody,
+        error: 'Payment receipt expired',
+        ...(x402Debug
+          ? {
+              debug: {
+                nowSec,
+                expSec,
+                receiptExp: args.proof?.exp ?? null,
+                settlementExp: args.proof?.settlement?.expiresAt ?? null,
+                paymentRequiredExp: paymentRequiredHeaderPayload.expiresAt,
+              },
+            }
+          : {}),
+      });
+      return false;
+    }
+
+    const amountRaw = amountRawFromProofOrContract(args.proof, contract);
+
+    // Bind tuple to request method + canonicalized path(+query) (tupleKey.ts canonicalizes query order)
+    const pathWithQuery = `${resourcePathname}${reqQueryString(req)}`;
+
+    const tupleKey = buildTupleKey({
+      contract: `${contract.contractId}:${contract.contractVersion}`,
+      nonce,
+      amountRaw,
+
+      payTo: contract.payTo,
+      network: contract.network,
+      tokenId: contract.asset?.tokenId,
+      decimals: contract.asset?.decimals,
+
+      method: req.method,
+      path: pathWithQuery,
+
+      contractId: contract.contractId,
+      contractVersion: contract.contractVersion,
+      merchantId: contract.merchantId,
+
+      isFrozen: contract.isFrozen,
+    });
+
+    const decision = replayCache.checkAndInsert({
+      tupleKey,
+      nowSec,
+      expSec,
+      receiptSha12: receiptSha12Fingerprint(args.receiptJws),
+      kid: args.verify?.kid,
+    });
+
+    if (!decision.ok) {
+      reply402({
+        ok: false,
+        paid: false,
+        paymentRequired: paymentRequiredBody,
+        error: 'Payment already claimed (replay)',
+        ...(x402Debug
+          ? {
+              debug: {
+                tupleKey,
+                seen: decision.entry,
+                match: args.match,
+                fulfill: args.fulfill,
+              },
+            }
+          : {}),
+      });
+      return false;
+    }
+
+    return true;
+  };
+
   // ---------------------------------------------------------------------------
   // DEV BYPASS (Phase B harness): If devReceiptJws is set, skip CRP calls.
   // Hardened by:
@@ -596,6 +769,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         ...(x402Debug ? { debug: { reason: message } } : {}),
       });
     }
+
+    // Phase C: replay protection BEFORE PAYMENT-RESPONSE
+    if (!enforceReplay({ receiptJws: devReceiptJws, verify, proof })) return;
 
     // Frozen PAYMENT-RESPONSE shape (Phase B)
     const paymentResponseHeaderPayload = {
@@ -719,6 +895,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       ...(x402Debug ? { debug: { reason: message, match, fulfill } } : {}),
     });
   }
+
+  // Phase C: replay protection BEFORE PAYMENT-RESPONSE
+  if (!enforceReplay({ receiptJws: receiptJws!, verify, proof, match, fulfill })) return;
 
   // 4) Only after verification succeeds do we emit PAYMENT-RESPONSE headers.
   // Phase B: Frozen PAYMENT-RESPONSE shape.

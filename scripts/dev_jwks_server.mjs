@@ -1,223 +1,283 @@
-// scripts/dev_jwks_server.mjs
-//
-// Dev JWKS issuer + receipt JWS minting for Phase B (real proof payload).
-// This server is used ONLY by the Phase B paid-path harness.
-//
-// It serves:
-// - GET /.well-known/jwks.json  (public key set)
-// - GET /mint?nonce=...&contractId=...&contractVersion=...&isFrozen=...&merchantId=...&method=...&path=...&network=...&tokenId=...&decimals=...&amount=...&payTo=...
-//   -> returns { jws, payload }
-//
-// The minted JWS payload is the FULL CcdPltProofV1 object, matching src/proofPayload.ts.
-//
-// Notes:
-// - Uses EdDSA (Ed25519) via jose.
-// - Deterministic amountRaw computed from amount+decimals.
-// - This is a DEV tool; do NOT use in production.
+#!/usr/bin/env node
+/**
+ * scripts/dev_jwks_server.mjs
+ *
+ * Dev-only JWKS issuer + receipt mint endpoint for local gateway regression harness.
+ *
+ * Endpoints:
+ *  - GET  /                         -> simple OK
+ *  - GET  /.well-known/jwks.json     -> JWKS (public Ed25519 key)
+ *  - GET  /mint?...                 -> returns JSON { jws, kid, payloadPreview }
+ *
+ * /mint query params (required by harness / gateway semantics):
+ *  nonce, contractId, contractVersion, isFrozen, merchantId,
+ *  method, path, network, tokenId, decimals, amount, payTo
+ *
+ * Phase D additions:
+ *  settlementStatus = finalized | pending   (default: finalized)
+ *  ttlSec = integer seconds (default: 300)
+ */
 
-import http from 'node:http';
-import { URL } from 'node:url';
-import { createHash } from 'node:crypto';
+import http from "http";
+import { randomBytes, createHash } from "crypto";
+import { URL } from "url";
 
-import { exportJWK, SignJWT, generateKeyPair } from 'jose';
+// jose is ESM-friendly here (.mjs)
+import {
+  generateKeyPair,
+  exportJWK,
+  SignJWT,
+} from "jose";
 
-// -----------------------------
-// Utils
-// -----------------------------
-function json(res, code, obj) {
-  const body = Buffer.from(JSON.stringify(obj, null, 2), 'utf8');
-  res.writeHead(code, {
-    'content-type': 'application/json; charset=utf-8',
-    'content-length': String(body.length),
-    'cache-control': 'no-store',
-  });
+const HOST = process.env.HOST || "127.0.0.1";
+const PORT = Number(process.env.PORT || 8088);
+
+// Stable dev key id used in earlier runs
+const KID = "dev-local-1";
+
+// Small helpers
+function json(res, status, obj) {
+  const body = JSON.stringify(obj, null, 2);
+  res.statusCode = status;
+  res.setHeader("content-type", "application/json");
+  res.setHeader("cache-control", "no-store");
   res.end(body);
 }
 
-function bad(res, msg, extra = {}) {
-  json(res, 400, { ok: false, error: msg, ...extra });
+function text(res, status, body) {
+  res.statusCode = status;
+  res.setHeader("content-type", "text/plain; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
+  res.end(body);
 }
 
-function reqStr(q, k) {
-  const v = q.get(k);
-  if (!v) throw new Error(`missing query param: ${k}`);
+function toBool(s) {
+  const v = String(s ?? "").toLowerCase();
+  if (v === "true") return true;
+  if (v === "false") return false;
+  return null;
+}
+
+function requireParam(u, name) {
+  const v = u.searchParams.get(name);
+  if (v === null || v === "") throw new Error(`missing query param: ${name}`);
   return v;
 }
 
-function optStr(q, k) {
-  const v = q.get(k);
-  return v && v.length ? v : null;
-}
-
-function reqInt(q, k) {
-  const s = reqStr(q, k);
-  const n = Number(s);
-  if (!Number.isFinite(n) || !Number.isInteger(n)) throw new Error(`invalid integer for ${k}: "${s}"`);
+function requireInt(u, name) {
+  const raw = requireParam(u, name);
+  const n = Number(raw);
+  if (!Number.isFinite(n) || !Number.isInteger(n)) throw new Error(`invalid int param: ${name}=${raw}`);
   return n;
 }
 
-function reqBool(q, k) {
-  const s = reqStr(q, k).toLowerCase();
-  if (s === 'true') return true;
-  if (s === 'false') return false;
-  throw new Error(`invalid boolean for ${k}: "${s}"`);
+function requireNumber(u, name) {
+  const raw = requireParam(u, name);
+  const n = Number(raw);
+  if (!Number.isFinite(n)) throw new Error(`invalid number param: ${name}=${raw}`);
+  return n;
 }
 
-// Strict decimal parsing -> integer base units string
-function amountToRawUnits(amount, decimals) {
-  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 18) {
-    throw new Error(`decimals must be integer in [0,18], got ${decimals}`);
-  }
-
-  const s = String(amount ?? '').trim();
-  if (!/^\d+(\.\d+)?$/.test(s)) {
-    throw new Error(`amount must be non-negative decimal string, got "${amount}"`);
-  }
-
-  const [whole, frac = ''] = s.split('.');
-  if (frac.length > decimals) {
-    throw new Error(`amount has too many decimal places: ${frac.length} > ${decimals} (amount="${amount}")`);
-  }
-
-  const fracPadded = frac.padEnd(decimals, '0');
-  const raw = `${whole}${fracPadded}`.replace(/^0+/, '') || '0';
-  return raw;
+function randomHex32() {
+  return randomBytes(32).toString("hex");
 }
 
-// Simple dev-only deterministic tx hash (not real chain data)
-function devTxHash(input) {
-  return createHash('sha256').update(input).digest('hex');
+function sha256HexPrefix(input, n) {
+  const hex = createHash("sha256").update(String(input), "utf8").digest("hex");
+  return hex.slice(0, Math.max(0, Math.min(hex.length, n)));
 }
 
-// -----------------------------
-// Key material (generated on boot)
-// -----------------------------
-const HOST = process.env.HOST ?? '127.0.0.1';
-const PORT = Number(process.env.PORT ?? 8088);
-const KID = process.env.KID ?? 'dev-local-1';
+/**
+ * Convert decimal string amount + decimals into "amountRaw" integer string.
+ * Example: amount="0.050101", decimals=6 -> "50101"
+ *
+ * This is intentionally strict and deterministic for tests.
+ */
+function amountToRaw(amountStr, decimals) {
+  const s = String(amountStr).trim();
+  if (!/^\d+(\.\d+)?$/.test(s)) throw new Error(`invalid amount format: ${amountStr}`);
 
-// Generate an ephemeral Ed25519 keypair on startup
-const { publicKey, privateKey } = await generateKeyPair('Ed25519');
+  const [whole, frac = ""] = s.split(".");
+  const fracPadded = (frac + "0".repeat(decimals)).slice(0, decimals);
 
-const jwkPub = await exportJWK(publicKey);
-jwkPub.use = 'sig';
-jwkPub.alg = 'EdDSA';
-jwkPub.kid = KID;
+  // Avoid BigInt issues by constructing string
+  const rawStr = `${whole}${fracPadded}`.replace(/^0+/, "") || "0";
+  return rawStr;
+}
 
-const jwks = { keys: [jwkPub] };
+// ---------------------------------------------------------------------------
+// Key material (generated per process run; that’s fine for harness)
+// ---------------------------------------------------------------------------
 
-// -----------------------------
-// Mint
-// -----------------------------
-async function mintReceiptJws(payload) {
-  // Sign the proof payload as the entire JWT payload
-  const now = Math.floor(Date.now() / 1000);
+const { publicKey, privateKey } = await generateKeyPair("EdDSA", { crv: "Ed25519" });
+const pubJwk = await exportJWK(publicKey);
 
-  // Ensure there is an iat/exp at top-level JWT claims for jose verification hygiene.
-  // We keep proof fields separate, but it's fine to include standard claims too.
-  const iat = payload?.settlement?.settledAt ?? now;
-  const exp = payload?.settlement?.expiresAt ?? now + 300;
+// Ensure JWKS includes expected metadata
+pubJwk.kid = KID;
+pubJwk.use = "sig";
+pubJwk.alg = "EdDSA";
 
-  const jws = await new SignJWT(payload)
-    .setProtectedHeader({ alg: 'EdDSA', kid: KID })
-    .setIssuedAt(iat)
-    .setExpirationTime(exp)
+// ---------------------------------------------------------------------------
+// Mint logic
+// ---------------------------------------------------------------------------
+
+function buildProofFromMintUrl(u) {
+  // Required contract/payment fields
+  const nonce = requireParam(u, "nonce");
+  const contractId = requireParam(u, "contractId");
+  const contractVersion = requireParam(u, "contractVersion");
+  const isFrozenRaw = requireParam(u, "isFrozen");
+  const isFrozen = toBool(isFrozenRaw);
+  if (isFrozen === null) throw new Error(`invalid boolean param: isFrozen=${isFrozenRaw}`);
+
+  const merchantId = requireParam(u, "merchantId");
+  const method = requireParam(u, "method").toUpperCase();
+  const path = requireParam(u, "path"); // expected to already be decoded by URL
+
+  const network = requireParam(u, "network");
+  const tokenId = requireParam(u, "tokenId");
+  const decimals = requireInt(u, "decimals");
+  const amount = requireParam(u, "amount");
+  const payTo = requireParam(u, "payTo");
+
+  // Phase D controls
+  const settlementStatus = String(u.searchParams.get("settlementStatus") || "finalized").toLowerCase();
+  const ttlSecRaw = u.searchParams.get("ttlSec");
+  const ttlSec = ttlSecRaw ? Number(ttlSecRaw) : 300;
+  const ttl = Number.isFinite(ttlSec) && ttlSec > 0 ? Math.floor(ttlSec) : 300;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const expSec = nowSec + ttl;
+
+  // Derived fields
+  const amountRaw = amountToRaw(amount, decimals);
+
+  // Keep chain fields stable-ish; can be random without breaking validation
+  // Use deterministic-looking hashes for readability.
+  const transactionHash = u.searchParams.get("transactionHash") || "36e915afacc211388c9fafa3ccc680ff4a5b892aed8f6482355f4ba9cf0a6b03";
+  const blockHash = u.searchParams.get("blockHash") || "4ff2b6731b09684d4b41909af43ccf0d793a632dc8cad4ce5ac83de7a6ce18f5";
+  const blockHeightRaw = u.searchParams.get("blockHeight");
+  const blockHeight = blockHeightRaw ? Number(blockHeightRaw) : 123456;
+
+  const proof = {
+    proofVersion: "ccd-plt-proof@v1",
+
+    contract: {
+      contractId,
+      contractVersion,
+      isFrozen,
+      merchantId,
+      resource: { method, path },
+      network,
+      asset: {
+        type: "PLT",
+        tokenId,
+        decimals,
+      },
+      amount,
+      payTo,
+    },
+
+    nonce,
+
+    // Phase D: finalized vs pending settlement
+    settlement:
+      settlementStatus === "pending"
+        ? {
+            status: "pending",
+            expiresAt: expSec,
+          }
+        : {
+            status: "finalized",
+            settledAt: nowSec,
+            expiresAt: expSec,
+          },
+
+    chain: {
+      transactionHash,
+      blockHash,
+      blockHeight,
+    },
+
+    paymentEvent: {
+      kind: "plt.transfer",
+      tokenId,
+      amountRaw,
+      to: payTo,
+    },
+
+    // iat/exp are added by SignJWT below, but keeping these in preview helps debugging
+    _meta: {
+      nowSec,
+      expSec,
+      ttlSec: ttl,
+      settlementStatus,
+      receiptSha12: null, // filled after signing
+    },
+  };
+
+  return { proof, nowSec, expSec, settlementStatus, ttlSec: ttl };
+}
+
+async function mintJws(u) {
+  const { proof, nowSec, expSec } = buildProofFromMintUrl(u);
+
+  // Remove any non-standard / debugging fields from the signed payload
+  // (keep _meta out of the signed proof to match strict validators)
+  const { _meta, ...signedProof } = proof;
+
+  const jws = await new SignJWT(signedProof)
+    .setProtectedHeader({ alg: "EdDSA", kid: KID })
+    .setIssuedAt(nowSec)
+    .setExpirationTime(expSec)
     .sign(privateKey);
 
-  return jws;
+  return { jws, preview: proof };
 }
 
-// -----------------------------
+// ---------------------------------------------------------------------------
 // HTTP server
-// -----------------------------
+// ---------------------------------------------------------------------------
+
 const server = http.createServer(async (req, res) => {
   try {
-    const url = new URL(req.url ?? '/', `http://${HOST}:${PORT}`);
+    const url = new URL(req.url || "/", `http://${HOST}:${PORT}`);
 
-    if (url.pathname === '/.well-known/jwks.json') {
-      return json(res, 200, jwks);
+    if (req.method === "GET" && url.pathname === "/") {
+      return text(res, 200, `DEV_JWKS_OK on ${HOST}:${PORT}\n`);
     }
 
-    if (url.pathname === '/mint') {
-      const q = url.searchParams;
-
-      const nonce = reqStr(q, 'nonce');
-
-      // Contract binding
-      const contractId = reqStr(q, 'contractId');
-      const contractVersion = reqStr(q, 'contractVersion');
-      const isFrozen = reqBool(q, 'isFrozen');
-
-      const merchantId = reqStr(q, 'merchantId');
-      const method = reqStr(q, 'method').toUpperCase();
-      const path = reqStr(q, 'path');
-
-      const network = reqStr(q, 'network');
-
-      const tokenId = reqStr(q, 'tokenId');
-      const decimals = reqInt(q, 'decimals');
-      const amount = reqStr(q, 'amount');
-      const payTo = reqStr(q, 'payTo');
-
-      const settledAt = Math.floor(Date.now() / 1000);
-      const expiresAt = settledAt + 300;
-
-      const amountRaw = amountToRawUnits(amount, decimals);
-
-      // Build the proof payload (must match src/proofPayload.ts)
-      const proof = {
-        proofVersion: 'ccd-plt-proof@v1',
-
-        contract: {
-          contractId,
-          contractVersion,
-          isFrozen,
-
-          merchantId,
-          resource: { method, path },
-
-          network,
-          asset: { type: 'PLT', tokenId, decimals },
-
-          amount,
-          payTo,
-        },
-
-        nonce,
-
-        settlement: {
-          status: 'finalized',
-          settledAt,
-          expiresAt,
-        },
-
-        chain: {
-          transactionHash: devTxHash(`${nonce}:${contractId}:${amountRaw}:${payTo}`),
-          blockHash: devTxHash(`block:${nonce}:${contractId}`),
-          blockHeight: 123456,
-        },
-
-        paymentEvent: {
-          kind: 'plt.transfer',
-          tokenId,
-          amountRaw,
-          to: payTo,
-        },
-      };
-
-      const jws = await mintReceiptJws(proof);
-
-      return json(res, 200, { ok: true, jws, payload: proof, kid: KID });
+    if (req.method === "GET" && url.pathname === "/.well-known/jwks.json") {
+      return json(res, 200, { keys: [pubJwk] });
     }
 
-    return json(res, 404, { ok: false, error: 'not found', path: url.pathname });
+    if (req.method === "GET" && url.pathname === "/mint") {
+      const out = await mintJws(url);
+
+      // Attach receipt sha prefix for diagnostics (not used by harness)
+      const sha12 = sha256HexPrefix(out.jws, 12);
+
+      // Return minimal shape that harness expects + a small preview
+      const payloadPreview = out.preview;
+      payloadPreview._meta.receiptSha12 = sha12;
+
+      return json(res, 200, {
+        ok: true,
+        kid: KID,
+        jws: out.jws,
+        payloadPreview,
+      });
+    }
+
+    return json(res, 404, { ok: false, error: "Not found", method: req.method, path: url.pathname });
   } catch (e) {
-    return bad(res, String(e?.message ?? e));
+    return json(res, 400, { ok: false, error: String(e?.message || e) });
   }
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`[dev-jwks] listening on http://${HOST}:${PORT}`);
-  console.log(`[dev-jwks] jwks at http://${HOST}:${PORT}/.well-known/jwks.json (kid=${KID})`);
-  console.log(`[dev-jwks] mint at http://${HOST}:${PORT}/mint?...`);
+  // Keep output simple; harness redirects this to a temp log file.
+  // This is still handy if you run it manually.
+  // eslint-disable-next-line no-console
+  console.log(`[dev_jwks_server] listening on http://${HOST}:${PORT}`);
 });
