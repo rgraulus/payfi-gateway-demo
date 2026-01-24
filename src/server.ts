@@ -10,6 +10,7 @@
 // 2) edge gateway/proxy mode: /x402/... forwards to upstream after verified payment
 //
 // C3/C4: NEVER emit PAYMENT-RESPONSE unless receipt verify + proof payload checks succeed.
+// M1 hardening: In proxy mode, only emit PAYMENT-RESPONSE if upstream returns 2xx.
 //
 // DEV-ONLY PAID-PATH HARNESS (hardened; off by default):
 // - Requires X402_ALLOW_DEV_HARNESS=true AND NODE_ENV != production
@@ -22,16 +23,16 @@
 //
 // Phase C:
 // - Deterministic tuple key + replay protection
-// - Enforce replay protection immediately after verifyAndValidateProof succeeds
-//   and BEFORE emitting PAYMENT-RESPONSE.
+// - Enforce replay protection immediately after verifyAndValidateProof succeeds.
+// - Tuple key intentionally ignores query params to prevent replay bypass via decoration/reorder.
 //
 // Phase C.1 Hardening:
 // - Replay expiry uses the tightest bound:
 //     expSec = min(receipt.exp, proof.settlement.expiresAt, paymentRequired.expiresAt, now+ttlSec)
 // - If derived expSec <= nowSec, treat as expired and 402 (never emit PAYMENT-RESPONSE).
 //
-// Phase E (this patch):
-// - Make Redis replay backend OPTIONAL at runtime with NO compile-time dependency.
+// Phase E:
+// - Redis replay backend OPTIONAL at runtime with NO compile-time dependency.
 // - No top-level `import 'redis'` (server must start even if redis isn’t installed).
 // - Select replay backend via X402_REPLAY_BACKEND=memory|redis (default: memory).
 // - If redis backend is selected and package isn’t installed, fail fast with clear error.
@@ -293,16 +294,27 @@ function stripX402Prefix(pathname: string): string {
   return pathname;
 }
 
-async function proxyToUpstream(args: {
+type UpstreamResult = {
+  ok: boolean; // HTTP 2xx
+  status: number;
+  headers: Array<[string, string]>;
+  body: Buffer;
+};
+
+async function fetchFromUpstream(args: {
   req: express.Request;
-  res: express.Response;
   contract: ContractDefinition;
   resourcePathname: string;
-}) {
-  const { req, res, contract, resourcePathname } = args;
+}): Promise<UpstreamResult> {
+  const { req, contract, resourcePathname } = args;
 
   if (!contract.upstream?.baseUrl) {
-    return res.status(500).json({ ok: false, error: 'proxy mode missing upstream.baseUrl' });
+    return {
+      ok: false,
+      status: 500,
+      headers: [['content-type', 'application/json']],
+      body: Buffer.from(JSON.stringify({ ok: false, error: 'proxy mode missing upstream.baseUrl' })),
+    };
   }
 
   const upstreamBase = contract.upstream.baseUrl.replace(/\/$/, '');
@@ -316,7 +328,6 @@ async function proxyToUpstream(args: {
   }
 
   const forwarded = stripPaymentHeaders(incoming);
-
   forwarded.delete('host');
   forwarded.delete('content-length');
 
@@ -333,9 +344,24 @@ async function proxyToUpstream(args: {
     redirect: 'manual',
   });
 
-  res.status(upstreamResp.status);
-
+  const headers: Array<[string, string]> = [];
   upstreamResp.headers.forEach((value, key) => {
+    headers.push([key, value]);
+  });
+
+  const buf = Buffer.from(await upstreamResp.arrayBuffer());
+  return {
+    ok: upstreamResp.ok,
+    status: upstreamResp.status,
+    headers,
+    body: buf,
+  };
+}
+
+function applyUpstreamResponse(res: express.Response, upstream: UpstreamResult) {
+  res.status(upstream.status);
+
+  for (const [key, value] of upstream.headers) {
     const k = key.toLowerCase();
     if (
       [
@@ -349,13 +375,12 @@ async function proxyToUpstream(args: {
         'upgrade',
       ].includes(k)
     ) {
-      return;
+      continue;
     }
     res.setHeader(key, value);
-  });
+  }
 
-  const buf = await upstreamResp.arrayBuffer();
-  res.send(Buffer.from(buf));
+  res.send(upstream.body);
 }
 
 // Build the expected contract binding for proof payload checks.
@@ -799,14 +824,14 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     return { verify, proof: payload };
   };
 
-  // Replay enforcement AFTER verify+validate and BEFORE PAYMENT-RESPONSE
+  // Replay enforcement AFTER verify+validate and BEFORE any paid content is served.
   const enforceReplay = async (args: {
     receiptJws: string;
     verify: any;
     proof: any;
     match?: any;
     fulfill?: any;
-  }): Promise<boolean> => {
+  }): Promise<{ ok: true; tupleKey: string } | { ok: false }> => {
     // Hardening: derive expSec from the tightest available bounds.
     const expSec = deriveReplayExpSec({
       nowSec,
@@ -834,12 +859,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
             }
           : {}),
       });
-      return false;
+      return { ok: false };
     }
 
     const amountRaw = amountRawFromProofOrContract(args.proof, contract);
 
-    // Bind tuple to request method + canonicalized path(+query) (tupleKey.ts canonicalizes query order)
+    // NOTE: tupleKey strips query params intentionally (see src/x402/tupleKey.ts)
     const pathWithQuery = `${resourcePathname}${reqQueryString(req)}`;
 
     const tupleKey = buildTupleKey({
@@ -887,10 +912,35 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
             }
           : {}),
       });
-      return false;
+      return { ok: false };
     }
 
-    return true;
+    return { ok: true, tupleKey };
+  };
+
+  const paymentResponseHeaderPayloadBase = (args: {
+    receiptJws: string;
+    proof: any;
+  }) => ({
+    version: 'x402-v2',
+    contractId: contract.contractId,
+    contractVersion: contract.contractVersion,
+    merchantId: contract.merchantId,
+    resource: contract.resource,
+    nonce,
+    settled: true,
+    receipt: {
+      jws: args.receiptJws,
+      payload: args.proof ?? null,
+    },
+  });
+
+  const maybeSetPaymentResponseHeader = (shouldSet: boolean, receiptJws: string, proof: any) => {
+    if (!shouldSet) return;
+    const payload = paymentResponseHeaderPayloadBase({ receiptJws, proof });
+    const respB64 = b64json(payload);
+    res.setHeader('PAYMENT-RESPONSE', respB64);
+    if (legacyHeaders) res.setHeader('X-PAYMENT-RESPONSE', respB64);
   };
 
   // ---------------------------------------------------------------------------
@@ -930,31 +980,19 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       });
     }
 
-    // Replay protection BEFORE PAYMENT-RESPONSE
-    if (!(await enforceReplay({ receiptJws: devReceiptJws, verify, proof }))) return;
+    // Replay protection BEFORE serving any paid content
+    const replay = await enforceReplay({ receiptJws: devReceiptJws, verify, proof });
+    if (!replay.ok) return;
 
-    // Frozen PAYMENT-RESPONSE shape (Phase B)
-    const paymentResponseHeaderPayload = {
-      version: 'x402-v2',
-      contractId: contract.contractId,
-      contractVersion: contract.contractVersion,
-      merchantId: contract.merchantId,
-      resource: contract.resource,
-      nonce,
-      settled: true,
-      receipt: {
-        jws: devReceiptJws,
-        payload: proof ?? null,
-      },
-    };
-
-    const respB64 = b64json(paymentResponseHeaderPayload);
-    res.setHeader('PAYMENT-RESPONSE', respB64);
-    if (legacyHeaders) res.setHeader('X-PAYMENT-RESPONSE', respB64);
-
+    // Serve locally or proxy upstream
     if ((contract.mode ?? 'local') === 'proxy') {
       try {
-        return await proxyToUpstream({ req, res, contract, resourcePathname });
+        const upstream = await fetchFromUpstream({ req, contract, resourcePathname });
+
+        // M1 hardening: only emit PAYMENT-RESPONSE if the paid content is a success response.
+        maybeSetPaymentResponseHeader(upstream.ok, devReceiptJws, proof);
+
+        return applyUpstreamResponse(res, upstream);
       } catch (e: any) {
         console.error('Proxy error (dev harness):', e);
         return res.status(502).json({
@@ -966,6 +1004,8 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     }
 
     // local mode
+    maybeSetPaymentResponseHeader(true, devReceiptJws, proof);
+
     return res.status(200).json({
       ok: true,
       paid: true,
@@ -1055,32 +1095,19 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     });
   }
 
-  // Replay protection BEFORE PAYMENT-RESPONSE
-  if (!(await enforceReplay({ receiptJws: receiptJws!, verify, proof, match, fulfill }))) return;
-
-  // 4) Only after verification succeeds do we emit PAYMENT-RESPONSE headers.
-  const paymentResponseHeaderPayload = {
-    version: 'x402-v2',
-    contractId: contract.contractId,
-    contractVersion: contract.contractVersion,
-    merchantId: contract.merchantId,
-    resource: contract.resource,
-    nonce,
-    settled: true,
-    receipt: {
-      jws: receiptJws!,
-      payload: proof ?? null,
-    },
-  };
-
-  const respB64 = b64json(paymentResponseHeaderPayload);
-  res.setHeader('PAYMENT-RESPONSE', respB64);
-  if (legacyHeaders) res.setHeader('X-PAYMENT-RESPONSE', respB64);
+  // Replay protection BEFORE serving any paid content
+  const replay = await enforceReplay({ receiptJws: receiptJws!, verify, proof, match, fulfill });
+  if (!replay.ok) return;
 
   // Serve locally or proxy upstream
   if ((contract.mode ?? 'local') === 'proxy') {
     try {
-      return await proxyToUpstream({ req, res, contract, resourcePathname });
+      const upstream = await fetchFromUpstream({ req, contract, resourcePathname });
+
+      // M1 hardening: only emit PAYMENT-RESPONSE if the paid content is a success response.
+      maybeSetPaymentResponseHeader(upstream.ok, receiptJws!, proof);
+
+      return applyUpstreamResponse(res, upstream);
     } catch (e: any) {
       console.error('Proxy error:', e);
       return res.status(502).json({
@@ -1092,6 +1119,8 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   }
 
   // local mode
+  maybeSetPaymentResponseHeader(true, receiptJws!, proof);
+
   return res.status(200).json({
     ok: true,
     paid: true,
