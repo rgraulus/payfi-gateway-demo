@@ -4,10 +4,9 @@ set -euo pipefail
 # -----------------------------------------------------------------------------
 # Phase C harness: paid proxy + replay protection + query-order canonicalization
 #
-# Key improvement (this patch):
-# - If WAIT_FOR_USER=false and NONCE was NOT explicitly provided, we auto-generate
-#   a unique nonce to prevent accidental back-to-back replay failures.
-# - If WAIT_FOR_USER=true and NONCE is not set, we keep the stable default bb-test.
+# Key improvements:
+# - Non-interactive runs can auto-generate a unique nonce to avoid accidental replays.
+# - Expanded replay attempts: reorder, decoration, duplicate keys, encoding variants.
 # -----------------------------------------------------------------------------
 
 BASE="${BASE:-http://127.0.0.1:3005}"
@@ -42,15 +41,12 @@ if [[ "${NONCE_WAS_SET}" == "true" ]]; then
   NONCE="${NONCE}"
 else
   if [[ "${WAIT_FOR_USER}" == "false" ]]; then
-    # Non-interactive run: default to a unique nonce to avoid accidental replay on reruns.
     NONCE="bb-$(date +%s)-$$-$RANDOM"
   else
-    # Interactive run: keep stable default
     NONCE="bb-test"
   fi
 fi
 
-# Warn if user explicitly pinned NONCE=bb-test in non-interactive mode.
 if [[ "${WAIT_FOR_USER}" == "false" && "${NONCE_WAS_SET}" == "true" && "${NONCE}" == "bb-test" ]]; then
   echo "[harness] WARNING: WAIT_FOR_USER=false with NONCE=bb-test will fail on back-to-back runs due to replay protection." >&2
   echo "[harness]          Use a unique NONCE (e.g. NONCE=bb-\$(date +%s)) or omit NONCE to auto-generate." >&2
@@ -65,18 +61,13 @@ TMP_HEADERS_1="$(mktemp)"
 TMP_BODY_1="$(mktemp)"
 TMP_HEADERS_2="$(mktemp)"
 TMP_BODY_2="$(mktemp)"
-TMP_HEADERS_3="$(mktemp)"
-TMP_BODY_3="$(mktemp)"
-TMP_HEADERS_4="$(mktemp)"
-TMP_BODY_4="$(mktemp)"
 TMP_ISSUER_LOG="$(mktemp)"
 TMP_MINT_JSON="$(mktemp)"
 
 ISSUER_PID=""
 
 cleanup() {
-  rm -f "$TMP_HEADERS_1" "$TMP_BODY_1" "$TMP_HEADERS_2" "$TMP_BODY_2" "$TMP_HEADERS_3" "$TMP_BODY_3" \
-        "$TMP_HEADERS_4" "$TMP_BODY_4" \
+  rm -f "$TMP_HEADERS_1" "$TMP_BODY_1" "$TMP_HEADERS_2" "$TMP_BODY_2" \
         "$TMP_ISSUER_LOG" "$TMP_MINT_JSON" || true
   if [[ -n "${ISSUER_PID}" ]]; then
     kill "${ISSUER_PID}" >/dev/null 2>&1 || true
@@ -84,10 +75,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Upstream must be running
 curl -sS "http://127.0.0.1:${UPSTREAM_PORT}/" >/dev/null
 
-# Start issuer in background
 HOST="${JWKS_HOST}" PORT="${JWKS_PORT}" NONCE="${NONCE}" \
   node scripts/dev_jwks_server.mjs >"$TMP_ISSUER_LOG" 2>&1 &
 ISSUER_PID=$!
@@ -95,7 +84,6 @@ ISSUER_PID=$!
 JWKS_URL="http://${JWKS_HOST}:${JWKS_PORT}/.well-known/jwks.json"
 MINT_BASE="http://${JWKS_HOST}:${JWKS_PORT}/mint"
 
-# Wait for JWKS endpoint to respond
 for _ in $(seq 1 100); do
   if curl -fsS "$JWKS_URL" >/dev/null 2>&1; then
     break
@@ -113,18 +101,15 @@ fi
 
 echo "[harness] JWKS_URL=$JWKS_URL"
 
-# Helper: extract a header (case-insensitive) from a curl headers file.
 get_header() {
   local name="$1"
   grep -i -m1 "^${name}:" "$2" | sed -E "s/^${name}:[[:space:]]*//I" | tr -d '\r'
 }
 
-# Helper: base64(JSON({nonce})) for PAYMENT-SIGNATURE
 payment_signature_b64() {
   NONCE="$NONCE" node -e 'process.stdout.write(Buffer.from(JSON.stringify({nonce:process.env.NONCE}),"utf8").toString("base64"))'
 }
 
-# Helper: assert status code for a given headers file
 assert_status() {
   local want="$1"
   local headers="$2"
@@ -142,7 +127,6 @@ assert_status() {
   fi
 }
 
-# Helper: assert 402 contains PAYMENT-REQUIRED and replay error substring
 assert_replay_402() {
   local headers="$1"
   local body="$2"
@@ -163,7 +147,6 @@ assert_replay_402() {
   fi
 }
 
-# Helper: sha256 hex prefix (12)
 sha25612() {
   node -e 'const crypto=require("crypto"); const s=process.argv[1]||""; process.stdout.write(crypto.createHash("sha256").update(s,"utf8").digest("hex").slice(0,12));' "$1"
 }
@@ -183,7 +166,6 @@ if [[ -z "$PR_B64" ]]; then
   exit 1
 fi
 
-# Decode PAYMENT-REQUIRED b64 -> JSON and build mint URL
 MINT_URL="$(
   PR_B64="$PR_B64" MINT_BASE="$MINT_BASE" node - <<'NODE'
 function normalizeB64(s){
@@ -263,11 +245,6 @@ printf "  X402_DEV_RECEIPT_REQUIRE_SIG=true \\\\\n"
 printf "  npm run dev\n"
 echo
 
-# Non-interactive path:
-# - If AUTO_START_GATEWAY=true, we don't pause; we only proceed if the gateway
-#   is already running with the expected receipt fingerprint.
-# - Otherwise: we still don't pause, but the user is responsible for having
-#   restarted the gateway correctly already.
 if [[ "${WAIT_FOR_USER}" == "true" ]]; then
   echo "[harness] Pausing now. Restart the gateway in Terminal A, then press Enter to continue..."
   read -r _
@@ -358,23 +335,48 @@ fi
 echo "[harness] PASS: paid-path proxy worked + PAYMENT-RESPONSE validated"
 
 # --------------------------------------------------------------------
-# Request #3: replay test (same URL, same signature)
+# Replay attempts helper
 # --------------------------------------------------------------------
-URL3="$URL2"
-echo "[harness] request #3 (Phase C replay, expect 402): $URL3"
-curl -sS -H "PAYMENT-SIGNATURE: ${SIG_B64}" "$URL3" -D "$TMP_HEADERS_3" -o "$TMP_BODY_3" >/dev/null || true
-assert_status "402" "$TMP_HEADERS_3" "#3" "$TMP_BODY_3"
-assert_replay_402 "$TMP_HEADERS_3" "$TMP_BODY_3" "#3"
+do_replay_attempt() {
+  local label="$1"
+  local url="$2"
+
+  local h b
+  h="$(mktemp)"
+  b="$(mktemp)"
+  # shellcheck disable=SC2064
+  trap "rm -f '$h' '$b' >/dev/null 2>&1 || true; cleanup" EXIT
+
+  echo "[harness] request ${label} (replay attempt, expect 402): $url"
+  curl -sS -H "PAYMENT-SIGNATURE: ${SIG_B64}" "$url" -D "$h" -o "$b" >/dev/null || true
+  assert_status "402" "$h" "$label" "$b"
+  assert_replay_402 "$h" "$b" "$label"
+  rm -f "$h" "$b" >/dev/null 2>&1 || true
+}
+
+# --------------------------------------------------------------------
+# Request #3: exact replay (same URL)
+# --------------------------------------------------------------------
+do_replay_attempt "#3" "$URL2"
 echo "[harness] PASS: replay rejected with 402 + PAYMENT-REQUIRED"
 
 # --------------------------------------------------------------------
-# Request #4: query-decoration/reorder replay attempt
+# M3 “airtight” query bypass attempts:
+# - reorder
+# - decoration
+# - duplicated keys
+# - duplicate nonce (Express may parse as array)
+# - encoding variants
 # --------------------------------------------------------------------
-URL4="${BASE}/x402/premium?${REPLAY_QUERY_EXTRA_KEY}=${REPLAY_QUERY_EXTRA_VAL}&nonce=${NONCE}"
-echo "[harness] request #4 (query-reorder replay attempt, expect 402): $URL4"
-curl -sS -H "PAYMENT-SIGNATURE: ${SIG_B64}" "$URL4" -D "$TMP_HEADERS_4" -o "$TMP_BODY_4" >/dev/null || true
-assert_status "402" "$TMP_HEADERS_4" "#4" "$TMP_BODY_4"
-assert_replay_402 "$TMP_HEADERS_4" "$TMP_BODY_4" "#4"
-echo "[harness] PASS: query-reorder replay rejected (canonical tuple key)"
+K="$REPLAY_QUERY_EXTRA_KEY"
+V="$REPLAY_QUERY_EXTRA_VAL"
 
+do_replay_attempt "#4" "${BASE}/x402/premium?${K}=${V}&nonce=${NONCE}"
+do_replay_attempt "#5" "${BASE}/x402/premium?nonce=${NONCE}&${K}=${V}"
+do_replay_attempt "#6" "${BASE}/x402/premium?nonce=${NONCE}&${K}=${V}&${K}=$((V+1))"
+do_replay_attempt "#7" "${BASE}/x402/premium?nonce=${NONCE}&${K}=${V}&${K}=${V}"   # dup key same value
+do_replay_attempt "#8" "${BASE}/x402/premium?nonce=${NONCE}&${K}=%31"             # encoded '1'
+do_replay_attempt "#9" "${BASE}/x402/premium?nonce=${NONCE}&nonce=${NONCE}&${K}=${V}" # dup nonce
+
+echo "[harness] PASS: query decoration/reorder variants rejected (tupleKey canonical path policy)"
 echo "[harness] DONE"
