@@ -34,10 +34,10 @@ function sha256Hex(input: string): string {
 
 /**
  * Strip query string from a path (if present).
- * We intentionally ignore request query params in the tuple key because:
- * - nonce is already a first-class field in the tuple
- * - the payment contract is bound to (method + contract.resource.path)
- * - including query params enables replay bypass via param decoration/reordering
+ *
+ * M3 policy: tupleKey binds to canonical PATH only.
+ * Query is intentionally ignored (canonical query slot exists but is empty),
+ * because including query enables replay bypass via param decoration/reordering.
  */
 function stripQuery(path?: string): string | undefined {
   if (!path) return path;
@@ -69,36 +69,53 @@ export type TupleKeyInput = {
 
   // Frozen contract flag to prevent “shape drift”
   isFrozen?: boolean;
+
+  // M3: canonical query slot (currently ignored by policy)
+  // (Future: canonical query could be included under strict rules.)
+  query?: string;
 };
 
 /**
  * Deterministic tuple key:
  * - builds a canonical JSON object with a stable field set
- * - strips query from `path` so added/reordered params can't bypass replay protection
+ * - binds to canonical PATH (query is intentionally ignored)
+ * - includes explicit canonical query slot (currently empty) so policy is visible
  * - returns sha256 hex of the canonical string
  */
 export function buildTupleKey(input: TupleKeyInput): string {
   // Explicit, stable “schema” (don’t rely on JS insertion order)
   const tuple = {
-    // bump version because tuple semantics changed (path now ignores query)
-    v: 3,
+    // bump version because tuple semantics now explicitly include a query policy slot
+    v: 4,
 
+    // payment contract
     contract: input.contract,
     nonce: input.nonce,
     amountRaw: input.amountRaw,
 
+    // binding context
     payTo: input.payTo,
     network: input.network,
     tokenId: input.tokenId,
     decimals: input.decimals,
 
+    // request identity
     method: input.method ? input.method.toUpperCase() : undefined,
+
+    // canonical path only
     path: stripQuery(input.path),
 
+    // M3: canonical query policy (explicit, but empty)
+    // Keeping this present makes the spec/implementation alignment obvious.
+    qPolicy: "ignored",
+    q: "",
+
+    // optional identity fields
     contractId: input.contractId,
     contractVersion: input.contractVersion,
     merchantId: input.merchantId,
 
+    // frozen
     isFrozen: input.isFrozen ?? true,
   };
 

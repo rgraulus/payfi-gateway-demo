@@ -1,7 +1,6 @@
-# Replay and claim model (M1 + M2)
+# Replay and claim model (M1/M2/M3)
 
-This gateway enforces **two complementary anti-replay / anti-double-claim layers**, and (as of M2)
-adds an explicit **pending settlement** behavior that is safe (no paid header leakage) and client-friendly.
+This gateway enforces **two complementary anti-replay/anti-double-claim layers**:
 
 ## Layer 1: Facilitator (CRP) “event claim” semantics
 
@@ -16,8 +15,8 @@ returns **402 + PAYMENT-REQUIRED** (not a 5xx).
 
 ## Layer 2: Gateway tupleKey replay protection
 
-After a receipt is verified and the proof payload is validated (and is eligible to be treated as paid),
-the gateway computes a deterministic **tupleKey** and performs an atomic **check-and-insert** in a ReplayStore.
+After a receipt is verified and the proof payload is validated, the gateway computes a deterministic
+**tupleKey** and performs an atomic **check-and-insert** in a ReplayStore.
 
 Default backend is **in-memory**; an optional **Redis** backend can be selected via env vars.
 
@@ -25,64 +24,40 @@ Default backend is **in-memory**; an optional **Redis** backend can be selected 
 - Replays that occur before (or in addition to) CRP-level checks.
 - “Request-binding” attacks: paying for one resource/method and replaying the receipt against another.
 
-### tupleKey inputs (high level)
+## tupleKey policy (M3)
 
-The tuple key is derived from:
-- contract identity/version (including `isFrozen`)
-- merchantId
-- nonce
-- amountRaw (from proof payload if present, else contract)
-- payTo, network, tokenId, decimals
-- request method
-- request path
+The tupleKey policy is specified in: `docs/tuplekey-policy.md`
 
-**Important: query params are intentionally ignored in the tupleKey.**
-This prevents bypass via query decoration and reordering (e.g., `?z=1&nonce=...` vs `?nonce=...`).
+Key points:
+- tupleKey binds to the **underlying resource path/method** (e.g., `/premium`), not the wrapper route.
+  - Requests arrive as `/x402/<resource>` in proxy mode, but the gateway strips `/x402` and binds tupleKey to `/<resource>`.
+  - Query string may still be forwarded to upstream, but it is **excluded from tupleKey**.
+- **Query params are intentionally ignored** (explicitly recorded as policy in the tuple schema) to prevent replay bypass via query decoration/reordering.
+- tupleKey is computed over canonical JSON (sorted keys) and hashed with sha256.
+- Tuple schema is versioned; current tupleKey schema is **v4** (explicit query policy slot).
 
-Implementation: `src/x402/tupleKey.ts` strips query from `path` before hashing.
+Implementation: `src/x402/tupleKey.ts`
 
-### Replay entry lifetime (hardening)
+## M2: Pending/non-finalized settlement semantics
 
-Replay entries are stored with an expiry that uses the tightest bound available:
+If a receipt verifies but the proof payload settlement is **not finalized** (e.g., `pending`):
+- return **402**
+- include **PAYMENT-REQUIRED**
+- emit **NO PAYMENT-RESPONSE**
+- include JSON body reason `pending_settlement` and settlement metadata
+- may include a `Retry-After` hint
 
-`expSec = min(receipt.exp, proof.settlement.expiresAt, PAYMENT-REQUIRED.expiresAt, now + ttlSec)`
-
-If the derived `expSec <= now`, the gateway treats the receipt as expired and returns **402 + PAYMENT-REQUIRED**
-(and never emits `PAYMENT-RESPONSE`).
-
-## M2: Pending / non-finalized settlement semantics
-
-A receipt can be **cryptographically valid** yet still represent a payment that is **not finalized**
-(e.g., `settlement.status = "pending"`). In M2, the gateway makes this state explicit and safe:
-
-If a receipt verifies and is a valid `ccd-plt-proof@v1` payload, but the settlement is **not finalized**:
-- Return **402 + PAYMENT-REQUIRED**
-- **Do NOT** emit `PAYMENT-RESPONSE`
-- Include a stable JSON signal:
-  - `reason = "pending_settlement"`
-  - `settlement` metadata (`status`, `settledAt`, `expiresAt`)
-  - Optional `retryAfterSec` hint and `Retry-After` header
-
-**Why this matters**
-- Prevents “paid header leakage” for non-finalized payments.
-- Gives clients a deterministic way to retry (or surface “still confirming” UX) instead of a generic “invalid receipt”.
-
-**Important note about replay**
-- Pending/non-finalized receipts are **not** inserted into the ReplayStore.
-  Replay is only enforced after a receipt is considered eligible for “paid delivery”.
+This prevents treating “verified but not finalized” as a successful paid delivery.
 
 ## Emitting PAYMENT-RESPONSE (hardening)
 
-The gateway never emits `PAYMENT-RESPONSE` unless all of the following are true:
+The gateway never emits `PAYMENT-RESPONSE` unless:
+1) receipt signature verification succeeds,
+2) proof payload validation against the resolved contract succeeds,
+3) replay protection accepts the tupleKey (first claim),
+4) and (proxy mode) the upstream returns a **2xx** response.
 
-1) Receipt signature verification succeeds (JWKS)
-2) Proof payload validation against the resolved contract succeeds
-3) Settlement is **finalized** (M2)
-4) Replay protection accepts the tupleKey (first claim)
-5) And (proxy mode) the upstream returns a **2xx** response
-
-This keeps `PAYMENT-RESPONSE` aligned with **successful paid delivery** rather than
-“payment verified but delivery failed” or “payment pending finality”.
+This keeps `PAYMENT-RESPONSE` aligned with “successful paid delivery” rather than “payment verified but delivery failed”.
 
 ## Operational note
 
