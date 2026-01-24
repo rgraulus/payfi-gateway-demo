@@ -1,21 +1,60 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# -----------------------------------------------------------------------------
+# Phase C harness: paid proxy + replay protection + query-order canonicalization
+#
+# Key improvement (this patch):
+# - If WAIT_FOR_USER=false and NONCE was NOT explicitly provided, we auto-generate
+#   a unique nonce to prevent accidental back-to-back replay failures.
+# - If WAIT_FOR_USER=true and NONCE is not set, we keep the stable default bb-test.
+# -----------------------------------------------------------------------------
+
 BASE="${BASE:-http://127.0.0.1:3005}"
 UPSTREAM_PORT="${UPSTREAM_PORT:-3010}"
-NONCE="${NONCE:-bb-test}"
 
-JWKS_HOST="${JWKS_HOST:-127.0.0.1}"
-JWKS_PORT="${JWKS_PORT:-8088}"
-WAIT_SECS="${WAIT_SECS:-60}"
+# Capture whether NONCE was explicitly provided (important!)
+NONCE_WAS_SET="false"
+if [[ -n "${NONCE+x}" ]]; then
+  NONCE_WAS_SET="true"
+fi
 
 # Default is to pause after ACTION REQUIRED
 WAIT_FOR_USER="${WAIT_FOR_USER:-true}"
+WAIT_SECS="${WAIT_SECS:-60}"
+
+# AUTO_START_GATEWAY:
+# - If true and WAIT_FOR_USER=false, we will NOT pause for manual restart.
+# - We do not attempt to kill existing gateway processes; we only proceed if
+#   /healthz indicates the expected receipt fingerprint is already active.
+AUTO_START_GATEWAY="${AUTO_START_GATEWAY:-false}"
+
+JWKS_HOST="${JWKS_HOST:-127.0.0.1}"
+JWKS_PORT="${JWKS_PORT:-8088}"
 
 # Replay regression expectations
 REPLAY_EXPECT_ERROR_SUBSTR="${REPLAY_EXPECT_ERROR_SUBSTR:-Payment already claimed (replay)}"
 REPLAY_QUERY_EXTRA_KEY="${REPLAY_QUERY_EXTRA_KEY:-z}"
 REPLAY_QUERY_EXTRA_VAL="${REPLAY_QUERY_EXTRA_VAL:-1}"
+
+# Decide NONCE
+if [[ "${NONCE_WAS_SET}" == "true" ]]; then
+  NONCE="${NONCE}"
+else
+  if [[ "${WAIT_FOR_USER}" == "false" ]]; then
+    # Non-interactive run: default to a unique nonce to avoid accidental replay on reruns.
+    NONCE="bb-$(date +%s)-$$-$RANDOM"
+  else
+    # Interactive run: keep stable default
+    NONCE="bb-test"
+  fi
+fi
+
+# Warn if user explicitly pinned NONCE=bb-test in non-interactive mode.
+if [[ "${WAIT_FOR_USER}" == "false" && "${NONCE_WAS_SET}" == "true" && "${NONCE}" == "bb-test" ]]; then
+  echo "[harness] WARNING: WAIT_FOR_USER=false with NONCE=bb-test will fail on back-to-back runs due to replay protection." >&2
+  echo "[harness]          Use a unique NONCE (e.g. NONCE=bb-\$(date +%s)) or omit NONCE to auto-generate." >&2
+fi
 
 echo "[harness] BASE=$BASE"
 echo "[harness] NONCE=$NONCE"
@@ -124,6 +163,11 @@ assert_replay_402() {
   fi
 }
 
+# Helper: sha256 hex prefix (12)
+sha25612() {
+  node -e 'const crypto=require("crypto"); const s=process.argv[1]||""; process.stdout.write(crypto.createHash("sha256").update(s,"utf8").digest("hex").slice(0,12));' "$1"
+}
+
 # --------------------------------------------------------------------
 # Request #1: expect 402 + PAYMENT-REQUIRED (this gives us the contract)
 # --------------------------------------------------------------------
@@ -202,6 +246,9 @@ if [[ -z "$RECEIPT_JWS" ]]; then
 fi
 echo "[harness] got RECEIPT_JWS (len=${#RECEIPT_JWS})"
 
+RECEIPT_SHA12="$(sha25612 "$RECEIPT_JWS")"
+echo "[harness] minted receipt sha25612=${RECEIPT_SHA12}"
+
 # --------------------------------------------------------------------
 # ACTION REQUIRED: restart gateway with dev harness enabled
 # --------------------------------------------------------------------
@@ -216,20 +263,33 @@ printf "  X402_DEV_RECEIPT_REQUIRE_SIG=true \\\\\n"
 printf "  npm run dev\n"
 echo
 
+# Non-interactive path:
+# - If AUTO_START_GATEWAY=true, we don't pause; we only proceed if the gateway
+#   is already running with the expected receipt fingerprint.
+# - Otherwise: we still don't pause, but the user is responsible for having
+#   restarted the gateway correctly already.
 if [[ "${WAIT_FOR_USER}" == "true" ]]; then
   echo "[harness] Pausing now. Restart the gateway in Terminal A, then press Enter to continue..."
   read -r _
+else
+  if [[ "${AUTO_START_GATEWAY}" == "true" ]]; then
+    echo "[harness] NOTE: WAIT_FOR_USER=false and AUTO_START_GATEWAY=true."
+    echo "[harness]       This harness will proceed only if the gateway is already running with the expected dev receipt fingerprint."
+    echo "[harness]       (It will not kill/restart a running gateway process.)"
+  fi
 fi
 
-echo "[harness] Waiting up to ${WAIT_SECS}s for /healthz to report devHarness.enabled=true ..."
+echo "[harness] Waiting up to ${WAIT_SECS}s for /healthz devHarness.enabled=true + receipt.sha25612=${RECEIPT_SHA12} ..."
 
 ok="false"
 for _ in $(seq 1 $((WAIT_SECS * 10))); do
-  if curl -fsS "${BASE}/healthz" 2>/dev/null | node -e '
+  if curl -fsS "${BASE}/healthz" 2>/dev/null | RECEIPT_SHA12="${RECEIPT_SHA12}" node -e '
     let d=""; process.stdin.on("data",c=>d+=c);
     process.stdin.on("end",()=>{ try{
       const j=JSON.parse(d);
-      process.exit(j?.devHarness?.enabled===true ? 0 : 1);
+      const enabled = j?.devHarness?.enabled===true;
+      const sha = j?.devHarness?.receipt?.sha25612 || null;
+      process.exit(enabled && sha === process.env.RECEIPT_SHA12 ? 0 : 1);
     }catch{process.exit(1)}});' >/dev/null 2>&1; then
     ok="true"
     break
@@ -238,11 +298,12 @@ for _ in $(seq 1 $((WAIT_SECS * 10))); do
 done
 
 if [[ "$ok" != "true" ]]; then
-  echo "[harness] ERROR: gateway did not report devHarness.enabled=true in time."
+  echo "[harness] ERROR: gateway did not report devHarness.enabled=true with expected receipt fingerprint in time."
+  echo "[harness]        If WAIT_FOR_USER=false, you must ensure the gateway is restarted with the printed env vars."
   exit 1
 fi
 
-echo "[harness] OK: gateway devHarness.enabled=true"
+echo "[harness] OK: gateway devHarness.enabled=true (and receipt fingerprint matched)"
 
 # --------------------------------------------------------------------
 # Request #2: expect 200 + PAYMENT-RESPONSE + upstream body

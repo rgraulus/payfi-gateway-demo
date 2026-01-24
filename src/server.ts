@@ -21,14 +21,20 @@
 //   jwksUrl, receipt sha256 prefix, kid, iat/exp — but NEVER the full receipt JWS.
 //
 // Phase C:
-// - Deterministic tuple key + in-memory replay cache
+// - Deterministic tuple key + replay protection
 // - Enforce replay protection immediately after verifyAndValidateProof succeeds
 //   and BEFORE emitting PAYMENT-RESPONSE.
 //
-// Hardening (Phase C.1):
-// - Replay cache expiry uses the tightest bound:
-//     expSec = min(receipt.exp, proof.settlement.expiresAt, paymentRequired.expiresAtSec, now+ttlSec)
+// Phase C.1 Hardening:
+// - Replay expiry uses the tightest bound:
+//     expSec = min(receipt.exp, proof.settlement.expiresAt, paymentRequired.expiresAt, now+ttlSec)
 // - If derived expSec <= nowSec, treat as expired and 402 (never emit PAYMENT-RESPONSE).
+//
+// Phase E (this patch):
+// - Make Redis replay backend OPTIONAL at runtime with NO compile-time dependency.
+// - No top-level `import 'redis'` (server must start even if redis isn’t installed).
+// - Select replay backend via X402_REPLAY_BACKEND=memory|redis (default: memory).
+// - If redis backend is selected and package isn’t installed, fail fast with clear error.
 
 import express from 'express';
 import bodyParser from 'body-parser';
@@ -50,7 +56,7 @@ import {
   ProofPayloadError,
 } from './proofPayload';
 
-// Phase C modules
+// Replay modules
 import { buildTupleKey } from './x402/tupleKey';
 import { ReplayCache } from './x402/replayCache';
 import { receiptSha12 as receiptSha12Fingerprint } from './x402/receiptFingerprint';
@@ -75,6 +81,11 @@ const legacyHeaders = String(process.env.X402_LEGACY_HEADERS ?? '').toLowerCase(
 const ttlSec = Number(process.env.X402_TTL_SEC ?? 300);
 const contractsPath = process.env.X402_CONTRACTS_PATH ?? 'config/contracts.json';
 
+// Replay backend selection (Phase E)
+const replayBackend = String(process.env.X402_REPLAY_BACKEND ?? 'memory').toLowerCase(); // memory|redis
+const replayRedisUrl = process.env.X402_REDIS_URL ?? process.env.REDIS_URL ?? null;
+const replayRedisKeyPrefix = process.env.X402_REDIS_KEY_PREFIX ?? 'x402:replay:';
+
 // ----------------------------------------------------------------------------
 // DEV HARNESS HARDENING
 // ----------------------------------------------------------------------------
@@ -92,9 +103,6 @@ const devReceiptJws =
   allowDevHarness && !isProd && devReceiptJwsRaw && devReceiptJwsRaw.length > 0
     ? devReceiptJwsRaw
     : null;
-
-// Phase C: replay cache (in-memory, lazy purge)
-const replayCache = new ReplayCache();
 
 // Load contracts once at startup (fail fast if frozen mismatch)
 let contracts: ContractDefinition[] = [];
@@ -383,7 +391,7 @@ function proofErrorToString(e: any): string {
   return String(e?.message ?? e);
 }
 
-// Phase C: extract amountRaw for tuple key from proof when possible, else from contract
+// Extract amountRaw for tuple key from proof when possible, else from contract
 function amountRawFromProofOrContract(proof: any, contract: ContractDefinition): string {
   const direct = proof?.amountRaw;
   if (typeof direct === 'string' && direct.length > 0) return direct;
@@ -410,7 +418,7 @@ function amountRawFromProofOrContract(proof: any, contract: ContractDefinition):
 }
 
 // ------------------------------
-// Phase C hardening helpers
+// Replay hardening helpers
 // ------------------------------
 
 function minDefined(...vals: Array<number | null | undefined>): number | null {
@@ -442,10 +450,159 @@ function deriveReplayExpSec(args: {
 }
 
 // -----------------------------------------------------------------------------
+// Phase E: Optional replay store abstraction (memory default; redis optional)
+// -----------------------------------------------------------------------------
+
+export type ReplayEntry = {
+  seenAtSec: number;
+  expSec: number;
+  receiptSha12: string;
+  kid?: string;
+};
+
+export type ReplayDecision =
+  | { ok: true; inserted: true; tupleKey: string; entry: ReplayEntry }
+  | { ok: false; reason: 'replay'; tupleKey: string; entry: ReplayEntry };
+
+interface ReplayStore {
+  kind(): string;
+  size(): Promise<number | null>;
+  checkAndInsert(args: {
+    tupleKey: string;
+    nowSec: number;
+    expSec: number;
+    receiptSha12: string;
+    kid?: string;
+  }): Promise<ReplayDecision>;
+}
+
+// Memory replay store (wrap existing ReplayCache)
+class MemoryReplayStore implements ReplayStore {
+  private cache = new ReplayCache();
+
+  kind(): string {
+    return 'memory';
+  }
+
+  async size(): Promise<number | null> {
+    return this.cache.size();
+  }
+
+  async checkAndInsert(args: {
+    tupleKey: string;
+    nowSec: number;
+    expSec: number;
+    receiptSha12: string;
+    kid?: string;
+  }): Promise<ReplayDecision> {
+    return this.cache.checkAndInsert(args);
+  }
+}
+
+// IMPORTANT: no `import 'redis'` anywhere. Load only if backend=redis at runtime.
+function loadRedisModule(): any {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require('redis');
+  } catch {
+    throw new Error(
+      "X402_REPLAY_BACKEND=redis selected, but the 'redis' package is not installed. " +
+        "Install it with: npm i redis",
+    );
+  }
+}
+
+class RedisReplayStore implements ReplayStore {
+  private client: any;
+  private connected = false;
+
+  constructor(private url: string, private keyPrefix: string) {}
+
+  kind(): string {
+    return 'redis';
+  }
+
+  private async ensureConnected(): Promise<void> {
+    if (this.connected) return;
+
+    const { createClient } = loadRedisModule();
+    this.client = createClient({ url: this.url });
+
+    this.client.on('error', (err: any) => {
+      console.error('[replay][redis] client error:', err);
+    });
+
+    await this.client.connect();
+    this.connected = true;
+  }
+
+  async size(): Promise<number | null> {
+    // We intentionally avoid SCAN in a hot path. Return null (unknown).
+    return null;
+  }
+
+  async checkAndInsert(args: {
+    tupleKey: string;
+    nowSec: number;
+    expSec: number;
+    receiptSha12: string;
+    kid?: string;
+  }): Promise<ReplayDecision> {
+    await this.ensureConnected();
+
+    const ttl = Math.max(1, Math.floor(args.expSec - args.nowSec));
+    const key = `${this.keyPrefix}${args.tupleKey}`;
+
+    const entry: ReplayEntry = {
+      seenAtSec: args.nowSec,
+      expSec: args.expSec,
+      receiptSha12: args.receiptSha12,
+      kid: args.kid,
+    };
+
+    // redis v4: SET key value NX EX <seconds>
+    const setRes = await this.client.set(key, JSON.stringify(entry), { NX: true, EX: ttl });
+
+    if (setRes) {
+      return { ok: true, inserted: true, tupleKey: args.tupleKey, entry };
+    }
+
+    // Replay: fetch existing entry (best-effort)
+    const existingRaw = await this.client.get(key);
+    let existing: ReplayEntry = entry;
+    try {
+      if (existingRaw) existing = JSON.parse(existingRaw);
+    } catch {
+      // ignore parse errors; fall back to "entry" shape
+    }
+
+    return { ok: false, reason: 'replay', tupleKey: args.tupleKey, entry: existing };
+  }
+}
+
+// Pick replay store (memory by default)
+let replayStore: ReplayStore;
+try {
+  if (replayBackend === 'redis') {
+    if (!replayRedisUrl) {
+      throw new Error(
+        'X402_REPLAY_BACKEND=redis requires X402_REDIS_URL (or REDIS_URL) to be set.',
+      );
+    }
+    replayStore = new RedisReplayStore(replayRedisUrl, replayRedisKeyPrefix);
+  } else {
+    replayStore = new MemoryReplayStore();
+  }
+} catch (e: any) {
+  console.error(`[replay] ERROR: ${String(e?.message ?? e)}`);
+  process.exit(1);
+}
+
+// -----------------------------------------------------------------------------
 // Health / readiness
 // -----------------------------------------------------------------------------
 
-app.get('/healthz', (_req, res) => {
+app.get('/healthz', async (_req, res) => {
   // IMPORTANT: Never print full receipt JWS in /healthz.
   // If X402_ALLOW_DEV_HARNESS=true, expose only non-secret metadata for debugging.
   let devReceiptMeta:
@@ -475,6 +632,13 @@ app.get('/healthz', (_req, res) => {
         exp: null,
       };
     }
+  }
+
+  let replaySize: number | null = null;
+  try {
+    replaySize = await replayStore.size();
+  } catch {
+    replaySize = null;
   }
 
   res.json({
@@ -514,8 +678,11 @@ app.get('/healthz', (_req, res) => {
       upstream: c.upstream ?? null,
       attestations: c.attestations ?? [],
     })),
-    replayCache: {
-      size: replayCache.size(),
+    replay: {
+      backend: replayStore.kind(),
+      redisUrl: replayBackend === 'redis' ? replayRedisUrl : null,
+      redisKeyPrefix: replayBackend === 'redis' ? replayRedisKeyPrefix : null,
+      size: replaySize,
     },
   });
 });
@@ -632,14 +799,14 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     return { verify, proof: payload };
   };
 
-  // Phase C: enforce replay AFTER verify+validate and BEFORE PAYMENT-RESPONSE
-  const enforceReplay = (args: {
+  // Replay enforcement AFTER verify+validate and BEFORE PAYMENT-RESPONSE
+  const enforceReplay = async (args: {
     receiptJws: string;
     verify: any;
     proof: any;
     match?: any;
     fulfill?: any;
-  }): boolean => {
+  }): Promise<boolean> => {
     // Hardening: derive expSec from the tightest available bounds.
     const expSec = deriveReplayExpSec({
       nowSec,
@@ -695,7 +862,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       isFrozen: contract.isFrozen,
     });
 
-    const decision = replayCache.checkAndInsert({
+    const decision = await replayStore.checkAndInsert({
       tupleKey,
       nowSec,
       expSec,
@@ -728,13 +895,6 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
 
   // ---------------------------------------------------------------------------
   // DEV BYPASS (Phase B harness): If devReceiptJws is set, skip CRP calls.
-  // Hardened by:
-  // - X402_ALLOW_DEV_HARNESS=true
-  // - NODE_ENV != production
-  // Still enforces:
-  // - PAYMENT-SIGNATURE must be present (unless disabled)
-  // - receipt must verify locally via JWKS
-  // - receipt payload must be valid ccd-plt-proof@v1 bound to contract+nonce
   // ---------------------------------------------------------------------------
   if (devReceiptJws) {
     if (devReceiptRequiresPaymentSignature && !paymentSignatureB64) {
@@ -770,8 +930,8 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       });
     }
 
-    // Phase C: replay protection BEFORE PAYMENT-RESPONSE
-    if (!enforceReplay({ receiptJws: devReceiptJws, verify, proof })) return;
+    // Replay protection BEFORE PAYMENT-RESPONSE
+    if (!(await enforceReplay({ receiptJws: devReceiptJws, verify, proof }))) return;
 
     // Frozen PAYMENT-RESPONSE shape (Phase B)
     const paymentResponseHeaderPayload = {
@@ -871,8 +1031,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     });
   }
 
-  // 3) C3/C4: Verify FIRST. If verify fails, return 402 (invalid receipt) and DO NOT set PAYMENT-RESPONSE.
-  // Phase B (real): also enforce proof payload semantics.
+  // 3) Verify FIRST. If verify fails, return 402 (invalid receipt) and DO NOT set PAYMENT-RESPONSE.
   let verify: any;
   let proof: any;
   try {
@@ -896,11 +1055,10 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     });
   }
 
-  // Phase C: replay protection BEFORE PAYMENT-RESPONSE
-  if (!enforceReplay({ receiptJws: receiptJws!, verify, proof, match, fulfill })) return;
+  // Replay protection BEFORE PAYMENT-RESPONSE
+  if (!(await enforceReplay({ receiptJws: receiptJws!, verify, proof, match, fulfill }))) return;
 
   // 4) Only after verification succeeds do we emit PAYMENT-RESPONSE headers.
-  // Phase B: Frozen PAYMENT-RESPONSE shape.
   const paymentResponseHeaderPayload = {
     version: 'x402-v2',
     contractId: contract.contractId,
