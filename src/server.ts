@@ -29,13 +29,26 @@
 // Phase C.1 Hardening:
 // - Replay expiry uses the tightest bound:
 //     expSec = min(receipt.exp, proof.settlement.expiresAt, paymentRequired.expiresAt, now+ttlSec)
-// - If derived expSec <= nowSec, treat as expired and 402 (never emit PAYMENT-RESPONSE).
+// - If derived expSec <= nowSec, treat it as expired and 402 (never emit PAYMENT-RESPONSE).
 //
 // Phase E:
 // - Redis replay backend OPTIONAL at runtime with NO compile-time dependency.
 // - No top-level `import 'redis'` (server must start even if redis isn’t installed).
 // - Select replay backend via X402_REPLAY_BACKEND=memory|redis (default: memory).
 // - If redis backend is selected and package isn’t installed, fail fast with clear error.
+//
+// M2:
+// - Explicit pending/non-finalized settlement semantics:
+//   If a receipt verifies but settlement is not finalized (e.g., pending), return 402 with:
+//   - PAYMENT-REQUIRED present
+//   - NO PAYMENT-RESPONSE
+//   - JSON body reason="pending_settlement" + settlement metadata
+//   - Optional Retry-After / retryAfterSec hint
+//
+// M2 tweak:
+// - Even if validateCcdPltProofAgainstContract does NOT throw on pending settlement,
+//   we still hard-stop after successful verify+validate if settlement is not finalized.
+//   (Prevents pending receipts from being treated as paid.)
 
 import express from 'express';
 import bodyParser from 'body-parser';
@@ -414,6 +427,28 @@ function toContractBinding(c: ContractDefinition): ContractBinding {
 function proofErrorToString(e: any): string {
   if (e?.name === 'ProofPayloadError' || e instanceof ProofPayloadError) return String(e.message ?? e);
   return String(e?.message ?? e);
+}
+
+// Pending settlement helpers (M2)
+function isPendingSettlement(proof: any): boolean {
+  const st = proof?.settlement?.status;
+  return typeof st === 'string' && st.length > 0 && st !== 'finalized';
+}
+
+function retryAfterFromProof(nowSec: number, proof: any): number | null {
+  const exp = proof?.settlement?.expiresAt;
+  if (typeof exp !== 'number' || !Number.isFinite(exp)) return null;
+  const remaining = Math.max(0, Math.floor(exp - nowSec));
+  // Hint: retry soon but don’t spam. Keep within 1..30 seconds.
+  return Math.min(30, Math.max(1, Math.min(5, remaining)));
+}
+
+function settlementMeta(proof: any) {
+  return {
+    status: typeof proof?.settlement?.status === 'string' ? proof.settlement.status : null,
+    settledAt: typeof proof?.settlement?.settledAt === 'number' ? proof.settlement.settledAt : null,
+    expiresAt: typeof proof?.settlement?.expiresAt === 'number' ? proof.settlement.expiresAt : null,
+  };
 }
 
 // Extract amountRaw for tuple key from proof when possible, else from contract
@@ -824,6 +859,88 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     return { verify, proof: payload };
   };
 
+  // M2: classify pending/non-finalized receipts without emitting PAYMENT-RESPONSE
+  const tryReplyPendingSettlement = async (args: {
+    receiptJws: string;
+    label: 'dev' | 'real';
+    match?: any;
+    fulfill?: any;
+  }): Promise<boolean> => {
+    try {
+      const v = await verifyReceiptJwsLocal(args.receiptJws);
+      const payload = v?.payload ?? null;
+
+      // Ensure it looks like ccd-plt-proof@v1 (will throw if not)
+      assertCcdPltProofV1(payload);
+
+      if (!isPendingSettlement(payload)) return false;
+
+      const retryAfterSec = retryAfterFromProof(nowSec, payload);
+      if (retryAfterSec) res.setHeader('Retry-After', String(retryAfterSec));
+
+      return !!reply402({
+        ok: false,
+        paid: false,
+        paymentRequired: paymentRequiredBody,
+        error: 'Payment pending settlement',
+        reason: 'pending_settlement',
+        settlement: settlementMeta(payload),
+        ...(retryAfterSec ? { retryAfterSec } : {}),
+        ...(x402Debug
+          ? {
+              debug: {
+                where: args.label,
+                note: 'receipt verified but settlement not finalized',
+                kid: v?.kid ?? null,
+                ...(args.match ? { match: args.match } : {}),
+                ...(args.fulfill ? { fulfill: args.fulfill } : {}),
+              },
+            }
+          : {}),
+      });
+    } catch {
+      return false;
+    }
+  };
+
+  // M2 tweak: after successful verify+validate, hard-stop if settlement is pending/non-finalized.
+  // (Does NOT consume replay / does NOT emit PAYMENT-RESPONSE.)
+  const replyPendingFromVerifiedProof = (args: {
+    label: 'dev' | 'real';
+    verify: any;
+    proof: any;
+    match?: any;
+    fulfill?: any;
+  }): boolean => {
+    if (!isPendingSettlement(args.proof)) return false;
+
+    const retryAfterSec = retryAfterFromProof(nowSec, args.proof);
+    if (retryAfterSec) res.setHeader('Retry-After', String(retryAfterSec));
+
+    reply402({
+      ok: false,
+      paid: false,
+      paymentRequired: paymentRequiredBody,
+      error: 'Payment pending settlement',
+      reason: 'pending_settlement',
+      settlement: settlementMeta(args.proof),
+      ...(retryAfterSec ? { retryAfterSec } : {}),
+      ...(x402Debug
+        ? {
+            debug: {
+              where: args.label,
+              note: 'verified receipt but settlement not finalized (post-verify guard)',
+              kid: args.verify?.kid ?? null,
+              ...(args.match ? { match: args.match } : {}),
+              ...(args.fulfill ? { fulfill: args.fulfill } : {}),
+            },
+          }
+        : {}),
+    });
+
+    return true;
+  };
+
   // Replay enforcement AFTER verify+validate and BEFORE any paid content is served.
   const enforceReplay = async (args: {
     receiptJws: string;
@@ -918,10 +1035,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     return { ok: true, tupleKey };
   };
 
-  const paymentResponseHeaderPayloadBase = (args: {
-    receiptJws: string;
-    proof: any;
-  }) => ({
+  const paymentResponseHeaderPayloadBase = (args: { receiptJws: string; proof: any }) => ({
     version: 'x402-v2',
     contractId: contract.contractId,
     contractVersion: contract.contractVersion,
@@ -964,6 +1078,10 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       verify = out.verify;
       proof = out.proof;
     } catch (err: any) {
+      // M2: if receipt verifies but is pending/non-finalized, return explicit pending semantics.
+      const repliedPending = await tryReplyPendingSettlement({ receiptJws: devReceiptJws, label: 'dev' });
+      if (repliedPending) return;
+
       const message =
         err?.name === 'ReceiptVerifyError'
           ? String(err.message)
@@ -979,6 +1097,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         ...(x402Debug ? { debug: { reason: message } } : {}),
       });
     }
+
+    // M2 tweak: post-verify guard (in case validation does not throw on pending)
+    if (replyPendingFromVerifiedProof({ label: 'dev', verify, proof })) return;
 
     // Replay protection BEFORE serving any paid content
     const replay = await enforceReplay({ receiptJws: devReceiptJws, verify, proof });
@@ -1071,7 +1192,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     });
   }
 
-  // 3) Verify FIRST. If verify fails, return 402 (invalid receipt) and DO NOT set PAYMENT-RESPONSE.
+  // 3) Verify FIRST. If verify fails, return 402 and DO NOT set PAYMENT-RESPONSE.
   let verify: any;
   let proof: any;
   try {
@@ -1079,6 +1200,15 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     verify = out.verify;
     proof = out.proof;
   } catch (err: any) {
+    // M2: if receipt verifies but is pending/non-finalized, return explicit pending semantics.
+    const repliedPending = await tryReplyPendingSettlement({
+      receiptJws: receiptJws!,
+      label: 'real',
+      match,
+      fulfill,
+    });
+    if (repliedPending) return;
+
     const message =
       err?.name === 'ReceiptVerifyError'
         ? String(err.message)
@@ -1094,6 +1224,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       ...(x402Debug ? { debug: { reason: message, match, fulfill } } : {}),
     });
   }
+
+  // M2 tweak: post-verify guard (in case validation does not throw on pending)
+  if (replyPendingFromVerifiedProof({ label: 'real', verify, proof, match, fulfill })) return;
 
   // Replay protection BEFORE serving any paid content
   const replay = await enforceReplay({ receiptJws: receiptJws!, verify, proof, match, fulfill });
