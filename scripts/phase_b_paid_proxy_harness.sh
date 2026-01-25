@@ -2,11 +2,18 @@
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
-# Phase C harness: paid proxy + replay protection + query-order canonicalization
+# Phase B/C harness: paid proxy + replay protection + query-policy regression
 #
-# Key improvements:
-# - Non-interactive runs can auto-generate a unique nonce to avoid accidental replays.
-# - Expanded replay attempts: reorder, decoration, duplicate keys, encoding variants.
+# M4 (restartless):
+# - No "restart gateway with new env receipt" loop.
+# - We mint a dev receipt and inject it per request using:
+#     X402-DEV-RECEIPT-JWS: <JWS>
+#
+# Gateway requirements for this harness:
+# - Gateway already running on BASE
+# - X402_ALLOW_DEV_HARNESS=true
+# - NODE_ENV != production
+# - CRP_JWKS_URL should point at the issuer this script starts (default 127.0.0.1:8088)
 # -----------------------------------------------------------------------------
 
 BASE="${BASE:-http://127.0.0.1:3005}"
@@ -18,15 +25,9 @@ if [[ -n "${NONCE+x}" ]]; then
   NONCE_WAS_SET="true"
 fi
 
-# Default is to pause after ACTION REQUIRED
+# Default is to pause after ACTION REQUIRED (kept for compatibility; no restart needed)
 WAIT_FOR_USER="${WAIT_FOR_USER:-true}"
 WAIT_SECS="${WAIT_SECS:-60}"
-
-# AUTO_START_GATEWAY:
-# - If true and WAIT_FOR_USER=false, we will NOT pause for manual restart.
-# - We do not attempt to kill existing gateway processes; we only proceed if
-#   /healthz indicates the expected receipt fingerprint is already active.
-AUTO_START_GATEWAY="${AUTO_START_GATEWAY:-false}"
 
 JWKS_HOST="${JWKS_HOST:-127.0.0.1}"
 JWKS_PORT="${JWKS_PORT:-8088}"
@@ -41,12 +42,15 @@ if [[ "${NONCE_WAS_SET}" == "true" ]]; then
   NONCE="${NONCE}"
 else
   if [[ "${WAIT_FOR_USER}" == "false" ]]; then
+    # Non-interactive run: default to a unique nonce to avoid accidental replay on reruns.
     NONCE="bb-$(date +%s)-$$-$RANDOM"
   else
+    # Interactive run: keep stable default
     NONCE="bb-test"
   fi
 fi
 
+# Warn if user explicitly pinned NONCE=bb-test in non-interactive mode.
 if [[ "${WAIT_FOR_USER}" == "false" && "${NONCE_WAS_SET}" == "true" && "${NONCE}" == "bb-test" ]]; then
   echo "[harness] WARNING: WAIT_FOR_USER=false with NONCE=bb-test will fail on back-to-back runs due to replay protection." >&2
   echo "[harness]          Use a unique NONCE (e.g. NONCE=bb-\$(date +%s)) or omit NONCE to auto-generate." >&2
@@ -61,22 +65,47 @@ TMP_HEADERS_1="$(mktemp)"
 TMP_BODY_1="$(mktemp)"
 TMP_HEADERS_2="$(mktemp)"
 TMP_BODY_2="$(mktemp)"
+TMP_HEADERS_3="$(mktemp)"
+TMP_BODY_3="$(mktemp)"
+TMP_HEADERS_4="$(mktemp)"
+TMP_BODY_4="$(mktemp)"
+TMP_HEADERS_5="$(mktemp)"
+TMP_BODY_5="$(mktemp)"
+TMP_HEADERS_6="$(mktemp)"
+TMP_BODY_6="$(mktemp)"
+TMP_HEADERS_7="$(mktemp)"
+TMP_BODY_7="$(mktemp)"
+TMP_HEADERS_8="$(mktemp)"
+TMP_BODY_8="$(mktemp)"
+TMP_HEADERS_9="$(mktemp)"
+TMP_BODY_9="$(mktemp)"
 TMP_ISSUER_LOG="$(mktemp)"
 TMP_MINT_JSON="$(mktemp)"
 
 ISSUER_PID=""
 
 cleanup() {
-  rm -f "$TMP_HEADERS_1" "$TMP_BODY_1" "$TMP_HEADERS_2" "$TMP_BODY_2" \
-        "$TMP_ISSUER_LOG" "$TMP_MINT_JSON" || true
+  rm -f \
+    "$TMP_HEADERS_1" "$TMP_BODY_1" \
+    "$TMP_HEADERS_2" "$TMP_BODY_2" \
+    "$TMP_HEADERS_3" "$TMP_BODY_3" \
+    "$TMP_HEADERS_4" "$TMP_BODY_4" \
+    "$TMP_HEADERS_5" "$TMP_BODY_5" \
+    "$TMP_HEADERS_6" "$TMP_BODY_6" \
+    "$TMP_HEADERS_7" "$TMP_BODY_7" \
+    "$TMP_HEADERS_8" "$TMP_BODY_8" \
+    "$TMP_HEADERS_9" "$TMP_BODY_9" \
+    "$TMP_ISSUER_LOG" "$TMP_MINT_JSON" || true
   if [[ -n "${ISSUER_PID}" ]]; then
     kill "${ISSUER_PID}" >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
 
+# Upstream must be running
 curl -sS "http://127.0.0.1:${UPSTREAM_PORT}/" >/dev/null
 
+# Start issuer in background
 HOST="${JWKS_HOST}" PORT="${JWKS_PORT}" NONCE="${NONCE}" \
   node scripts/dev_jwks_server.mjs >"$TMP_ISSUER_LOG" 2>&1 &
 ISSUER_PID=$!
@@ -84,6 +113,7 @@ ISSUER_PID=$!
 JWKS_URL="http://${JWKS_HOST}:${JWKS_PORT}/.well-known/jwks.json"
 MINT_BASE="http://${JWKS_HOST}:${JWKS_PORT}/mint"
 
+# Wait for JWKS endpoint to respond
 for _ in $(seq 1 100); do
   if curl -fsS "$JWKS_URL" >/dev/null 2>&1; then
     break
@@ -101,15 +131,18 @@ fi
 
 echo "[harness] JWKS_URL=$JWKS_URL"
 
+# Helper: extract a header (case-insensitive) from a curl headers file.
 get_header() {
   local name="$1"
   grep -i -m1 "^${name}:" "$2" | sed -E "s/^${name}:[[:space:]]*//I" | tr -d '\r'
 }
 
+# Helper: base64(JSON({nonce})) for PAYMENT-SIGNATURE
 payment_signature_b64() {
   NONCE="$NONCE" node -e 'process.stdout.write(Buffer.from(JSON.stringify({nonce:process.env.NONCE}),"utf8").toString("base64"))'
 }
 
+# Helper: assert status code for a given headers file
 assert_status() {
   local want="$1"
   local headers="$2"
@@ -127,6 +160,7 @@ assert_status() {
   fi
 }
 
+# Helper: assert 402 contains PAYMENT-REQUIRED and replay error substring
 assert_replay_402() {
   local headers="$1"
   local body="$2"
@@ -147,8 +181,36 @@ assert_replay_402() {
   fi
 }
 
-sha25612() {
-  node -e 'const crypto=require("crypto"); const s=process.argv[1]||""; process.stdout.write(crypto.createHash("sha256").update(s,"utf8").digest("hex").slice(0,12));' "$1"
+# Helper: wait for gateway to be ready (dev harness allowed, jwksUrl matches)
+wait_for_gateway() {
+  echo "[harness] Waiting up to ${WAIT_SECS}s for gateway /healthz allowDevHarness=true and jwksUrl=${JWKS_URL} ..."
+  local ok="false"
+  for _ in $(seq 1 $((WAIT_SECS * 10))); do
+    if curl -fsS "${BASE}/healthz" 2>/dev/null | JWKS_URL="${JWKS_URL}" node -e '
+      let d=""; process.stdin.on("data",c=>d+=c);
+      process.stdin.on("end",()=>{ try{
+        const j=JSON.parse(d);
+        const allow = j?.devHarness?.allowDevHarness===true;
+        const env = String(j?.devHarness?.nodeEnv||"").toLowerCase();
+        const notProd = env !== "production";
+        const jwks = String(j?.jwksUrl||"");
+        process.exit(allow && notProd && jwks === process.env.JWKS_URL ? 0 : 1);
+      }catch{process.exit(1)}});' >/dev/null 2>&1; then
+      ok="true"
+      break
+    fi
+    sleep 0.1
+  done
+
+  if [[ "$ok" != "true" ]]; then
+    echo "[harness] ERROR: gateway /healthz did not report allowDevHarness=true + jwksUrl match in time."
+    echo "[harness]        Make sure gateway is started with:"
+    echo "[harness]          X402_ALLOW_DEV_HARNESS=true"
+    echo "[harness]          NODE_ENV!=production"
+    echo "[harness]          CRP_JWKS_URL=${JWKS_URL}"
+    exit 1
+  fi
+  echo "[harness] OK: gateway dev harness allowed + jwksUrl matched"
 }
 
 # --------------------------------------------------------------------
@@ -166,6 +228,7 @@ if [[ -z "$PR_B64" ]]; then
   exit 1
 fi
 
+# Decode PAYMENT-REQUIRED b64 -> JSON and build mint URL
 MINT_URL="$(
   PR_B64="$PR_B64" MINT_BASE="$MINT_BASE" node - <<'NODE'
 function normalizeB64(s){
@@ -228,67 +291,20 @@ if [[ -z "$RECEIPT_JWS" ]]; then
 fi
 echo "[harness] got RECEIPT_JWS (len=${#RECEIPT_JWS})"
 
-RECEIPT_SHA12="$(sha25612 "$RECEIPT_JWS")"
-echo "[harness] minted receipt sha25612=${RECEIPT_SHA12}"
-
-# --------------------------------------------------------------------
-# ACTION REQUIRED: restart gateway with dev harness enabled
-# --------------------------------------------------------------------
-echo
-echo "[harness] ACTION REQUIRED:"
-echo "  Restart your gateway (Terminal A) with these env vars set:"
-echo
-printf "  X402_ALLOW_DEV_HARNESS=true \\\\\n"
-printf "  CRP_JWKS_URL=\"%s\" \\\\\n" "$JWKS_URL"
-printf "  X402_DEV_RECEIPT_JWS=\"%s\" \\\\\n" "$RECEIPT_JWS"
-printf "  X402_DEV_RECEIPT_REQUIRE_SIG=true \\\\\n"
-printf "  npm run dev\n"
-echo
-
-if [[ "${WAIT_FOR_USER}" == "true" ]]; then
-  echo "[harness] Pausing now. Restart the gateway in Terminal A, then press Enter to continue..."
-  read -r _
-else
-  if [[ "${AUTO_START_GATEWAY}" == "true" ]]; then
-    echo "[harness] NOTE: WAIT_FOR_USER=false and AUTO_START_GATEWAY=true."
-    echo "[harness]       This harness will proceed only if the gateway is already running with the expected dev receipt fingerprint."
-    echo "[harness]       (It will not kill/restart a running gateway process.)"
-  fi
-fi
-
-echo "[harness] Waiting up to ${WAIT_SECS}s for /healthz devHarness.enabled=true + receipt.sha25612=${RECEIPT_SHA12} ..."
-
-ok="false"
-for _ in $(seq 1 $((WAIT_SECS * 10))); do
-  if curl -fsS "${BASE}/healthz" 2>/dev/null | RECEIPT_SHA12="${RECEIPT_SHA12}" node -e '
-    let d=""; process.stdin.on("data",c=>d+=c);
-    process.stdin.on("end",()=>{ try{
-      const j=JSON.parse(d);
-      const enabled = j?.devHarness?.enabled===true;
-      const sha = j?.devHarness?.receipt?.sha25612 || null;
-      process.exit(enabled && sha === process.env.RECEIPT_SHA12 ? 0 : 1);
-    }catch{process.exit(1)}});' >/dev/null 2>&1; then
-    ok="true"
-    break
-  fi
-  sleep 0.1
-done
-
-if [[ "$ok" != "true" ]]; then
-  echo "[harness] ERROR: gateway did not report devHarness.enabled=true with expected receipt fingerprint in time."
-  echo "[harness]        If WAIT_FOR_USER=false, you must ensure the gateway is restarted with the printed env vars."
-  exit 1
-fi
-
-echo "[harness] OK: gateway devHarness.enabled=true (and receipt fingerprint matched)"
+# Ensure gateway is ready and pointed at this issuer
+wait_for_gateway
 
 # --------------------------------------------------------------------
 # Request #2: expect 200 + PAYMENT-RESPONSE + upstream body
+# (inject receipt per request via X402-DEV-RECEIPT-JWS)
 # --------------------------------------------------------------------
 SIG_B64="$(payment_signature_b64)"
 URL2="${BASE}/x402/premium?nonce=${NONCE}"
 echo "[harness] request #2 (expect 200 + proxy content): $URL2"
-curl -sS -H "PAYMENT-SIGNATURE: ${SIG_B64}" "$URL2" -D "$TMP_HEADERS_2" -o "$TMP_BODY_2" >/dev/null || true
+curl -sS \
+  -H "PAYMENT-SIGNATURE: ${SIG_B64}" \
+  -H "X402-DEV-RECEIPT-JWS: ${RECEIPT_JWS}" \
+  "$URL2" -D "$TMP_HEADERS_2" -o "$TMP_BODY_2" >/dev/null || true
 assert_status "200" "$TMP_HEADERS_2" "#2" "$TMP_BODY_2"
 
 RESP_B64="$(get_header "PAYMENT-RESPONSE" "$TMP_HEADERS_2")"
@@ -335,48 +351,74 @@ fi
 echo "[harness] PASS: paid-path proxy worked + PAYMENT-RESPONSE validated"
 
 # --------------------------------------------------------------------
-# Replay attempts helper
+# Request #3: replay test (same URL, same signature, same injected receipt)
 # --------------------------------------------------------------------
-do_replay_attempt() {
-  local label="$1"
-  local url="$2"
-
-  local h b
-  h="$(mktemp)"
-  b="$(mktemp)"
-  # shellcheck disable=SC2064
-  trap "rm -f '$h' '$b' >/dev/null 2>&1 || true; cleanup" EXIT
-
-  echo "[harness] request ${label} (replay attempt, expect 402): $url"
-  curl -sS -H "PAYMENT-SIGNATURE: ${SIG_B64}" "$url" -D "$h" -o "$b" >/dev/null || true
-  assert_status "402" "$h" "$label" "$b"
-  assert_replay_402 "$h" "$b" "$label"
-  rm -f "$h" "$b" >/dev/null 2>&1 || true
-}
-
-# --------------------------------------------------------------------
-# Request #3: exact replay (same URL)
-# --------------------------------------------------------------------
-do_replay_attempt "#3" "$URL2"
+URL3="$URL2"
+echo "[harness] request #3 (replay attempt, expect 402): $URL3"
+curl -sS \
+  -H "PAYMENT-SIGNATURE: ${SIG_B64}" \
+  -H "X402-DEV-RECEIPT-JWS: ${RECEIPT_JWS}" \
+  "$URL3" -D "$TMP_HEADERS_3" -o "$TMP_BODY_3" >/dev/null || true
+assert_status "402" "$TMP_HEADERS_3" "#3" "$TMP_BODY_3"
+assert_replay_402 "$TMP_HEADERS_3" "$TMP_BODY_3" "#3"
 echo "[harness] PASS: replay rejected with 402 + PAYMENT-REQUIRED"
 
 # --------------------------------------------------------------------
-# M3 “airtight” query bypass attempts:
-# - reorder
-# - decoration
-# - duplicated keys
-# - duplicate nonce (Express may parse as array)
-# - encoding variants
+# Request #4-#9: query decoration / reorder / duplicates / encoding variants
 # --------------------------------------------------------------------
-K="$REPLAY_QUERY_EXTRA_KEY"
-V="$REPLAY_QUERY_EXTRA_VAL"
+URL4="${BASE}/x402/premium?${REPLAY_QUERY_EXTRA_KEY}=${REPLAY_QUERY_EXTRA_VAL}&nonce=${NONCE}"
+echo "[harness] request #4 (replay attempt, expect 402): $URL4"
+curl -sS \
+  -H "PAYMENT-SIGNATURE: ${SIG_B64}" \
+  -H "X402-DEV-RECEIPT-JWS: ${RECEIPT_JWS}" \
+  "$URL4" -D "$TMP_HEADERS_4" -o "$TMP_BODY_4" >/dev/null || true
+assert_status "402" "$TMP_HEADERS_4" "#4" "$TMP_BODY_4"
+assert_replay_402 "$TMP_HEADERS_4" "$TMP_BODY_4" "#4"
 
-do_replay_attempt "#4" "${BASE}/x402/premium?${K}=${V}&nonce=${NONCE}"
-do_replay_attempt "#5" "${BASE}/x402/premium?nonce=${NONCE}&${K}=${V}"
-do_replay_attempt "#6" "${BASE}/x402/premium?nonce=${NONCE}&${K}=${V}&${K}=$((V+1))"
-do_replay_attempt "#7" "${BASE}/x402/premium?nonce=${NONCE}&${K}=${V}&${K}=${V}"   # dup key same value
-do_replay_attempt "#8" "${BASE}/x402/premium?nonce=${NONCE}&${K}=%31"             # encoded '1'
-do_replay_attempt "#9" "${BASE}/x402/premium?nonce=${NONCE}&nonce=${NONCE}&${K}=${V}" # dup nonce
+URL5="${BASE}/x402/premium?nonce=${NONCE}&${REPLAY_QUERY_EXTRA_KEY}=${REPLAY_QUERY_EXTRA_VAL}"
+echo "[harness] request #5 (replay attempt, expect 402): $URL5"
+curl -sS \
+  -H "PAYMENT-SIGNATURE: ${SIG_B64}" \
+  -H "X402-DEV-RECEIPT-JWS: ${RECEIPT_JWS}" \
+  "$URL5" -D "$TMP_HEADERS_5" -o "$TMP_BODY_5" >/dev/null || true
+assert_status "402" "$TMP_HEADERS_5" "#5" "$TMP_BODY_5"
+assert_replay_402 "$TMP_HEADERS_5" "$TMP_BODY_5" "#5"
 
-echo "[harness] PASS: query decoration/reorder variants rejected (tupleKey canonical path policy)"
+URL6="${BASE}/x402/premium?nonce=${NONCE}&${REPLAY_QUERY_EXTRA_KEY}=1&${REPLAY_QUERY_EXTRA_KEY}=2"
+echo "[harness] request #6 (replay attempt, expect 402): $URL6"
+curl -sS \
+  -H "PAYMENT-SIGNATURE: ${SIG_B64}" \
+  -H "X402-DEV-RECEIPT-JWS: ${RECEIPT_JWS}" \
+  "$URL6" -D "$TMP_HEADERS_6" -o "$TMP_BODY_6" >/dev/null || true
+assert_status "402" "$TMP_HEADERS_6" "#6" "$TMP_BODY_6"
+assert_replay_402 "$TMP_HEADERS_6" "$TMP_BODY_6" "#6"
+
+URL7="${BASE}/x402/premium?nonce=${NONCE}&${REPLAY_QUERY_EXTRA_KEY}=1&${REPLAY_QUERY_EXTRA_KEY}=1"
+echo "[harness] request #7 (replay attempt, expect 402): $URL7"
+curl -sS \
+  -H "PAYMENT-SIGNATURE: ${SIG_B64}" \
+  -H "X402-DEV-RECEIPT-JWS: ${RECEIPT_JWS}" \
+  "$URL7" -D "$TMP_HEADERS_7" -o "$TMP_BODY_7" >/dev/null || true
+assert_status "402" "$TMP_HEADERS_7" "#7" "$TMP_BODY_7"
+assert_replay_402 "$TMP_HEADERS_7" "$TMP_BODY_7" "#7"
+
+URL8="${BASE}/x402/premium?nonce=${NONCE}&${REPLAY_QUERY_EXTRA_KEY}=%31"
+echo "[harness] request #8 (replay attempt, expect 402): $URL8"
+curl -sS \
+  -H "PAYMENT-SIGNATURE: ${SIG_B64}" \
+  -H "X402-DEV-RECEIPT-JWS: ${RECEIPT_JWS}" \
+  "$URL8" -D "$TMP_HEADERS_8" -o "$TMP_BODY_8" >/dev/null || true
+assert_status "402" "$TMP_HEADERS_8" "#8" "$TMP_BODY_8"
+assert_replay_402 "$TMP_HEADERS_8" "$TMP_BODY_8" "#8"
+
+URL9="${BASE}/x402/premium?nonce=${NONCE}&nonce=${NONCE}&${REPLAY_QUERY_EXTRA_KEY}=1"
+echo "[harness] request #9 (replay attempt, expect 402): $URL9"
+curl -sS \
+  -H "PAYMENT-SIGNATURE: ${SIG_B64}" \
+  -H "X402-DEV-RECEIPT-JWS: ${RECEIPT_JWS}" \
+  "$URL9" -D "$TMP_HEADERS_9" -o "$TMP_BODY_9" >/dev/null || true
+assert_status "402" "$TMP_HEADERS_9" "#9" "$TMP_BODY_9"
+assert_replay_402 "$TMP_HEADERS_9" "$TMP_BODY_9" "#9"
+
+echo "[harness] PASS: query decoration/reorder variants rejected (tupleKey canonical path/query policy)"
 echo "[harness] DONE"

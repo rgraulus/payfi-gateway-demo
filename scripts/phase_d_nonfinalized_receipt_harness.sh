@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# -----------------------------------------------------------------------------
+# Phase D harness: pending/non-finalized settlement semantics
+#
+# M4 (restartless):
+# - No "restart gateway" loop.
+# - We mint a pending receipt and inject it per request using:
+#     X402-DEV-RECEIPT-JWS: <JWS>
+#
+# Gateway requirements for this harness:
+# - Gateway already running on BASE
+# - X402_ALLOW_DEV_HARNESS=true
+# - NODE_ENV != production
+# - CRP_JWKS_URL should point at the issuer this script starts (default 127.0.0.1:8088)
+# -----------------------------------------------------------------------------
+
 BASE="${BASE:-http://127.0.0.1:3005}"
 UPSTREAM_PORT="${UPSTREAM_PORT:-3010}"
 NONCE="${NONCE:-bb-test}"
@@ -8,9 +23,6 @@ NONCE="${NONCE:-bb-test}"
 JWKS_HOST="${JWKS_HOST:-127.0.0.1}"
 JWKS_PORT="${JWKS_PORT:-8088}"
 WAIT_SECS="${WAIT_SECS:-60}"
-
-# Default pause after ACTION REQUIRED
-WAIT_FOR_USER="${WAIT_FOR_USER:-true}"
 
 # Mint a non-finalized receipt
 SETTLEMENT_STATUS="${SETTLEMENT_STATUS:-pending}"
@@ -106,6 +118,37 @@ assert_header_absent() {
   fi
 }
 
+wait_for_gateway() {
+  echo "[phase-d] Waiting up to ${WAIT_SECS}s for gateway /healthz allowDevHarness=true and jwksUrl=${JWKS_URL} ..."
+  local ok="false"
+  for _ in $(seq 1 $((WAIT_SECS * 10))); do
+    if curl -fsS "${BASE}/healthz" 2>/dev/null | JWKS_URL="${JWKS_URL}" node -e '
+      let d=""; process.stdin.on("data",c=>d+=c);
+      process.stdin.on("end",()=>{ try{
+        const j=JSON.parse(d);
+        const allow = j?.devHarness?.allowDevHarness===true;
+        const env = String(j?.devHarness?.nodeEnv||"").toLowerCase();
+        const notProd = env !== "production";
+        const jwks = String(j?.jwksUrl||"");
+        process.exit(allow && notProd && jwks === process.env.JWKS_URL ? 0 : 1);
+      }catch{process.exit(1)}});' >/dev/null 2>&1; then
+      ok="true"
+      break
+    fi
+    sleep 0.1
+  done
+
+  if [[ "$ok" != "true" ]]; then
+    echo "[phase-d] ERROR: gateway /healthz did not report allowDevHarness=true + jwksUrl match in time."
+    echo "[phase-d]        Make sure gateway is started with:"
+    echo "[phase-d]          X402_ALLOW_DEV_HARNESS=true"
+    echo "[phase-d]          NODE_ENV!=production"
+    echo "[phase-d]          CRP_JWKS_URL=${JWKS_URL}"
+    exit 1
+  fi
+  echo "[phase-d] OK: gateway dev harness allowed + jwksUrl matched"
+}
+
 # --------------------------------------------------------------------
 # Request #1: expect 402 + PAYMENT-REQUIRED (this gives us contract fields)
 # --------------------------------------------------------------------
@@ -187,47 +230,8 @@ if [[ -z "$RECEIPT_JWS" ]]; then
 fi
 echo "[phase-d] got RECEIPT_JWS (len=${#RECEIPT_JWS})"
 
-# --------------------------------------------------------------------
-# ACTION REQUIRED: restart gateway with dev harness enabled (using pending receipt)
-# --------------------------------------------------------------------
-echo
-echo "[phase-d] ACTION REQUIRED:"
-echo "  Restart your gateway (Terminal A) with these env vars set:"
-echo
-printf "  X402_ALLOW_DEV_HARNESS=true \\\\\n"
-printf "  CRP_JWKS_URL=\"%s\" \\\\\n" "$JWKS_URL"
-printf "  X402_DEV_RECEIPT_JWS=\"%s\" \\\\\n" "$RECEIPT_JWS"
-printf "  X402_DEV_RECEIPT_REQUIRE_SIG=true \\\\\n"
-printf "  npm run dev\n"
-echo
-
-if [[ "${WAIT_FOR_USER}" == "true" ]]; then
-  echo "[phase-d] Pausing now. Restart the gateway in Terminal A, then press Enter to continue..."
-  read -r _
-fi
-
-echo "[phase-d] Waiting up to ${WAIT_SECS}s for /healthz to report devHarness.enabled=true ..."
-
-ok="false"
-for _ in $(seq 1 $((WAIT_SECS * 10))); do
-  if curl -fsS "${BASE}/healthz" 2>/dev/null | node -e '
-    let d=""; process.stdin.on("data",c=>d+=c);
-    process.stdin.on("end",()=>{ try{
-      const j=JSON.parse(d);
-      process.exit(j?.devHarness?.enabled===true ? 0 : 1);
-    }catch{process.exit(1)}});' >/dev/null 2>&1; then
-    ok="true"
-    break
-  fi
-  sleep 0.1
-done
-
-if [[ "$ok" != "true" ]]; then
-  echo "[phase-d] ERROR: gateway did not report devHarness.enabled=true in time."
-  exit 1
-fi
-
-echo "[phase-d] OK: gateway devHarness.enabled=true"
+# Ensure gateway is ready and pointed at this issuer
+wait_for_gateway
 
 # --------------------------------------------------------------------
 # Request #2: paid attempt with pending receipt must be rejected:
@@ -238,7 +242,10 @@ echo "[phase-d] OK: gateway devHarness.enabled=true"
 SIG_B64="$(payment_signature_b64)"
 URL2="${BASE}/x402/premium?nonce=${NONCE}"
 echo "[phase-d] request #2 (expect 402; NO PAYMENT-RESPONSE): $URL2"
-curl -sS -H "PAYMENT-SIGNATURE: ${SIG_B64}" "$URL2" -D "$TMP_HEADERS_2" -o "$TMP_BODY_2" >/dev/null || true
+curl -sS \
+  -H "PAYMENT-SIGNATURE: ${SIG_B64}" \
+  -H "X402-DEV-RECEIPT-JWS: ${RECEIPT_JWS}" \
+  "$URL2" -D "$TMP_HEADERS_2" -o "$TMP_BODY_2" >/dev/null || true
 assert_status "402" "$TMP_HEADERS_2" "#2" "$TMP_BODY_2"
 
 PR2="$(get_header "PAYMENT-REQUIRED" "$TMP_HEADERS_2")"
