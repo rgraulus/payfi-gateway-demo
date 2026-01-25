@@ -14,7 +14,7 @@
 //
 // DEV-ONLY PAID-PATH HARNESS (hardened; off by default):
 // - Requires X402_ALLOW_DEV_HARNESS=true AND NODE_ENV != production
-// - If enabled and X402_DEV_RECEIPT_JWS is set, we skip CRP calls and use that receipt JWS.
+// - If enabled and a dev receipt is provided, we skip CRP calls and use that receipt JWS.
 // - Still requires local JWKS verification + proof payload validation.
 //
 // OPTIONAL HARDENING:
@@ -49,6 +49,13 @@
 // - Even if validateCcdPltProofAgainstContract does NOT throw on pending settlement,
 //   we still hard-stop after successful verify+validate if settlement is not finalized.
 //   (Prevents pending receipts from being treated as paid.)
+//
+// M4 (ONLY changes in this file vs M3):
+// - Add optional per-request dev receipt injection via header: X402-DEV-RECEIPT-JWS
+// - Prefer header receipt over env receipt (when dev harness allowed + not prod)
+// - Allow the header in CORS (only when dev harness allowed + not prod)
+// - Strip the header before proxying upstream
+// - Keep replyPendingFromVerifiedProof guard EXACTLY as-is (no M2 regression)
 
 import express from 'express';
 import bodyParser from 'body-parser';
@@ -118,6 +125,9 @@ const devReceiptJws =
     ? devReceiptJwsRaw
     : null;
 
+// M4: per-request dev receipt injection header (only honored when allowDevHarness && !isProd)
+const DEV_RECEIPT_HEADER = 'x402-dev-receipt-jws';
+
 // Load contracts once at startup (fail fast if frozen mismatch)
 let contracts: ContractDefinition[] = [];
 try {
@@ -142,11 +152,15 @@ const crpClient = new CrpClient({ baseUrl: crpBaseUrl });
 app.use((_req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
+  // M4: if dev harness is allowed (and not prod), allow the injection header in CORS preflight.
+  const extraDevHeader =
+    allowDevHarness && !isProd ? `,${DEV_RECEIPT_HEADER.toUpperCase()}` : '';
+
   res.setHeader(
     'Access-Control-Allow-Headers',
     legacyHeaders
-      ? 'Content-Type,PAYMENT-SIGNATURE,X-PAYMENT-SIGNATURE'
-      : 'Content-Type,PAYMENT-SIGNATURE',
+      ? `Content-Type,PAYMENT-SIGNATURE,X-PAYMENT-SIGNATURE${extraDevHeader}`
+      : `Content-Type,PAYMENT-SIGNATURE${extraDevHeader}`,
   );
 
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
@@ -214,6 +228,14 @@ function getPaymentSignatureB64(req: express.Request): string | null {
     if (typeof xh === 'string' && xh.length > 0) return xh;
   }
 
+  return null;
+}
+
+// M4: read per-request injected receipt header (only when dev harness allowed + not prod).
+function getInjectedDevReceiptJws(req: express.Request): string | null {
+  if (!(allowDevHarness && !isProd)) return null;
+  const h = req.headers[DEV_RECEIPT_HEADER];
+  if (typeof h === 'string' && h.length > 0) return h;
   return null;
 }
 
@@ -285,6 +307,8 @@ function stripPaymentHeaders(headers: HeadersInit): Headers {
     'x-payment-required',
     'x-payment-response',
     'x-payment-signature',
+    // M4: never forward the dev injection header upstream
+    DEV_RECEIPT_HEADER,
   ];
   for (const k of toDelete) h.delete(k);
   return h;
@@ -905,6 +929,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
 
   // M2 tweak: after successful verify+validate, hard-stop if settlement is pending/non-finalized.
   // (Does NOT consume replay / does NOT emit PAYMENT-RESPONSE.)
+  // KEEP EXACTLY AS-IS (NO REGRESSION).
   const replyPendingFromVerifiedProof = (args: {
     label: 'dev' | 'real';
     verify: any;
@@ -1058,9 +1083,14 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   };
 
   // ---------------------------------------------------------------------------
-  // DEV BYPASS (Phase B harness): If devReceiptJws is set, skip CRP calls.
+  // DEV BYPASS (Phase B harness):
+  // M4: allow per-request receipt injection via header (preferred),
+  //     otherwise fall back to env-based devReceiptJws.
   // ---------------------------------------------------------------------------
-  if (devReceiptJws) {
+  const injectedReceiptJws = getInjectedDevReceiptJws(req);
+  const effectiveDevReceiptJws = injectedReceiptJws ?? devReceiptJws;
+
+  if (effectiveDevReceiptJws) {
     if (devReceiptRequiresPaymentSignature && !paymentSignatureB64) {
       return reply402({
         ok: false,
@@ -1074,12 +1104,15 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     let verify: any;
     let proof: any;
     try {
-      const out = await verifyAndValidateProof(devReceiptJws);
+      const out = await verifyAndValidateProof(effectiveDevReceiptJws);
       verify = out.verify;
       proof = out.proof;
     } catch (err: any) {
       // M2: if receipt verifies but is pending/non-finalized, return explicit pending semantics.
-      const repliedPending = await tryReplyPendingSettlement({ receiptJws: devReceiptJws, label: 'dev' });
+      const repliedPending = await tryReplyPendingSettlement({
+        receiptJws: effectiveDevReceiptJws,
+        label: 'dev',
+      });
       if (repliedPending) return;
 
       const message =
@@ -1099,10 +1132,11 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     }
 
     // M2 tweak: post-verify guard (in case validation does not throw on pending)
+    // KEEP EXACTLY AS-IS (NO REGRESSION).
     if (replyPendingFromVerifiedProof({ label: 'dev', verify, proof })) return;
 
     // Replay protection BEFORE serving any paid content
-    const replay = await enforceReplay({ receiptJws: devReceiptJws, verify, proof });
+    const replay = await enforceReplay({ receiptJws: effectiveDevReceiptJws, verify, proof });
     if (!replay.ok) return;
 
     // Serve locally or proxy upstream
@@ -1111,7 +1145,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         const upstream = await fetchFromUpstream({ req, contract, resourcePathname });
 
         // M1 hardening: only emit PAYMENT-RESPONSE if the paid content is a success response.
-        maybeSetPaymentResponseHeader(upstream.ok, devReceiptJws, proof);
+        maybeSetPaymentResponseHeader(upstream.ok, effectiveDevReceiptJws, proof);
 
         return applyUpstreamResponse(res, upstream);
       } catch (e: any) {
@@ -1125,7 +1159,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     }
 
     // local mode
-    maybeSetPaymentResponseHeader(true, devReceiptJws, proof);
+    maybeSetPaymentResponseHeader(true, effectiveDevReceiptJws, proof);
 
     return res.status(200).json({
       ok: true,
@@ -1140,6 +1174,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       },
       verify,
       devHarness: true,
+      ...(injectedReceiptJws ? { devReceiptSource: 'header' } : { devReceiptSource: 'env' }),
     });
   }
 
@@ -1226,6 +1261,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   }
 
   // M2 tweak: post-verify guard (in case validation does not throw on pending)
+  // KEEP EXACTLY AS-IS (NO REGRESSION).
   if (replyPendingFromVerifiedProof({ label: 'real', verify, proof, match, fulfill })) return;
 
   // Replay protection BEFORE serving any paid content
