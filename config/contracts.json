@@ -40,9 +40,9 @@
     },
 
     {
-      "contractId": "cid_placeholder_post_premium",
+      "contractId": "cid_48cfcb36663a168ebc853d72795dd4073945b5661f46b15475989b5c24440a04",
       "contractVersion": "1.0.0",
-      "isFrozen": false,
+      "isFrozen": true,
 
       "mode": "proxy",
       "merchantId": "demo-merchant",
