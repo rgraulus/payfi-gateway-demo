@@ -37,6 +37,28 @@
       },
 
       "attestations": []
+    },
+
+    {
+      "contractId": "cid_48cfcb36663a168ebc853d72795dd4073945b5661f46b15475989b5c24440a04",
+      "contractVersion": "1.0.0",
+      "isFrozen": true,
+
+      "mode": "proxy",
+      "merchantId": "demo-merchant",
+      "resource": { "method": "POST", "path": "/premium" },
+
+      "network": "ccd:testnet",
+      "asset": { "type": "PLT", "tokenId": "EUDemo", "decimals": 6 },
+      "amount": "0.050101",
+      "payTo": "4jPLfUuSeFeP5SFLrf2eDeZEnT7ixbqXyQp9bg6qrgXyHReDfZ",
+
+      "upstream": {
+        "baseUrl": "http://127.0.0.1:3010",
+        "pathPrefix": ""
+      },
+
+      "attestations": []
     }
   ]
 }

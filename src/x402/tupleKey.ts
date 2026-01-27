@@ -17,7 +17,7 @@ function canonicalize(value: any): any {
   if (t === "object") {
     const out: Record<string, any> = {};
     for (const k of Object.keys(value).sort()) {
-      const v = value[k];
+      const v = (value as any)[k];
       if (v === undefined) continue;
       out[k] = canonicalize(v);
     }
@@ -44,6 +44,17 @@ function stripQuery(path?: string): string | undefined {
   const s = String(path);
   const i = s.indexOf("?");
   return i === -1 ? s : s.slice(0, i);
+}
+
+function upperMethod(m?: string): string | undefined {
+  if (!m) return undefined;
+  const s = String(m).toUpperCase();
+  return s.length ? s : undefined;
+}
+
+function isBodyBoundMethod(methodUpper?: string): boolean {
+  const m = String(methodUpper || "");
+  return m === "POST" || m === "PUT" || m === "PATCH";
 }
 
 export type TupleKeyInput = {
@@ -73,6 +84,10 @@ export type TupleKeyInput = {
   // M3: canonical query slot (currently ignored by policy)
   // (Future: canonical query could be included under strict rules.)
   query?: string;
+
+  // M5: optional body binding for POST/PUT/PATCH
+  // Expectation: hex sha256 of *raw request bytes*.
+  bodySha256?: string;
 };
 
 /**
@@ -80,13 +95,19 @@ export type TupleKeyInput = {
  * - builds a canonical JSON object with a stable field set
  * - binds to canonical PATH (query is intentionally ignored)
  * - includes explicit canonical query slot (currently empty) so policy is visible
+ * - optionally (M5) binds POST/PUT/PATCH to sha256(rawBodyBytes)
  * - returns sha256 hex of the canonical string
  */
 export function buildTupleKey(input: TupleKeyInput): string {
+  const method = upperMethod(input.method);
+  const includeBody = isBodyBoundMethod(method);
+
   // Explicit, stable “schema” (don’t rely on JS insertion order)
-  const tuple = {
-    // bump version because tuple semantics now explicitly include a query policy slot
-    v: 4,
+  const tuple: Record<string, any> = {
+    // bump version only when semantics change.
+    // v4: query policy slot present
+    // v5: optional body binding for POST/PUT/PATCH
+    v: 5,
 
     // payment contract
     contract: input.contract,
@@ -100,13 +121,12 @@ export function buildTupleKey(input: TupleKeyInput): string {
     decimals: input.decimals,
 
     // request identity
-    method: input.method ? input.method.toUpperCase() : undefined,
+    method,
 
     // canonical path only
     path: stripQuery(input.path),
 
     // M3: canonical query policy (explicit, but empty)
-    // Keeping this present makes the spec/implementation alignment obvious.
     qPolicy: "ignored",
     q: "",
 
@@ -118,6 +138,13 @@ export function buildTupleKey(input: TupleKeyInput): string {
     // frozen
     isFrozen: input.isFrozen ?? true,
   };
+
+  // M5: body binding only applies to POST/PUT/PATCH (never GET).
+  // If present, we include a policy slot + the hash to make the binding explicit.
+  if (includeBody) {
+    tuple.bPolicy = "sha256-raw";
+    tuple.bodySha256 = typeof input.bodySha256 === "string" ? input.bodySha256 : "";
+  }
 
   const canonical = JSON.stringify(canonicalize(tuple));
   return sha256Hex(canonical);

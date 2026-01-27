@@ -56,6 +56,10 @@
 // - Allow the header in CORS (only when dev harness allowed + not prod)
 // - Strip the header before proxying upstream
 // - Keep replyPendingFromVerifiedProof guard EXACTLY as-is (no M2 regression)
+//
+// M5 (Commit 1):
+// - Capture raw request bytes for POST/PUT/PATCH and plumb sha256(rawBodyBytes) into tupleKey
+// - No behavior change for GET and no change to pending/finalized semantics.
 
 import express from 'express';
 import bodyParser from 'body-parser';
@@ -82,8 +86,36 @@ import { buildTupleKey } from './x402/tupleKey';
 import { ReplayCache } from './x402/replayCache';
 import { receiptSha12 as receiptSha12Fingerprint } from './x402/receiptFingerprint';
 
+// -----------------------------------------------------------------------------
+// Raw body capture (M5 Commit 1)
+// -----------------------------------------------------------------------------
+
+type RawBodyRequest = express.Request & {
+  rawBody?: Buffer;
+};
+
+function isBodyBoundMethod(method: string): boolean {
+  const m = String(method || '').toUpperCase();
+  return m === 'POST' || m === 'PUT' || m === 'PATCH';
+}
+
+function sha256HexBytes(buf: Buffer): string {
+  return createHash('sha256').update(buf).digest('hex');
+}
+
 const app = express();
-app.use(bodyParser.json());
+
+// Capture raw request bytes during JSON parsing.
+// NOTE: this runs only for requests handled by bodyParser.json() (content-type based).
+app.use(
+  bodyParser.json({
+    verify: (req, _res, buf) => {
+      // Stash raw bytes for tupleKey body binding (POST/PUT/PATCH).
+      // We intentionally store bytes (not string) to avoid encoding drift.
+      (req as RawBodyRequest).rawBody = Buffer.isBuffer(buf) ? Buffer.from(buf) : Buffer.alloc(0);
+    },
+  }),
+);
 
 // -----------------------------------------------------------------------------
 // Config
@@ -1009,6 +1041,16 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     // NOTE: tupleKey strips query params intentionally (see src/x402/tupleKey.ts)
     const pathWithQuery = `${resourcePathname}${reqQueryString(req)}`;
 
+    // M5 Commit 1: If method is POST/PUT/PATCH, bind tupleKey to sha256(rawBodyBytes).
+    // This is plumbing only; M5 will add POST contracts + harnesses next.
+    const methodUpper = String(req.method || '').toUpperCase();
+    const rawBodyBuf =
+      isBodyBoundMethod(methodUpper) && Buffer.isBuffer((req as RawBodyRequest).rawBody)
+        ? ((req as RawBodyRequest).rawBody as Buffer)
+        : Buffer.alloc(0);
+
+    const bodySha256 = isBodyBoundMethod(methodUpper) ? sha256HexBytes(rawBodyBuf) : undefined;
+
     const tupleKey = buildTupleKey({
       contract: `${contract.contractId}:${contract.contractVersion}`,
       nonce,
@@ -1027,6 +1069,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       merchantId: contract.merchantId,
 
       isFrozen: contract.isFrozen,
+
+      // Only used for POST/PUT/PATCH; GET remains unchanged.
+      bodySha256,
     });
 
     const decision = await replayStore.checkAndInsert({

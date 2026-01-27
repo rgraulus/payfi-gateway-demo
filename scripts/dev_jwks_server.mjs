@@ -7,7 +7,7 @@
  * Endpoints:
  *  - GET  /                         -> simple OK
  *  - GET  /.well-known/jwks.json     -> JWKS (public Ed25519 key)
- *  - GET  /mint?...                 -> returns JSON { jws, kid, payloadPreview }
+ *  - GET  /mint?...                 -> returns JSON { ok, kid, jws, payloadPreview }
  *
  * /mint query params (required by harness / gateway semantics):
  *  nonce, contractId, contractVersion, isFrozen, merchantId,
@@ -16,24 +16,32 @@
  * Phase D additions:
  *  settlementStatus = finalized | pending   (default: finalized)
  *  ttlSec = integer seconds (default: 300)
+ *
+ * NOTE (Node 22+):
+ * - Use Node crypto KeyObject APIs (NOT WebCrypto CryptoKey exportJWK).
+ * - Persist the Ed25519 private key to disk so JWKS is stable across runs.
  */
 
 import http from "http";
-import { randomBytes, createHash } from "crypto";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { randomBytes, createHash, generateKeyPairSync, createPrivateKey, createPublicKey } from "crypto";
 import { URL } from "url";
-
-// jose is ESM-friendly here (.mjs)
-import {
-  generateKeyPair,
-  exportJWK,
-  SignJWT,
-} from "jose";
+import { SignJWT } from "jose";
 
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 8088);
 
 // Stable dev key id used in earlier runs
 const KID = "dev-local-1";
+
+// Resolve scripts directory (works in ESM)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Persisted key path (this file already exists in your repo)
+const KEY_PATH = process.env.DEV_JWKS_KEY_PATH || path.join(__dirname, ".dev_jwks_ed25519_private.pem");
 
 // Small helpers
 function json(res, status, obj) {
@@ -71,17 +79,6 @@ function requireInt(u, name) {
   return n;
 }
 
-function requireNumber(u, name) {
-  const raw = requireParam(u, name);
-  const n = Number(raw);
-  if (!Number.isFinite(n)) throw new Error(`invalid number param: ${name}=${raw}`);
-  return n;
-}
-
-function randomHex32() {
-  return randomBytes(32).toString("hex");
-}
-
 function sha256HexPrefix(input, n) {
   const hex = createHash("sha256").update(String(input), "utf8").digest("hex");
   return hex.slice(0, Math.max(0, Math.min(hex.length, n)));
@@ -100,39 +97,59 @@ function amountToRaw(amountStr, decimals) {
   const [whole, frac = ""] = s.split(".");
   const fracPadded = (frac + "0".repeat(decimals)).slice(0, decimals);
 
-  // Avoid BigInt issues by constructing string
   const rawStr = `${whole}${fracPadded}`.replace(/^0+/, "") || "0";
   return rawStr;
 }
 
 // ---------------------------------------------------------------------------
-// Key material (generated per process run; that’s fine for harness)
+// Key material (stable on disk)
 // ---------------------------------------------------------------------------
 
-const { publicKey, privateKey } = await generateKeyPair("EdDSA", { crv: "Ed25519" });
-const pubJwk = await exportJWK(publicKey);
+function loadOrCreateKeypair() {
+  // If key exists, load it.
+  if (fs.existsSync(KEY_PATH)) {
+    const pem = fs.readFileSync(KEY_PATH, "utf8");
+    const privateKey = createPrivateKey(pem);
+    const publicKey = createPublicKey(privateKey);
+    return { publicKey, privateKey, loaded: true };
+  }
 
-// Ensure JWKS includes expected metadata
+  // Else create once and persist.
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+
+  // Export private key in PKCS8 PEM
+  const pem = privateKey.export({ format: "pem", type: "pkcs8" });
+  fs.writeFileSync(KEY_PATH, pem, { encoding: "utf8", mode: 0o600 });
+
+  return { publicKey, privateKey, loaded: false };
+}
+
+const { publicKey, privateKey, loaded } = loadOrCreateKeypair();
+
+// Export public JWK from Node KeyObject (stable across runs)
+const pubJwk = publicKey.export({ format: "jwk" });
 pubJwk.kid = KID;
 pubJwk.use = "sig";
 pubJwk.alg = "EdDSA";
+
+console.log(`[dev_jwks_server] key: ${loaded ? "loaded" : "created"} ${KEY_PATH}`);
 
 // ---------------------------------------------------------------------------
 // Mint logic
 // ---------------------------------------------------------------------------
 
 function buildProofFromMintUrl(u) {
-  // Required contract/payment fields
   const nonce = requireParam(u, "nonce");
   const contractId = requireParam(u, "contractId");
   const contractVersion = requireParam(u, "contractVersion");
+
   const isFrozenRaw = requireParam(u, "isFrozen");
   const isFrozen = toBool(isFrozenRaw);
   if (isFrozen === null) throw new Error(`invalid boolean param: isFrozen=${isFrozenRaw}`);
 
   const merchantId = requireParam(u, "merchantId");
   const method = requireParam(u, "method").toUpperCase();
-  const path = requireParam(u, "path"); // expected to already be decoded by URL
+  const pathParam = requireParam(u, "path");
 
   const network = requireParam(u, "network");
   const tokenId = requireParam(u, "tokenId");
@@ -140,7 +157,6 @@ function buildProofFromMintUrl(u) {
   const amount = requireParam(u, "amount");
   const payTo = requireParam(u, "payTo");
 
-  // Phase D controls
   const settlementStatus = String(u.searchParams.get("settlementStatus") || "finalized").toLowerCase();
   const ttlSecRaw = u.searchParams.get("ttlSec");
   const ttlSec = ttlSecRaw ? Number(ttlSecRaw) : 300;
@@ -149,13 +165,14 @@ function buildProofFromMintUrl(u) {
   const nowSec = Math.floor(Date.now() / 1000);
   const expSec = nowSec + ttl;
 
-  // Derived fields
   const amountRaw = amountToRaw(amount, decimals);
 
-  // Keep chain fields stable-ish; can be random without breaking validation
-  // Use deterministic-looking hashes for readability.
-  const transactionHash = u.searchParams.get("transactionHash") || "36e915afacc211388c9fafa3ccc680ff4a5b892aed8f6482355f4ba9cf0a6b03";
-  const blockHash = u.searchParams.get("blockHash") || "4ff2b6731b09684d4b41909af43ccf0d793a632dc8cad4ce5ac83de7a6ce18f5";
+  const transactionHash =
+    u.searchParams.get("transactionHash") ||
+    "36e915afacc211388c9fafa3ccc680ff4a5b892aed8f6482355f4ba9cf0a6b03";
+  const blockHash =
+    u.searchParams.get("blockHash") ||
+    "4ff2b6731b09684d4b41909af43ccf0d793a632dc8cad4ce5ac83de7a6ce18f5";
   const blockHeightRaw = u.searchParams.get("blockHeight");
   const blockHeight = blockHeightRaw ? Number(blockHeightRaw) : 123456;
 
@@ -167,7 +184,7 @@ function buildProofFromMintUrl(u) {
       contractVersion,
       isFrozen,
       merchantId,
-      resource: { method, path },
+      resource: { method, path: pathParam },
       network,
       asset: {
         type: "PLT",
@@ -180,18 +197,10 @@ function buildProofFromMintUrl(u) {
 
     nonce,
 
-    // Phase D: finalized vs pending settlement
     settlement:
       settlementStatus === "pending"
-        ? {
-            status: "pending",
-            expiresAt: expSec,
-          }
-        : {
-            status: "finalized",
-            settledAt: nowSec,
-            expiresAt: expSec,
-          },
+        ? { status: "pending", expiresAt: expSec }
+        : { status: "finalized", settledAt: nowSec, expiresAt: expSec },
 
     chain: {
       transactionHash,
@@ -206,24 +215,21 @@ function buildProofFromMintUrl(u) {
       to: payTo,
     },
 
-    // iat/exp are added by SignJWT below, but keeping these in preview helps debugging
     _meta: {
       nowSec,
       expSec,
       ttlSec: ttl,
       settlementStatus,
-      receiptSha12: null, // filled after signing
+      receiptSha12: null,
     },
   };
 
-  return { proof, nowSec, expSec, settlementStatus, ttlSec: ttl };
+  return { proof, nowSec, expSec };
 }
 
 async function mintJws(u) {
   const { proof, nowSec, expSec } = buildProofFromMintUrl(u);
 
-  // Remove any non-standard / debugging fields from the signed payload
-  // (keep _meta out of the signed proof to match strict validators)
   const { _meta, ...signedProof } = proof;
 
   const jws = await new SignJWT(signedProof)
@@ -253,11 +259,8 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname === "/mint") {
       const out = await mintJws(url);
-
-      // Attach receipt sha prefix for diagnostics (not used by harness)
       const sha12 = sha256HexPrefix(out.jws, 12);
 
-      // Return minimal shape that harness expects + a small preview
       const payloadPreview = out.preview;
       payloadPreview._meta.receiptSha12 = sha12;
 
@@ -276,8 +279,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  // Keep output simple; harness redirects this to a temp log file.
-  // This is still handy if you run it manually.
-  // eslint-disable-next-line no-console
   console.log(`[dev_jwks_server] listening on http://${HOST}:${PORT}`);
 });
