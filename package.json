@@ -10,7 +10,8 @@
     "test:tuplekey": "node scripts/tuplekey_policy_selftest.mjs",
     "test:m4": "WAIT_FOR_USER=false ./scripts/phase_b_paid_proxy_harness.sh && WAIT_FOR_USER=false ./scripts/phase_d_nonfinalized_receipt_harness.sh",
     "test": "npm run test:tuplekey && npm run test:m4",
-    "ci:m4": "node scripts/ci_run_m4.mjs"
+    "ci:m4": "node scripts/ci_run_m4.mjs",
+    "ci:m5-post": "node scripts/ci_run_m5_post.mjs"
   },
   "repository": {
     "type": "git",
