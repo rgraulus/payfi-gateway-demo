@@ -1,7 +1,7 @@
 {
   "contracts": [
     {
-      "contractId": "cid_5a7a69a125bdaa58fcab3c138ac5b02621a0feeaecef8c8ec8d56c9e39b20ff1",
+      "contractId": "cid_25231f34dc9c7f1232afa73fe1c13d71dff15799428f23daf88aba17c205170e",
       "contractVersion": "1.0.0",
       "isFrozen": true,
 
@@ -9,7 +9,7 @@
       "merchantId": "demo-merchant",
       "resource": { "method": "GET", "path": "/paid" },
 
-      "network": "ccd:testnet",
+      "network": "concordium:testnet",
       "asset": { "type": "PLT", "tokenId": "EUDemo", "decimals": 6 },
       "amount": "0.050101",
       "payTo": "4jPLfUuSeFeP5SFLrf2eDeZEnT7ixbqXyQp9bg6qrgXyHReDfZ",

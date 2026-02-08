@@ -16,6 +16,9 @@ E2E_POLL_INTERVAL="${E2E_POLL_INTERVAL:-1}"
 E2E_SKIP_HEALTH="${E2E_SKIP_HEALTH:-0}"
 E2E_SOFT_FAIL="${E2E_SOFT_FAIL:-0}"
 
+# NEW: expiry guard window before redeeming a receipt (seconds)
+E2E_RECEIPT_GRACE_SEC="${E2E_RECEIPT_GRACE_SEC:-20}"
+
 need() { command -v "$1" >/dev/null 2>&1 || { echo "ERROR: missing required command: $1"; exit 1; }; }
 die() { echo "ERROR: $*" >&2; exit 1; }
 warn() { echo "WARN:  $*" >&2; }
@@ -26,7 +29,6 @@ need jq
 need python
 
 # Fix: make urlencode() actually consume stdin reliably under MSYS/Git Bash.
-# The prior version *should* work, but we saw ENC_REQ_NONCE become empty in practice.
 # This version reads from stdin OR argv[1], so bash pipes are robust.
 urlencode() {
   python - "$@" <<'PY'
@@ -41,6 +43,61 @@ print(urllib.parse.quote(s, safe=""))
 PY
 }
 
+# Decode compact JWS payload (2nd part) as JSON; tolerates base64url + missing padding.
+jws_payload_json() {
+  python - "$@" <<'PY'
+import sys, json, base64
+
+jws = (sys.argv[1] if len(sys.argv) > 1 else "").strip()
+parts = jws.split(".")
+if len(parts) < 2:
+    print("")
+    sys.exit(0)
+
+p = parts[1].strip()
+p = p.replace("-", "+").replace("_", "/")
+p += "=" * ((4 - (len(p) % 4)) % 4)
+
+try:
+    raw = base64.b64decode(p)
+    obj = json.loads(raw.decode("utf-8"))
+    print(json.dumps(obj))
+except Exception:
+    print("")
+PY
+}
+
+# Guard: ensure receipt not too close to expiry (or already expired).
+guard_receipt_expiry() {
+  local jws="$1"
+  local grace="${2:-20}"
+  local now
+  now="$(date +%s)"
+
+  local payload
+  payload="$(jws_payload_json "$jws")"
+  [[ -n "${payload:-}" ]] || die "could not decode receipt JWS payload to check expiry"
+
+  # Prefer settlement.expiresAt; fall back to exp if present.
+  local exp
+  exp="$(echo "$payload" | jq -r '(.settlement.expiresAt // .exp // empty)')"
+  [[ -n "${exp:-}" && "$exp" != "null" ]] || die "receipt payload missing settlement.expiresAt/exp; cannot guard expiry"
+
+  if ! echo "$exp" | grep -Eq '^[0-9]+$'; then
+    die "receipt expiry is not numeric: '$exp'"
+  fi
+
+  local remaining=$(( exp - now ))
+  if (( remaining <= 0 )); then
+    die "receipt/proof already expired (exp=$exp, now=$now)"
+  fi
+  if (( remaining <= grace )); then
+    die "receipt/proof expires too soon to redeem safely (remaining=${remaining}s <= grace=${grace}s). Re-run from Step 1 to get a fresh nonce/payment."
+  fi
+
+  echo "  [expiry] ok: expiresIn=${remaining}s (exp=$exp now=$now grace=${grace}s)"
+}
+
 HDRS="./.e2e_hdrs.txt"
 BODY="./.e2e_body.txt"
 HDRS2="./.e2e_hdrs2.txt"
@@ -52,6 +109,7 @@ echo "GW=$GW"
 echo "CRP=$CRP"
 echo "REQUESTED_NONCE=$REQUESTED_NONCE"
 echo "POLL=${E2E_POLL_SECS}s interval=${E2E_POLL_INTERVAL}s"
+echo "RECEIPT_GRACE=${E2E_RECEIPT_GRACE_SEC}s"
 echo
 
 if [[ "$E2E_SKIP_HEALTH" != "1" ]]; then
@@ -193,9 +251,28 @@ PY
 CREATE_OUT="$(curl -sS -X POST "$CRP/v1/crp/payments" -H 'content-type: application/json' -d "$CREATE_PAYLOAD")"
 echo "$CREATE_OUT" | jq '{ok, reason, payment: {nonce: .payment.nonce, status: .payment.status}}'
 
+# NEW: persist CRP payment as the single source of truth (nonce stability)
+echo "$CREATE_OUT" | jq -e '.ok == true and (.payment.nonce | type=="string" and length>0)' >/dev/null \
+  || die "CRP /v1/crp/payments did not return ok:true with payment.nonce"
+
+echo "$CREATE_OUT" | jq '.payment' > /tmp/payment.json
+
+CRP_NONCE="$(jq -r '.nonce' /tmp/payment.json)"
+[[ -n "${CRP_NONCE:-}" && "${CRP_NONCE}" != "null" ]] || die "could not read nonce from /tmp/payment.json"
+
+if [[ "$CRP_NONCE" != "$TUPLE_NONCE" ]]; then
+  warn "CRP returned a different payment nonce than the tuple nonce (will follow CRP nonce going forward)."
+  echo "  tuple nonce: $TUPLE_NONCE"
+  echo "  CRP nonce:   $CRP_NONCE"
+  echo
+fi
+
+# From here on, NONCE is the authoritative CRP payment nonce.
+NONCE="$CRP_NONCE"
+
 # Guard: confirm the stored resource.path is EXACTLY "/paid"
 CHECK_PATH="$(curl -sS "$CRP/v1/crp/payments/search?limit=25" \
-  | jq -r --arg n "$TUPLE_NONCE" '.matches[] | select(.nonce==$n) | .metadata.contract.resource.path' \
+  | jq -r --arg n "$NONCE" '.matches[] | select(.nonce==$n) | .metadata.contract.resource.path' \
   | head -n 1)"
 
 if [[ "$CHECK_PATH" != "/paid" ]]; then
@@ -211,6 +288,9 @@ echo "  amount:    $AMOUNT"
 echo "  amountRaw: $AMOUNT_RAW"
 echo "  to:        $PAY_TO"
 echo
+echo "Payment correlation nonce (store/remember this):"
+echo "  NONCE:     $NONCE"
+echo
 echo "When ready, paste the transaction hash (preferred), or press ENTER to just start polling."
 read -r -p "TX hash (hex) [ENTER to skip]: " USER_TX
 
@@ -221,7 +301,7 @@ MATCH_PAYLOAD="$(python - <<PY
 import json
 print(json.dumps({
   "merchantId":"${MERCHANT_ID}",
-  "nonce":"${TUPLE_NONCE}",
+  "nonce":"${NONCE}",
   "network":"${NETWORK}",
   "asset":{"type":"${ASSET_TYPE}","tokenId":"${TOKEN_ID}","decimals":int("${DECIMALS}")},
   "amount":"${AMOUNT}",
@@ -234,7 +314,7 @@ FULFILL_PAYLOAD_BASE="$(python - <<PY
 import json
 print(json.dumps({
   "merchantId":"${MERCHANT_ID}",
-  "nonce":"${TUPLE_NONCE}",
+  "nonce":"${NONCE}",
   "network":"${NETWORK}",
   "asset":{"type":"${ASSET_TYPE}","tokenId":"${TOKEN_ID}","decimals":int("${DECIMALS}")},
   "amount":"${AMOUNT}",
@@ -298,9 +378,7 @@ while true; do
   fi
 
   # If pending and we have a tx hash (from user or from match receipt payload), try fulfill.
-  # This makes the manual flow complete without needing a separate curl by the user.
   if [[ "$STATUS" == "pending" ]]; then
-    # Prefer tx hash from user; else use any tx hinted in match response
     TRY_TX="${USER_TX:-}"
     if [[ -z "${TRY_TX:-}" && -n "${TX:-}" ]]; then
       TRY_TX="$TX"
@@ -339,13 +417,17 @@ if [[ "${STATUS:-}" != "fulfilled" ]]; then
   fi
 fi
 
+# NEW: expiry guard before redeem
 echo
-note "5) Fetch paid resource (should be 200 + PAYMENT-RESPONSE)"
-ENC_TUPLE_NONCE="$(urlencode "$TUPLE_NONCE")"
-[[ -n "${ENC_TUPLE_NONCE:-}" ]] || die "urlencode() produced empty string for TUPLE_NONCE='$TUPLE_NONCE'"
+note "4b) Guard: ensure receipt/proof is not too close to expiry before redeem"
+guard_receipt_expiry "$RECEIPT_JWS" "$E2E_RECEIPT_GRACE_SEC"
 
+echo
+note "5) Fetch paid resource using direct receipt header (should be 200 + PAYMENT-RESPONSE)"
 rm -f "$HDRS2" "$BODY2"
-HTTP_CODE2="$(curl -sS -D "$HDRS2" -o "$BODY2" -w '%{http_code}' "$GW/paid?nonce=$ENC_TUPLE_NONCE" || true)"
+HTTP_CODE2="$(curl -sS -D "$HDRS2" -o "$BODY2" -w '%{http_code}' \
+  -H "x402-receipt: $RECEIPT_JWS" \
+  "$GW/paid" || true)"
 echo "HTTP=$HTTP_CODE2"
 
 RESP_JSON="$(
