@@ -60,6 +60,13 @@
 // M5 (Commit 1):
 // - Capture raw request bytes for POST/PUT/PATCH and plumb sha256(rawBodyBytes) into tupleKey
 // - No behavior change for GET and no change to pending/finalized semantics.
+//
+// PATCH (this file):
+// - Fix root-cause “nonce treadmill”:
+//   If the client sends a receipt (via `x402-receipt: <JWS>` OR inside PAYMENT-SIGNATURE JSON),
+//   we verify it locally, take the nonce FROM THE VERIFIED RECEIPT payload,
+//   and serve 200 without calling CRP match/fulfill.
+// - Keep CRP flow for clients that don’t provide a receipt (classic 402 -> pay -> fulfill -> 200).
 
 import express from 'express';
 import bodyParser from 'body-parser';
@@ -160,6 +167,10 @@ const devReceiptJws =
 // M4: per-request dev receipt injection header (only honored when allowDevHarness && !isProd)
 const DEV_RECEIPT_HEADER = 'x402-dev-receipt-jws';
 
+// PATCH: allow a “direct receipt JWS” header for real clients (matches what you were sending).
+// This is NOT a dev-only feature; it is the cleanest interop path for curl/harnesses.
+const DIRECT_RECEIPT_HEADER = 'x402-receipt';
+
 // Load contracts once at startup (fail fast if frozen mismatch)
 let contracts: ContractDefinition[] = [];
 try {
@@ -188,11 +199,14 @@ app.use((_req, res, next) => {
   const extraDevHeader =
     allowDevHarness && !isProd ? `,${DEV_RECEIPT_HEADER.toUpperCase()}` : '';
 
+  // PATCH: allow the direct receipt header in CORS for convenience.
+  const extraReceiptHeader = `,${DIRECT_RECEIPT_HEADER.toUpperCase()}`;
+
   res.setHeader(
     'Access-Control-Allow-Headers',
     legacyHeaders
-      ? `Content-Type,PAYMENT-SIGNATURE,X-PAYMENT-SIGNATURE${extraDevHeader}`
-      : `Content-Type,PAYMENT-SIGNATURE${extraDevHeader}`,
+      ? `Content-Type,PAYMENT-SIGNATURE,X-PAYMENT-SIGNATURE${extraDevHeader}${extraReceiptHeader}`
+      : `Content-Type,PAYMENT-SIGNATURE${extraDevHeader}${extraReceiptHeader}`,
   );
 
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
@@ -260,6 +274,13 @@ function getPaymentSignatureB64(req: express.Request): string | null {
     if (typeof xh === 'string' && xh.length > 0) return xh;
   }
 
+  return null;
+}
+
+// PATCH: allow clients to provide the raw receipt JWS directly (what you were doing).
+function getDirectReceiptJws(req: express.Request): string | null {
+  const h = req.headers[DIRECT_RECEIPT_HEADER];
+  if (typeof h === 'string' && h.length > 0) return h;
   return null;
 }
 
@@ -341,6 +362,8 @@ function stripPaymentHeaders(headers: HeadersInit): Headers {
     'x-payment-signature',
     // M4: never forward the dev injection header upstream
     DEV_RECEIPT_HEADER,
+    // PATCH: never forward raw receipt header upstream
+    DIRECT_RECEIPT_HEADER,
   ];
   for (const k of toDelete) h.delete(k);
   return h;
@@ -838,6 +861,19 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     }
   }
 
+  // PATCH: accept receipt JWS either directly (x402-receipt) or embedded in PAYMENT-SIGNATURE JSON.
+  // If present and verifies, we take nonce FROM THE VERIFIED RECEIPT and do NOT call CRP.
+  const directReceiptJws = getDirectReceiptJws(req);
+
+  const receiptJwsFromPaymentSignature =
+    typeof paymentSignature?.receipt?.jws === 'string' && paymentSignature.receipt.jws.length > 0
+      ? paymentSignature.receipt.jws
+      : typeof paymentSignature?.receiptJws === 'string' && paymentSignature.receiptJws.length > 0
+        ? paymentSignature.receiptJws
+        : null;
+
+  const clientReceiptJws = directReceiptJws ?? receiptJwsFromPaymentSignature;
+
   const nonceFromQuery =
     typeof req.query.nonce === 'string' && req.query.nonce.length > 0 ? req.query.nonce : null;
 
@@ -846,34 +882,37 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       ? paymentSignature.nonce
       : null;
 
-  const nonce = nonceFromQuery ?? nonceFromSig ?? `demo-${randomUUID()}`;
+  // We may override this nonce if we successfully verify a client-provided receipt.
+  let nonce = nonceFromQuery ?? nonceFromSig ?? `demo-${randomUUID()}`;
 
   const nowSec = Math.floor(Date.now() / 1000);
 
-  const paymentRequiredHeaderPayload = buildPaymentRequiredPayload({
-    contract,
-    nonce,
-    issuedAtSec: nowSec,
-    expiresAtSec: nowSec + ttlSec,
-  });
+  // These are built once we decide the nonce (possibly from verified receipt).
+  let paymentRequiredHeaderPayload: any = null;
+  let paymentRequiredBody: any = null;
+  let prB64 = '';
 
-  const paymentRequiredBody = {
-    ...paymentRequiredHeaderPayload,
-    facilitator: crpBaseUrl,
-    description: `Payment required for ${contract.resource.method.toUpperCase()} ${contract.resource.path}`,
+  const rebuildPaymentRequired = (nonceValue: string) => {
+    nonce = nonceValue;
+
+    paymentRequiredHeaderPayload = buildPaymentRequiredPayload({
+      contract,
+      nonce,
+      issuedAtSec: nowSec,
+      expiresAtSec: nowSec + ttlSec,
+    });
+
+    paymentRequiredBody = {
+      ...paymentRequiredHeaderPayload,
+      facilitator: crpBaseUrl,
+      description: `Payment required for ${contract.resource.method.toUpperCase()} ${contract.resource.path}`,
+    };
+
+    prB64 = b64jsonHeader(paymentRequiredHeaderPayload);
   };
 
-  const matchReq: MatchPaymentRequest = {
-    merchantId: contract.merchantId,
-    nonce,
-    network: contract.network,
-    payTo: contract.payTo,
-    amount: contract.amount,
-    asset: contract.asset,
-  };
-
-  // Precompute header value so every 402 uses the same payload
-  const prB64 = b64jsonHeader(paymentRequiredHeaderPayload);
+  // Build it initially with current nonce (may be replaced if receipt verifies).
+  rebuildPaymentRequired(nonce);
 
   // Helper to issue a "payment required" response consistently
   const reply402 = (body: any) => {
@@ -894,19 +933,20 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     });
   }
 
-  // Helper: once we have a receipt JWS, verify signature + enforce proof payload semantics.
-  const verifyAndValidateProof = async (receiptJws: string) => {
-    const verify = await verifyReceiptJwsLocal(receiptJws);
+  // Helper: verify signature + enforce proof payload semantics.
+  // PATCH: allow caller to specify which nonce to bind against (important when nonce comes from receipt).
+  const verifyAndValidateProof = async (args: { receiptJws: string; expectedNonce: string }) => {
+    const verify = await verifyReceiptJwsLocal(args.receiptJws);
 
-    // Phase B (real): require ccd-plt-proof@v1 in receipt payload
     const payload = verify.payload;
 
+    // Phase B (real): require ccd-plt-proof@v1 in receipt payload
     assertCcdPltProofV1(payload);
 
     validateCcdPltProofAgainstContract({
       proof: payload,
       expected: {
-        nonce,
+        nonce: args.expectedNonce,
         contract: toContractBinding(contract),
         nowSec,
       },
@@ -918,7 +958,8 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   // M2: classify pending/non-finalized receipts without emitting PAYMENT-RESPONSE
   const tryReplyPendingSettlement = async (args: {
     receiptJws: string;
-    label: 'dev' | 'real';
+    label: 'dev' | 'real' | 'client';
+    expectedNonce: string;
     match?: any;
     fulfill?: any;
   }): Promise<boolean> => {
@@ -926,8 +967,17 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       const v = await verifyReceiptJwsLocal(args.receiptJws);
       const payload = v?.payload ?? null;
 
-      // Ensure it looks like ccd-plt-proof@v1 (will throw if not)
       assertCcdPltProofV1(payload);
+
+      // Ensure it’s at least structurally bound (nonce/contract checks) before we treat it as pending.
+      validateCcdPltProofAgainstContract({
+        proof: payload,
+        expected: {
+          nonce: args.expectedNonce,
+          contract: toContractBinding(contract),
+          nowSec,
+        },
+      });
 
       if (!isPendingSettlement(payload)) return false;
 
@@ -963,7 +1013,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   // (Does NOT consume replay / does NOT emit PAYMENT-RESPONSE.)
   // KEEP EXACTLY AS-IS (NO REGRESSION).
   const replyPendingFromVerifiedProof = (args: {
-    label: 'dev' | 'real';
+    label: 'dev' | 'real' | 'client';
     verify: any;
     proof: any;
     match?: any;
@@ -1042,7 +1092,6 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     const pathWithQuery = `${resourcePathname}${reqQueryString(req)}`;
 
     // M5 Commit 1: If method is POST/PUT/PATCH, bind tupleKey to sha256(rawBodyBytes).
-    // This is plumbing only; M5 will add POST contracts + harnesses next.
     const methodUpper = String(req.method || '').toUpperCase();
     const rawBodyBuf =
       isBodyBoundMethod(methodUpper) && Buffer.isBuffer((req as RawBodyRequest).rawBody)
@@ -1128,6 +1177,119 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   };
 
   // ---------------------------------------------------------------------------
+  // PATCH: If client provides a receipt JWS, verify it and serve directly.
+  // This avoids the “new nonce every request” treadmill.
+  // ---------------------------------------------------------------------------
+  if (clientReceiptJws) {
+    try {
+      // Verify (signature) first so nonce comes from a trusted payload
+      const v0 = await verifyReceiptJwsLocal(clientReceiptJws);
+      assertCcdPltProofV1(v0.payload);
+
+      const receiptNonce =
+        typeof v0.payload?.nonce === 'string' && v0.payload.nonce.length > 0 ? v0.payload.nonce : null;
+
+      if (!receiptNonce) {
+        return reply402({
+          ok: false,
+          paid: false,
+          paymentRequired: paymentRequiredBody,
+          error: 'Invalid payment receipt',
+          ...(x402Debug ? { debug: { reason: 'receipt missing nonce in payload' } } : {}),
+        });
+      }
+
+      // Rebuild PR based on receipt nonce (so errors/pending remain coherent)
+      rebuildPaymentRequired(receiptNonce);
+
+      // Full validate with expected nonce = receipt nonce
+      const out = await verifyAndValidateProof({ receiptJws: clientReceiptJws, expectedNonce: receiptNonce });
+      const verify = out.verify;
+      const proof = out.proof;
+
+      // M2 pending semantics (keep exact behavior)
+      if (replyPendingFromVerifiedProof({ label: 'client', verify, proof })) return;
+
+      // Replay protection BEFORE serving any paid content
+      const replay = await enforceReplay({ receiptJws: clientReceiptJws, verify, proof });
+      if (!replay.ok) return;
+
+      // Serve locally or proxy upstream
+      if ((contract.mode ?? 'local') === 'proxy') {
+        try {
+          const upstream = await fetchFromUpstream({ req, contract, resourcePathname });
+          maybeSetPaymentResponseHeader(upstream.ok, clientReceiptJws, proof);
+          return applyUpstreamResponse(res, upstream);
+        } catch (e: any) {
+          console.error('Proxy error (client receipt):', e);
+          return res.status(502).json({
+            ok: false,
+            error: 'Upstream proxy error',
+            ...(x402Debug ? { debug: { message: String(e?.message ?? e) } } : {}),
+          });
+        }
+      }
+
+      maybeSetPaymentResponseHeader(true, clientReceiptJws, proof);
+
+      return res.status(200).json({
+        ok: true,
+        paid: true,
+        nonce,
+        resource: 'secret-data',
+        contract: {
+          contractId: contract.contractId,
+          contractVersion: contract.contractVersion,
+          isFrozen: contract.isFrozen,
+          mode: contract.mode ?? 'local',
+        },
+        verify,
+        ...(x402Debug
+          ? { debug: { receiptSource: directReceiptJws ? 'x402-receipt' : 'payment-signature.receipt.jws' } }
+          : {}),
+      });
+    } catch (err: any) {
+      // Best-effort: if receipt decodes, we can attempt pending semantics with coherent nonce.
+      let receiptNonceCandidate: string | null = null;
+      try {
+        const parts = String(clientReceiptJws || '').split('.');
+        if (parts.length >= 2) {
+          const payload = parseB64Json(parts[1]); // parseB64Json already base64url-tolerant
+          receiptNonceCandidate =
+            typeof payload?.nonce === 'string' && payload.nonce.length > 0 ? payload.nonce : null;
+        }
+      } catch {
+        receiptNonceCandidate = null;
+      }
+
+      if (receiptNonceCandidate) {
+        rebuildPaymentRequired(receiptNonceCandidate);
+        const repliedPending = await tryReplyPendingSettlement({
+          receiptJws: clientReceiptJws,
+          label: 'client',
+          expectedNonce: receiptNonceCandidate,
+        });
+        if (repliedPending) return;
+      }
+
+      const message =
+        err?.name === 'ReceiptVerifyError'
+          ? String(err.message)
+          : err?.name === 'ProofPayloadError' || err instanceof ProofPayloadError
+            ? proofErrorToString(err)
+            : String(err?.message ?? err);
+
+      return reply402({
+        ok: false,
+        paid: false,
+        paymentRequired: paymentRequiredBody,
+        error: 'Invalid payment receipt',
+        ...(x402Debug ? { debug: { reason: message } } : {}),
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // DEV BYPASS (Phase B harness):
   // M4: allow per-request receipt injection via header (preferred),
   //     otherwise fall back to env-based devReceiptJws.
@@ -1149,7 +1311,8 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     let verify: any;
     let proof: any;
     try {
-      const out = await verifyAndValidateProof(effectiveDevReceiptJws);
+      // In dev harness we bind to the current nonce (from query/sig/random) exactly as before.
+      const out = await verifyAndValidateProof({ receiptJws: effectiveDevReceiptJws, expectedNonce: nonce });
       verify = out.verify;
       proof = out.proof;
     } catch (err: any) {
@@ -1157,6 +1320,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       const repliedPending = await tryReplyPendingSettlement({
         receiptJws: effectiveDevReceiptJws,
         label: 'dev',
+        expectedNonce: nonce,
       });
       if (repliedPending) return;
 
@@ -1227,6 +1391,15 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   let match: any;
   let fulfill: any;
 
+  const matchReq: MatchPaymentRequest = {
+    merchantId: contract.merchantId,
+    nonce,
+    network: contract.network,
+    payTo: contract.payTo,
+    amount: contract.amount,
+    asset: contract.asset,
+  };
+
   try {
     match = await crpClient.matchPayment(matchReq);
     fulfill = await crpClient.fulfillPayment(matchReq);
@@ -1276,7 +1449,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   let verify: any;
   let proof: any;
   try {
-    const out = await verifyAndValidateProof(receiptJws!);
+    const out = await verifyAndValidateProof({ receiptJws: receiptJws!, expectedNonce: nonce });
     verify = out.verify;
     proof = out.proof;
   } catch (err: any) {
@@ -1284,6 +1457,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     const repliedPending = await tryReplyPendingSettlement({
       receiptJws: receiptJws!,
       label: 'real',
+      expectedNonce: nonce,
       match,
       fulfill,
     });
