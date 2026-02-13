@@ -5,11 +5,12 @@ set -euo pipefail
 export MSYS_NO_PATHCONV=1
 export MSYS2_ARG_CONV_EXCL='*'
 
-GW=http://127.0.0.1:3005
-CRP=http://127.0.0.1:8080
-MERCHANT=demo-merchant
+GW="${GW:-http://127.0.0.1:3005}"
+CRP="${CRP:-http://127.0.0.1:8080}"
+MERCHANT="${MERCHANT:-demo-merchant}"
 
-TMPDIR="$HOME/.xcf_tmp"
+# Default temp dir inside repo (ignored). Override with TMPDIR=... if desired.
+TMPDIR="${TMPDIR:-$PWD/.tmp/e2e-manual-local}"
 mkdir -p "$TMPDIR"
 
 PR_JSON="$TMPDIR/pr.json"
