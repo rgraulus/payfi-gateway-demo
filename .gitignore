@@ -4,3 +4,8 @@ dist/
 
 # Dev JWKS private key (never commit)
 scripts/.dev_jwks_ed25519_private.pem
+
+# Local E2E artifacts (do not commit)
+.e2e_body.txt
+.e2e_hdrs.txt
+.tmp/
