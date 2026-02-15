@@ -9,3 +9,7 @@ scripts/.dev_jwks_ed25519_private.pem
 .e2e_body.txt
 .e2e_hdrs.txt
 .tmp/
+
+# Local wallet exports (autorun payer - NEVER commit)
+keys/
+*.export
