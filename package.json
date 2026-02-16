@@ -7,6 +7,9 @@
     "dev": "ts-node src/server.ts",
     "demo:crp-client": "ts-node src/demo-crp-client.ts",
     "demo:proto-x402": "ts-node src/demo-proto-x402-client.ts",
+
+    "payer:plt": "ts-node scripts/plt-transfer.ts",
+
     "test:tuplekey": "node scripts/tuplekey_policy_selftest.mjs",
     "test:m4": "WAIT_FOR_USER=false ./scripts/phase_b_paid_proxy_harness.sh && WAIT_FOR_USER=false ./scripts/phase_d_nonfinalized_receipt_harness.sh",
     "test": "npm run test:tuplekey && npm run test:m4",
@@ -32,6 +35,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@concordium/web-sdk": "^12.0.2",
+    "@grpc/grpc-js": "^1.14.3",
     "body-parser": "^1.20.3",
     "express": "^4.21.2",
     "jose": "^6.1.3"
