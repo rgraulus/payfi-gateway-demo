@@ -18,7 +18,7 @@
     },
 
     {
-      "contractId": "cid_da5121cffbd8b18f76ddcb5da840eab7a195b1bc8eac1accf9bcb02c1ff62b08",
+      "contractId": "cid_12b1af5fae09985159417a0a1f96ee48ea92599ecd6634c5cf0696c78e786a27",
       "contractVersion": "1.0.0",
       "isFrozen": true,
 
@@ -26,7 +26,7 @@
       "merchantId": "demo-merchant",
       "resource": { "method": "GET", "path": "/premium" },
 
-      "network": "ccd:testnet",
+      "network": "concordium:testnet",
       "asset": { "type": "PLT", "tokenId": "EUDemo", "decimals": 6 },
       "amount": "0.050101",
       "payTo": "4jPLfUuSeFeP5SFLrf2eDeZEnT7ixbqXyQp9bg6qrgXyHReDfZ",
@@ -40,7 +40,7 @@
     },
 
     {
-      "contractId": "cid_48cfcb36663a168ebc853d72795dd4073945b5661f46b15475989b5c24440a04",
+      "contractId": "cid_f0119f667945cdfe3cc374b8b00ca8ddd5b91e2b4a99c0148e27f108924e4143",
       "contractVersion": "1.0.0",
       "isFrozen": true,
 
@@ -48,7 +48,7 @@
       "merchantId": "demo-merchant",
       "resource": { "method": "POST", "path": "/premium" },
 
-      "network": "ccd:testnet",
+      "network": "concordium:testnet",
       "asset": { "type": "PLT", "tokenId": "EUDemo", "decimals": 6 },
       "amount": "0.050101",
       "payTo": "4jPLfUuSeFeP5SFLrf2eDeZEnT7ixbqXyQp9bg6qrgXyHReDfZ",
