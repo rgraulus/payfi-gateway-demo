@@ -9,6 +9,8 @@
     "demo:proto-x402": "ts-node src/demo-proto-x402-client.ts",
 
     "payer:plt": "ts-node scripts/plt-transfer.ts",
+    "payer:plt:perf:build": "tsc -p tsconfig.perf.json",
+    "payer:plt:perf": "node dist-perf/scripts/plt-transfer-perf.js",
 
     "test:tuplekey": "node scripts/tuplekey_policy_selftest.mjs",
     "test:m4": "WAIT_FOR_USER=false ./scripts/phase_b_paid_proxy_harness.sh && WAIT_FOR_USER=false ./scripts/phase_d_nonfinalized_receipt_harness.sh",
