@@ -59,6 +59,28 @@
       },
 
       "attestations": []
+    },
+
+    {
+      "contractId": "cid_aa496c005c3b3780a9bc8d34cf3186fd5e868d8dff108fb563ed8f00cd376ee5",
+      "contractVersion": "1.0.0",
+      "isFrozen": true,
+
+      "mode": "proxy",
+      "merchantId": "demo-merchant",
+      "resource": { "method": "GET", "path": "/paid/*" },
+
+      "network": "concordium:testnet",
+      "asset": { "type": "PLT", "tokenId": "EUDemo", "decimals": 6 },
+      "amount": "0.050101",
+      "payTo": "4jPLfUuSeFeP5SFLrf2eDeZEnT7ixbqXyQp9bg6qrgXyHReDfZ",
+
+      "upstream": {
+        "baseUrl": "http://127.0.0.1:3010",
+        "pathPrefix": ""
+      },
+
+      "attestations": []
     }
   ]
 }
