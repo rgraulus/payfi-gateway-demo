@@ -67,6 +67,10 @@
 //   we verify it locally, take the nonce FROM THE VERIFIED RECEIPT payload,
 //   and serve 200 without calling CRP match/fulfill.
 // - Keep CRP flow for clients that don’t provide a receipt (classic 402 -> pay -> fulfill -> 200).
+//
+// NEW (this patch):
+// - Compile contracts registry at startup to support exact + prefix-wildcard matching (e.g. /paid/*)
+// - Exact matches still win; existing /premium scripts remain unaffected.
 
 import express from 'express';
 import bodyParser from 'body-parser';
@@ -75,10 +79,12 @@ import { randomUUID, createHash } from 'crypto';
 import { CrpClient, MatchPaymentRequest } from './crpClient';
 import {
   loadContracts,
-  resolveContract,
+  compileContracts,
+  resolveContractFromRegistry,
   buildPaymentRequiredPayload,
   b64jsonHeader,
   ContractDefinition,
+  CompiledContractRegistry,
 } from './contracts';
 
 import type { ContractBinding, HttpMethod } from './proofPayload';
@@ -171,10 +177,14 @@ const DEV_RECEIPT_HEADER = 'x402-dev-receipt-jws';
 // This is NOT a dev-only feature; it is the cleanest interop path for curl/harnesses.
 const DIRECT_RECEIPT_HEADER = 'x402-receipt';
 
-// Load contracts once at startup (fail fast if frozen mismatch)
+// Load contracts once at startup (fail fast if frozen mismatch) + compile registry for scalable matching
 let contracts: ContractDefinition[] = [];
+let contractRegistry: CompiledContractRegistry;
+
 try {
   ({ contracts } = loadContracts(contractsPath));
+  contractRegistry = compileContracts(contracts);
+
   console.log(`[contracts] loaded ${contracts.length} contract(s) from ${contractsPath}`);
   for (const c of contracts) {
     console.log(
@@ -196,8 +206,7 @@ app.use((_req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   // M4: if dev harness is allowed (and not prod), allow the injection header in CORS preflight.
-  const extraDevHeader =
-    allowDevHarness && !isProd ? `,${DEV_RECEIPT_HEADER.toUpperCase()}` : '';
+  const extraDevHeader = allowDevHarness && !isProd ? `,${DEV_RECEIPT_HEADER.toUpperCase()}` : '';
 
   // PATCH: allow the direct receipt header in CORS for convenience.
   const extraReceiptHeader = `,${DIRECT_RECEIPT_HEADER.toUpperCase()}`;
@@ -724,9 +733,7 @@ let replayStore: ReplayStore;
 try {
   if (replayBackend === 'redis') {
     if (!replayRedisUrl) {
-      throw new Error(
-        'X402_REPLAY_BACKEND=redis requires X402_REDIS_URL (or REDIS_URL) to be set.',
-      );
+      throw new Error('X402_REPLAY_BACKEND=redis requires X402_REDIS_URL (or REDIS_URL) to be set.');
     }
     replayStore = new RedisReplayStore(replayRedisUrl, replayRedisKeyPrefix);
   } else {
@@ -840,10 +847,13 @@ app.get('/readyz', async (_req, res) => {
 // -----------------------------------------------------------------------------
 
 async function handleX402(req: express.Request, res: express.Response, resourcePathname: string) {
-  // Resolve contract based on the underlying resource path (e.g. /premium)
+  // Resolve contract based on the underlying resource path (e.g. /premium or /paid/demo.pdf)
   let contract: ContractDefinition;
   try {
-    contract = resolveContract(contracts, { method: req.method, pathname: resourcePathname });
+    contract = resolveContractFromRegistry(contractRegistry, {
+      method: req.method,
+      pathname: resourcePathname,
+    });
   } catch (e: any) {
     return res.status(404).json({ ok: false, error: String(e?.message ?? e) });
   }
@@ -1431,10 +1441,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   const receiptJws = m?.receipt?.jws ?? null;
 
   const isPaid =
-    fulfill?.ok === true &&
-    (fulfill?.count ?? 0) >= 1 &&
-    m?.status === 'fulfilled' &&
-    !!receiptJws;
+    fulfill?.ok === true && (fulfill?.count ?? 0) >= 1 && m?.status === 'fulfilled' && !!receiptJws;
 
   if (!isPaid) {
     return reply402({
@@ -1534,6 +1541,7 @@ app.get('/paid', async (req, res) => handleX402(req, res, '/paid'));
 
 // Generic edge gateway route: /x402/... (regex because path-to-regexp v6 rejects '/x402/*')
 // Example: GET /x402/premium?nonce=...  -> resolves contract for GET /premium
+// Example: GET /x402/paid/demo.pdf      -> resolves contract for GET /paid/demo.pdf (matches /paid/*)
 app.all(/^\/x402(?:\/.*)?$/, async (req, res) => {
   const pathname = reqPathname(req);
   const resourcePathname = stripX402Prefix(pathname);

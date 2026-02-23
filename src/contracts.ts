@@ -10,6 +10,12 @@
 //
 // Excludes metadata/lifecycle fields:
 // - contractId, contractVersion, isFrozen
+//
+// Matching rules (scalable):
+// - Exact match wins (method + exact path)
+// - Optional prefix-wildcard contracts using "/paid/*" style
+//   (longest prefix wins; deterministic)
+// - Fail fast on duplicates (exact or wildcard-prefix duplicates)
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -121,22 +127,128 @@ export function loadContracts(configPath = 'config/contracts.json'): { contracts
   return { contracts };
 }
 
-export function resolveContract(
-  contracts: ContractDefinition[],
+// ------------------------------
+// Scalable matching (exact + prefix wildcard)
+// ------------------------------
+
+export type CompiledContractRegistry = {
+  // Exact match: method -> pathname -> contract
+  exact: Map<string, Map<string, ContractDefinition>>;
+
+  // Prefix wildcards: method -> [{ prefix, contract }] sorted by longest prefix first
+  prefix: Map<string, Array<{ prefix: string; contract: ContractDefinition }>>;
+
+  // Keep original list
+  all: ContractDefinition[];
+};
+
+function isPrefixWildcardPath(p: string): boolean {
+  // Canonical: "/paid/*" (preferred)
+  // Also accept "/paid*" as a looser variant (not recommended for directories)
+  return p.endsWith('/*') || (p.endsWith('*') && !p.endsWith('/*'));
+}
+
+function wildcardPrefix(p: string): string {
+  // "/paid/*" -> "/paid/"
+  // "/paid*"  -> "/paid"
+  if (p.endsWith('/*')) return p.slice(0, -1); // keep trailing '/'
+  if (p.endsWith('*')) return p.slice(0, -1);
+  return p;
+}
+
+/**
+ * Compile contracts into a fast registry:
+ * - Exact map for O(1) hot path
+ * - Prefix list for wildcard matches
+ *
+ * Deterministic resolution order:
+ * 1) exact
+ * 2) longest prefix first
+ *
+ * Fail-fast rules:
+ * - duplicate exact (method+path) is rejected
+ * - duplicate wildcard prefixes are rejected
+ */
+export function compileContracts(contracts: ContractDefinition[]): CompiledContractRegistry {
+  const exact = new Map<string, Map<string, ContractDefinition>>();
+  const prefix = new Map<string, Array<{ prefix: string; contract: ContractDefinition }>>();
+
+  const getExactBucket = (method: string) => {
+    let m = exact.get(method);
+    if (!m) {
+      m = new Map();
+      exact.set(method, m);
+    }
+    return m;
+  };
+
+  const getPrefixBucket = (method: string) => {
+    let arr = prefix.get(method);
+    if (!arr) {
+      arr = [];
+      prefix.set(method, arr);
+    }
+    return arr;
+  };
+
+  for (const c of contracts) {
+    const method = c.resource.method.toUpperCase();
+    const p = c.resource.path;
+
+    if (isPrefixWildcardPath(p)) {
+      const pre = wildcardPrefix(p);
+
+      if (!pre.startsWith('/')) {
+        throw new Error(`[contracts] wildcard path must start with '/': ${method} ${p}`);
+      }
+
+      getPrefixBucket(method).push({ prefix: pre, contract: c });
+      continue;
+    }
+
+    const bucket = getExactBucket(method);
+    if (bucket.has(p)) {
+      throw new Error(`[contracts] duplicate exact contract for ${method} ${p}`);
+    }
+    bucket.set(p, c);
+  }
+
+  // Sort prefixes by specificity: longest prefix first
+  for (const [method, arr] of prefix.entries()) {
+    arr.sort((a, b) => b.prefix.length - a.prefix.length);
+
+    // Fail fast on duplicate prefixes
+    const seen = new Set<string>();
+    for (const it of arr) {
+      if (seen.has(it.prefix)) {
+        throw new Error(`[contracts] duplicate wildcard prefix for ${method} ${it.prefix}*`);
+      }
+      seen.add(it.prefix);
+    }
+  }
+
+  return { exact, prefix, all: contracts };
+}
+
+export function resolveContractFromRegistry(
+  reg: CompiledContractRegistry,
   req: { method: string; pathname: string },
 ): ContractDefinition {
   const pathname = req.pathname;
   const method = (req.method || 'GET').toUpperCase();
 
-  const found = contracts.find(
-    (c) => c.resource.method.toUpperCase() === method && c.resource.path === pathname,
-  );
+  // 1) Exact match wins
+  const exactBucket = reg.exact.get(method);
+  const exactHit = exactBucket?.get(pathname);
+  if (exactHit) return exactHit;
 
-  if (!found) {
-    throw new Error(`[contracts] No contract for ${method} ${pathname}`);
+  // 2) Prefix wildcard match (longest prefix first)
+  const prefixBucket = reg.prefix.get(method) ?? [];
+  for (const { prefix, contract } of prefixBucket) {
+    if (pathname.startsWith(prefix)) return contract;
   }
 
-  return found;
+  throw new Error(`[contracts] No contract for ${method} ${pathname}`);
 }
 
 export function buildPaymentRequiredPayload(args: {
