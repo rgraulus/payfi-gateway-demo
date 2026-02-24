@@ -1,0 +1,24 @@
+services:
+  poc-gw:
+    build:
+      context: ../../../..
+      dockerfile: docker/poc/demo/phase1/Dockerfile
+    container_name: payfi-poc-gw
+    ports:
+      - "3005:3005"
+    environment:
+      # Bind within container so published port works
+      HOST: "0.0.0.0"
+      PORT: "3005"
+      NODE_ENV: "development"
+
+      # CRITICAL: gateway must reach host-run CRP from inside Docker
+      CRP_BASE_URL: "http://host.docker.internal:8080"
+      CRP_JWKS_URL: "http://host.docker.internal:8080/.well-known/jwks.json"
+
+      # Make failures visible while we harden Phase 1
+      X402_DEBUG: "true"
+
+      # Upstream runs *inside the same container* on 3010; gateway should call it via localhost
+      UPSTREAM_PORT: "3010"
+      UPSTREAM_BASE_URL: "http://127.0.0.1:3010"

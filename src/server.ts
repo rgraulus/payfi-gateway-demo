@@ -134,6 +134,7 @@ app.use(
 // Config
 // -----------------------------------------------------------------------------
 
+const host = String(process.env.HOST ?? 'localhost'); // host dev default; Docker sets HOST=0.0.0.0
 const port = Number(process.env.PORT ?? 3005);
 
 const crpBaseUrl = (process.env.CRP_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
@@ -1565,6 +1566,6 @@ app.use((req, res) => {
 // Start server
 // -----------------------------------------------------------------------------
 
-app.listen(port, () => {
-  console.log(`payfi-gateway-demo HTTP server listening on http://localhost:${port}`);
+app.listen(port, host, () => {
+  console.log(`payfi-gateway-demo HTTP server listening on http://${host}:${port}`);
 });
