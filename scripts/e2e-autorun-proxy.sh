@@ -302,22 +302,39 @@ if ! awk 'NR==1{print}' "$REDEEM_RESP" | grep -qE 'HTTP/[0-9.]+ 200'; then
   die "redeem did not return HTTP 200"
 fi
 
-# Expect upstream body marker (CI upstream server)
-if ! grep -q 'UPSTREAM_OK' "$REDEEM_RESP"; then
-  echo "---- redeem response (first 80 lines) ----"
-  sed -n '1,80p' "$REDEEM_RESP"
-  die "redeem response missing UPSTREAM_OK (proxy did not forward or upstream not running)"
+# Expect an upstream success marker.
+# We accept either:
+#   A) CI upstream body marker: "UPSTREAM_OK <METHOD> <URL>"
+#   B) PoC upstream header marker: "x-upstream-demo: true"
+#
+# (Your PoC upstream serves PDFs and signals success via that header.)
+method_upper="$(printf '%s' "${METHOD_OVERRIDE:-GET}" | tr '[:lower:]' '[:upper:]')"
+
+has_upstream_marker=false
+
+if grep -q 'UPSTREAM_OK' "$REDEEM_RESP"; then
+  has_upstream_marker=true
+elif grep -qi '^x-upstream-demo: *true' "$REDEEM_RESP"; then
+  has_upstream_marker=true
 fi
 
-# Stronger assertion: method + path appear (from ci_upstream_server.mjs)
-# It prints: UPSTREAM_OK <METHOD> <URL>
-method_upper="$(printf '%s' "${METHOD_OVERRIDE:-GET}" | tr '[:lower:]' '[:upper:]')"
-if ! grep -q "UPSTREAM_OK ${method_upper} ${RESOURCE_PATH}" "$REDEEM_RESP"; then
-  # Don't fail hard if querystring exists; check at least path
-  if ! grep -q "UPSTREAM_OK ${method_upper} " "$REDEEM_RESP"; then
-    echo "---- redeem response (first 80 lines) ----"
-    sed -n '1,80p' "$REDEEM_RESP"
-    die "redeem response did not look like upstream echo (unexpected body)"
+if [ "$has_upstream_marker" != "true" ]; then
+  echo "---- redeem response (first 80 lines) ----"
+  sed -n '1,80p' "$REDEEM_RESP"
+  die "redeem response missing upstream marker (expected UPSTREAM_OK... OR x-upstream-demo: true). Proxy did not forward or upstream not running?"
+fi
+
+# If the CI marker is present, keep the stronger assertion (backwards compatible).
+if grep -q 'UPSTREAM_OK' "$REDEEM_RESP"; then
+  # Stronger assertion: method + path appear (from ci_upstream_server.mjs)
+  # It prints: UPSTREAM_OK <METHOD> <URL>
+  if ! grep -q "UPSTREAM_OK ${method_upper} ${RESOURCE_PATH}" "$REDEEM_RESP"; then
+    # Don't fail hard if querystring exists; check at least method marker
+    if ! grep -q "UPSTREAM_OK ${method_upper} " "$REDEEM_RESP"; then
+      echo "---- redeem response (first 80 lines) ----"
+      sed -n '1,80p' "$REDEEM_RESP"
+      die "redeem response did not look like upstream echo (unexpected body)"
+    fi
   fi
 fi
 
