@@ -71,21 +71,20 @@
 // NEW (this patch):
 // - Compile contracts registry at startup to support exact + prefix-wildcard matching (e.g. /paid/*)
 // - Exact matches still win; existing /premium scripts remain unaffected.
+//
+// M0.5:
+// - Introduce ContractResolver abstraction so server.ts no longer owns
+//   loadContracts()/compileContracts()/resolveContractFromRegistry() directly.
+// - Current implementation remains file-backed via FileContractResolver.
 
 import express from 'express';
 import bodyParser from 'body-parser';
 import { randomUUID, createHash } from 'crypto';
 
 import { CrpClient, MatchPaymentRequest } from './crpClient';
-import {
-  loadContracts,
-  compileContracts,
-  resolveContractFromRegistry,
-  buildPaymentRequiredPayload,
-  b64jsonHeader,
-  ContractDefinition,
-  CompiledContractRegistry,
-} from './contracts';
+import { buildPaymentRequiredPayload, b64jsonHeader, ContractDefinition } from './contracts';
+import { FileContractResolver } from './contractResolver';
+import type { ContractResolver } from './contractResolver';
 
 import type { ContractBinding, HttpMethod } from './proofPayload';
 import {
@@ -178,13 +177,13 @@ const DEV_RECEIPT_HEADER = 'x402-dev-receipt-jws';
 // This is NOT a dev-only feature; it is the cleanest interop path for curl/harnesses.
 const DIRECT_RECEIPT_HEADER = 'x402-receipt';
 
-// Load contracts once at startup (fail fast if frozen mismatch) + compile registry for scalable matching
+// Load contracts once at startup via resolver (fail fast if frozen mismatch)
+let contractResolver: ContractResolver;
 let contracts: ContractDefinition[] = [];
-let contractRegistry: CompiledContractRegistry;
 
 try {
-  ({ contracts } = loadContracts(contractsPath));
-  contractRegistry = compileContracts(contracts);
+  contractResolver = new FileContractResolver(contractsPath);
+  contracts = contractResolver.list();
 
   console.log(`[contracts] loaded ${contracts.length} contract(s) from ${contractsPath}`);
   for (const c of contracts) {
@@ -851,7 +850,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   // Resolve contract based on the underlying resource path (e.g. /premium or /paid/demo.pdf)
   let contract: ContractDefinition;
   try {
-    contract = resolveContractFromRegistry(contractRegistry, {
+    contract = contractResolver.resolveByResource({
       method: req.method,
       pathname: resourcePathname,
     });
@@ -873,7 +872,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   }
 
   // PATCH: accept receipt JWS either directly (x402-receipt) or embedded in PAYMENT-SIGNATURE JSON.
-  // If present and verifies, we take nonce FROM THE VERIFIED RECEIPT and do NOT call CRP.
+  // If present and verifies, we take nonce FROM THE VERIFIED RECEIPT payload and do NOT call CRP.
   const directReceiptJws = getDirectReceiptJws(req);
 
   const receiptJwsFromPaymentSignature =
