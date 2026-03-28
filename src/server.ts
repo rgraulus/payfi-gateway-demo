@@ -85,6 +85,7 @@ import { CrpClient, MatchPaymentRequest } from './crpClient';
 import { buildPaymentRequiredPayload, b64jsonHeader, ContractDefinition } from './contracts';
 import { FileContractResolver } from './contractResolver';
 import type { ContractResolver } from './contractResolver';
+import { persistIssuedChallenge } from './db/gatewayPersistence';
 
 import type { ContractBinding, HttpMethod } from './proofPayload';
 import {
@@ -924,8 +925,27 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   // Build it initially with current nonce (may be replaced if receipt verifies).
   rebuildPaymentRequired(nonce);
 
+  let issuedPersistStarted = false;
+
+  const persistIssuedChallengeIfNeeded = () => {
+    if (issuedPersistStarted) return;
+    issuedPersistStarted = true;
+
+    void persistIssuedChallenge({
+      contract,
+      nonce,
+      paymentRequiredHeaderPayload,
+    }).catch((err) => {
+      // Keep current 402 behavior intact for this first persistence step.
+      // Later phases may tighten this to fail closed.
+      issuedPersistStarted = false;
+      console.error('Failed to persist issued payment challenge:', err);
+    });
+  };
+
   // Helper to issue a "payment required" response consistently
   const reply402 = (body: any) => {
+    persistIssuedChallengeIfNeeded();
     res.setHeader('PAYMENT-REQUIRED', prB64);
     if (legacyHeaders) res.setHeader('X-PAYMENT-REQUIRED', prB64);
     return res.status(402).json(body);
