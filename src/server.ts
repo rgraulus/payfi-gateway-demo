@@ -86,6 +86,7 @@ import { buildPaymentRequiredPayload, b64jsonHeader, ContractDefinition } from '
 import { FileContractResolver } from './contractResolver';
 import type { ContractResolver } from './contractResolver';
 import {
+  completeSourceVerificationByNonce,
   persistIssuedChallenge,
   transitionChallengeStateByNonce,
 } from './db/gatewayPersistence';
@@ -947,15 +948,19 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   };
 
   let proofWorkflowPersistStarted = false;
+  let proofWorkflowPersistPromise: Promise<void> | null = null;
 
   const persistProofWorkflowForCurrentNonceIfNeeded = (
     submittedReasonCode = 'proof_submitted',
     pendingReasonCode = 'source_verify_pending',
-  ) => {
-    if (proofWorkflowPersistStarted) return;
+  ): Promise<void> => {
+    if (proofWorkflowPersistStarted && proofWorkflowPersistPromise) {
+      return proofWorkflowPersistPromise;
+    }
+
     proofWorkflowPersistStarted = true;
 
-    void (async () => {
+    proofWorkflowPersistPromise = (async () => {
       await transitionChallengeStateByNonce({
         nonce,
         fromState: 'ISSUED',
@@ -975,8 +980,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       });
     })().catch((err) => {
       proofWorkflowPersistStarted = false;
+      proofWorkflowPersistPromise = null;
       console.error('Failed to persist proof workflow transitions:', err);
+      throw err;
     });
+
+    return proofWorkflowPersistPromise;
   };
 
   // Helper to issue a "payment required" response consistently
@@ -1000,7 +1009,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   }
 
   if (!paymentSignatureParseError && paymentSignatureB64 && (nonceFromQuery || nonceFromSig)) {
-    persistProofWorkflowForCurrentNonceIfNeeded(
+    await persistProofWorkflowForCurrentNonceIfNeeded(
       'payment_signature_submitted',
       'payment_signature_verification_started',
     );
@@ -1227,6 +1236,22 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     return { ok: true, tupleKey };
   };
 
+  const persistSourceVerificationOutcomeIfNeeded = (
+    outcome: 'verified' | 'failed',
+    reasonCode: string,
+    reasonMessage: string,
+  ) => {
+    void completeSourceVerificationByNonce({
+      nonce,
+      outcome,
+      actor: 'gateway',
+      reasonCode,
+      reasonMessage,
+    }).catch((err) => {
+      console.error('Failed to persist source verification outcome:', err);
+    });
+  };
+
   const paymentResponseHeaderPayloadBase = (args: { receiptJws: string; proof: any }) => ({
     version: 'x402-v2',
     contractId: contract.contractId,
@@ -1275,7 +1300,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       // Rebuild PR based on receipt nonce (so errors/pending remain coherent)
       rebuildPaymentRequired(receiptNonce);
 
-      persistProofWorkflowForCurrentNonceIfNeeded(
+      await persistProofWorkflowForCurrentNonceIfNeeded(
         'client_receipt_submitted',
         'client_receipt_verification_started',
       );
@@ -1284,6 +1309,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       const out = await verifyAndValidateProof({ receiptJws: clientReceiptJws, expectedNonce: receiptNonce });
       const verify = out.verify;
       const proof = out.proof;
+
+      persistSourceVerificationOutcomeIfNeeded(
+        'verified',
+        'client_receipt_verified',
+        'Client-provided receipt verified successfully',
+      );
 
       // M2 pending semantics (keep exact behavior)
       if (replyPendingFromVerifiedProof({ label: 'client', verify, proof })) return;
@@ -1357,6 +1388,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
             ? proofErrorToString(err)
             : String(err?.message ?? err);
 
+      persistSourceVerificationOutcomeIfNeeded(
+        'failed',
+        'client_receipt_invalid',
+        `Client-provided receipt failed verification: ${message}`,
+      );
+
       return reply402({
         ok: false,
         paid: false,
@@ -1386,7 +1423,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       });
     }
 
-    persistProofWorkflowForCurrentNonceIfNeeded(
+    await persistProofWorkflowForCurrentNonceIfNeeded(
       'dev_receipt_submitted',
       'dev_receipt_verification_started',
     );
@@ -1414,6 +1451,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
             ? proofErrorToString(err)
             : String(err?.message ?? err);
 
+      persistSourceVerificationOutcomeIfNeeded(
+        'failed',
+        'dev_receipt_invalid',
+        `Dev receipt failed verification: ${message}`,
+      );
+
       return reply402({
         ok: false,
         paid: false,
@@ -1422,6 +1465,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         ...(x402Debug ? { debug: { reason: message } } : {}),
       });
     }
+
+    persistSourceVerificationOutcomeIfNeeded(
+      'verified',
+      'dev_receipt_verified',
+      'Dev receipt verified successfully',
+    );
 
     // M2 tweak: post-verify guard (in case validation does not throw on pending)
     // KEEP EXACTLY AS-IS (NO REGRESSION).
@@ -1488,6 +1537,13 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     fulfill = await crpClient.fulfillPayment(matchReq);
   } catch (err) {
     console.error('Error calling CRP:', err);
+
+    persistSourceVerificationOutcomeIfNeeded(
+      'failed',
+      'crp_match_fulfill_error',
+      `Gateway error while checking payment: ${String(err)}`,
+    );
+
     return reply402({
       ok: false,
       paid: false,
@@ -1550,6 +1606,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           ? proofErrorToString(err)
           : String(err?.message ?? err);
 
+    persistSourceVerificationOutcomeIfNeeded(
+      'failed',
+      'real_receipt_invalid',
+      `Facilitator receipt failed verification: ${message}`,
+    );
+
     return reply402({
       ok: false,
       paid: false,
@@ -1558,6 +1620,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       ...(x402Debug ? { debug: { reason: message, match, fulfill } } : {}),
     });
   }
+
+  persistSourceVerificationOutcomeIfNeeded(
+    'verified',
+    'real_receipt_verified',
+    'Facilitator receipt verified successfully',
+  );
 
   // M2 tweak: post-verify guard (in case validation does not throw on pending)
   // KEEP EXACTLY AS-IS (NO REGRESSION).

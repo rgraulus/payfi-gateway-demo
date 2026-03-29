@@ -22,6 +22,14 @@ type TransitionChallengeStateArgs = {
   reasonMessage: string;
 };
 
+type CompleteSourceVerificationArgs = {
+  nonce: string;
+  outcome: 'verified' | 'failed';
+  actor: string;
+  reasonCode: string;
+  reasonMessage: string;
+};
+
 function sha256Hex(input: string): string {
   return createHash('sha256').update(input, 'utf8').digest('hex');
 }
@@ -275,4 +283,29 @@ export async function transitionChallengeStateByNonce(
   } finally {
     client.release();
   }
+}
+
+export async function completeSourceVerificationByNonce(
+  args: CompleteSourceVerificationArgs,
+): Promise<{
+  updated: boolean;
+  reason:
+    | 'updated'
+    | 'missing'
+    | 'already_in_target'
+    | 'unexpected_state';
+  challengeId?: string;
+  currentState?: string;
+}> {
+  const toState =
+    args.outcome === 'verified' ? 'SOURCE_VERIFIED' : 'SOURCE_VERIFY_FAILED';
+
+  return transitionChallengeStateByNonce({
+    nonce: args.nonce,
+    fromState: 'SOURCE_VERIFY_PENDING',
+    toState,
+    actor: args.actor,
+    reasonCode: args.reasonCode,
+    reasonMessage: args.reasonMessage,
+  });
 }
