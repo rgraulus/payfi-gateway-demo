@@ -85,7 +85,10 @@ import { CrpClient, MatchPaymentRequest } from './crpClient';
 import { buildPaymentRequiredPayload, b64jsonHeader, ContractDefinition } from './contracts';
 import { FileContractResolver } from './contractResolver';
 import type { ContractResolver } from './contractResolver';
-import { persistIssuedChallenge } from './db/gatewayPersistence';
+import {
+  persistIssuedChallenge,
+  transitionChallengeStateByNonce,
+} from './db/gatewayPersistence';
 
 import type { ContractBinding, HttpMethod } from './proofPayload';
 import {
@@ -943,6 +946,39 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     });
   };
 
+  let proofWorkflowPersistStarted = false;
+
+  const persistProofWorkflowForCurrentNonceIfNeeded = (
+    submittedReasonCode = 'proof_submitted',
+    pendingReasonCode = 'source_verify_pending',
+  ) => {
+    if (proofWorkflowPersistStarted) return;
+    proofWorkflowPersistStarted = true;
+
+    void (async () => {
+      await transitionChallengeStateByNonce({
+        nonce,
+        fromState: 'ISSUED',
+        toState: 'PROOF_SUBMITTED',
+        actor: 'gateway',
+        reasonCode: submittedReasonCode,
+        reasonMessage: 'Payment proof material submitted to gateway',
+      });
+
+      await transitionChallengeStateByNonce({
+        nonce,
+        fromState: 'PROOF_SUBMITTED',
+        toState: 'SOURCE_VERIFY_PENDING',
+        actor: 'gateway',
+        reasonCode: pendingReasonCode,
+        reasonMessage: 'Gateway entered source verification workflow',
+      });
+    })().catch((err) => {
+      proofWorkflowPersistStarted = false;
+      console.error('Failed to persist proof workflow transitions:', err);
+    });
+  };
+
   // Helper to issue a "payment required" response consistently
   const reply402 = (body: any) => {
     persistIssuedChallengeIfNeeded();
@@ -961,6 +997,13 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       error: 'Invalid payment signature header',
       ...(x402Debug ? { debug: { reason: paymentSignatureParseError } } : {}),
     });
+  }
+
+  if (!paymentSignatureParseError && paymentSignatureB64 && (nonceFromQuery || nonceFromSig)) {
+    persistProofWorkflowForCurrentNonceIfNeeded(
+      'payment_signature_submitted',
+      'payment_signature_verification_started',
+    );
   }
 
   // Helper: verify signature + enforce proof payload semantics.
@@ -1232,6 +1275,11 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       // Rebuild PR based on receipt nonce (so errors/pending remain coherent)
       rebuildPaymentRequired(receiptNonce);
 
+      persistProofWorkflowForCurrentNonceIfNeeded(
+        'client_receipt_submitted',
+        'client_receipt_verification_started',
+      );
+
       // Full validate with expected nonce = receipt nonce
       const out = await verifyAndValidateProof({ receiptJws: clientReceiptJws, expectedNonce: receiptNonce });
       const verify = out.verify;
@@ -1337,6 +1385,11 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         ...(x402Debug ? { debug: { devReceiptRequiresPaymentSignature: true } } : {}),
       });
     }
+
+    persistProofWorkflowForCurrentNonceIfNeeded(
+      'dev_receipt_submitted',
+      'dev_receipt_verification_started',
+    );
 
     let verify: any;
     let proof: any;

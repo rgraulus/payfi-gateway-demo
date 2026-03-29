@@ -13,6 +13,15 @@ type PersistIssuedChallengeArgs = {
   };
 };
 
+type TransitionChallengeStateArgs = {
+  nonce: string;
+  fromState: string;
+  toState: string;
+  actor: string;
+  reasonCode: string;
+  reasonMessage: string;
+};
+
 function sha256Hex(input: string): string {
   return createHash('sha256').update(input, 'utf8').digest('hex');
 }
@@ -153,6 +162,113 @@ export async function persistIssuedChallenge(
     }
 
     await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function transitionChallengeStateByNonce(
+  args: TransitionChallengeStateArgs,
+): Promise<{
+  updated: boolean;
+  reason:
+    | 'updated'
+    | 'missing'
+    | 'already_in_target'
+    | 'unexpected_state';
+  challengeId?: string;
+  currentState?: string;
+}> {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const existing = await client.query<{
+      challenge_id: string;
+      status: string;
+    }>(
+      `
+      SELECT challenge_id, status
+      FROM payment_challenges
+      WHERE nonce = $1
+      FOR UPDATE
+      `,
+      [args.nonce],
+    );
+
+    if (existing.rowCount !== 1) {
+      await client.query('ROLLBACK');
+      return { updated: false, reason: 'missing' };
+    }
+
+    const row = existing.rows[0];
+    const challengeId = row.challenge_id;
+    const currentState = row.status;
+
+    if (currentState === args.toState) {
+      await client.query('ROLLBACK');
+      return {
+        updated: false,
+        reason: 'already_in_target',
+        challengeId,
+        currentState,
+      };
+    }
+
+    if (currentState !== args.fromState) {
+      await client.query('ROLLBACK');
+      return {
+        updated: false,
+        reason: 'unexpected_state',
+        challengeId,
+        currentState,
+      };
+    }
+
+    await client.query(
+      `
+      UPDATE payment_challenges
+      SET status = $2,
+          updated_at = now()
+      WHERE challenge_id = $1
+      `,
+      [challengeId, args.toState],
+    );
+
+    await client.query(
+      `
+      INSERT INTO gateway_state_transitions (
+        challenge_id,
+        from_state,
+        to_state,
+        actor,
+        reason_code,
+        reason_message
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+      `,
+      [
+        challengeId,
+        args.fromState,
+        args.toState,
+        args.actor,
+        args.reasonCode,
+        args.reasonMessage,
+      ],
+    );
+
+    await client.query('COMMIT');
+
+    return {
+      updated: true,
+      reason: 'updated',
+      challengeId,
+      currentState: args.toState,
+    };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
