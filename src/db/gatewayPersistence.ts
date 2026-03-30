@@ -30,6 +30,13 @@ type CompleteSourceVerificationArgs = {
   reasonMessage: string;
 };
 
+type CompletePolicyEvaluationArgs = {
+  nonce: string;
+  actor: string;
+  reasonCode: string;
+  reasonMessage: string;
+};
+
 function sha256Hex(input: string): string {
   return createHash('sha256').update(input, 'utf8').digest('hex');
 }
@@ -309,3 +316,26 @@ export async function completeSourceVerificationByNonce(
     reasonMessage: args.reasonMessage,
   });
 }
+
+export async function completePolicyEvaluationByNonce(
+  args: CompletePolicyEvaluationArgs,
+): Promise<{
+  updated: boolean;
+  reason:
+    | 'updated'
+    | 'missing'
+    | 'already_in_target'
+    | 'unexpected_state';
+  challengeId?: string;
+  currentState?: string;
+}> {
+  return transitionChallengeStateByNonce({
+    nonce: args.nonce,
+    fromState: 'SOURCE_VERIFIED',
+    toState: 'POLICY_SATISFIED',
+    actor: args.actor,
+    reasonCode: args.reasonCode,
+    reasonMessage: args.reasonMessage,
+  });
+}
+
