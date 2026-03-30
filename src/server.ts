@@ -87,6 +87,7 @@ import { FileContractResolver } from './contractResolver';
 import type { ContractResolver } from './contractResolver';
 import {
   completePolicyEvaluationByNonce,
+  completeReleaseByNonce,
   completeSettlementEntryByNonce,
   completeSettlementOutcomeByNonce,
   completeSourceVerificationByNonce,
@@ -1298,6 +1299,21 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     });
   };
 
+  const persistReleaseIfNeeded = (receiptJws: string) => {
+    void completeReleaseByNonce({
+      nonce,
+      actor: 'gateway',
+      reasonCode: 'resource_released',
+      reasonMessage: 'Gateway released protected resource',
+      receiptJws,
+      responseHeaders: {
+        'PAYMENT-RESPONSE': 'set',
+      },
+    }).catch((err) => {
+      console.error('Failed to persist release:', err);
+    });
+  };
+
   const paymentResponseHeaderPayloadBase = (args: { receiptJws: string; proof: any }) => ({
     version: 'x402-v2',
     contractId: contract.contractId,
@@ -1398,6 +1414,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         'Gateway marked settlement confirmed before serving protected resource',
       );
 
+      persistReleaseIfNeeded(clientReceiptJws);
       maybeSetPaymentResponseHeader(true, clientReceiptJws, proof);
 
       return res.status(200).json({
@@ -1572,6 +1589,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       'Gateway marked settlement confirmed before serving protected resource',
     );
 
+    persistReleaseIfNeeded(effectiveDevReceiptJws);
     maybeSetPaymentResponseHeader(true, effectiveDevReceiptJws, proof);
 
     return res.status(200).json({
@@ -1740,6 +1758,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     'Gateway marked settlement confirmed before serving protected resource',
   );
 
+  persistReleaseIfNeeded(receiptJws!);
   maybeSetPaymentResponseHeader(true, receiptJws!, proof);
 
   return res.status(200).json({

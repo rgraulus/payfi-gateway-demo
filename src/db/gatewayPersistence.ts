@@ -54,6 +54,15 @@ type CompleteSettlementOutcomeArgs = {
   reasonMessage: string;
 };
 
+type CompleteReleaseArgs = {
+  nonce: string;
+  actor: string;
+  reasonCode: string;
+  reasonMessage: string;
+  receiptJws?: string | null;
+  responseHeaders?: Record<string, string> | null;
+};
+
 function sha256Hex(input: string): string {
   return createHash('sha256').update(input, 'utf8').digest('hex');
 }
@@ -418,5 +427,133 @@ export async function completeSettlementOutcomeByNonce(
     reasonCode: args.reasonCode,
     reasonMessage: args.reasonMessage,
   });
+}
+
+export async function completeReleaseByNonce(
+  args: CompleteReleaseArgs,
+): Promise<{
+  updated: boolean;
+  reason:
+    | 'updated'
+    | 'missing'
+    | 'already_in_target'
+    | 'unexpected_state';
+  challengeId?: string;
+  currentState?: string;
+}> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const selected = await client.query<{
+      challenge_id: string;
+      status: string;
+      release_status: string;
+    }>(
+      `
+      SELECT challenge_id, status, release_status
+      FROM payment_challenges
+      WHERE nonce = $1
+      FOR UPDATE
+      `,
+      [args.nonce],
+    );
+
+    if (selected.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return {
+        updated: false,
+        reason: 'missing',
+      };
+    }
+
+    const row = selected.rows[0];
+    const challengeId = row.challenge_id;
+    const currentState = row.status;
+
+    if (currentState === 'RELEASED') {
+      await client.query('ROLLBACK');
+      return {
+        updated: false,
+        reason: 'already_in_target',
+        challengeId,
+        currentState,
+      };
+    }
+
+    if (currentState != 'SETTLEMENT_CONFIRMED') {
+      await client.query('ROLLBACK');
+      return {
+        updated: false,
+        reason: 'unexpected_state',
+        challengeId,
+        currentState,
+      };
+    }
+
+    await client.query(
+      `
+      UPDATE payment_challenges
+      SET status = 'RELEASED',
+          release_status = 'RELEASED',
+          updated_at = now()
+      WHERE challenge_id = $1
+      `,
+      [challengeId],
+    );
+
+    await client.query(
+      `
+      INSERT INTO gateway_state_transitions (
+        challenge_id,
+        from_state,
+        to_state,
+        actor,
+        reason_code,
+        reason_message
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+      `,
+      [
+        challengeId,
+        'SETTLEMENT_CONFIRMED',
+        'RELEASED',
+        args.actor,
+        args.reasonCode,
+        args.reasonMessage,
+      ],
+    );
+
+    await client.query(
+      `
+      INSERT INTO gateway_release_events (
+        challenge_id,
+        receipt_jws,
+        response_headers
+      )
+      VALUES ($1, $2, $3::jsonb)
+      ON CONFLICT (challenge_id) DO NOTHING
+      `,
+      [
+        challengeId,
+        args.receiptJws ?? null,
+        JSON.stringify(args.responseHeaders ?? null),
+      ],
+    );
+
+    await client.query('COMMIT');
+
+    return {
+      updated: true,
+      reason: 'updated',
+      challengeId,
+      currentState: 'RELEASED',
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
