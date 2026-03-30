@@ -46,6 +46,14 @@ type CompleteSettlementEntryArgs = {
   pendingReasonMessage: string;
 };
 
+type CompleteSettlementOutcomeArgs = {
+  nonce: string;
+  outcome: 'confirmed' | 'failed_retryable' | 'failed_final';
+  actor: string;
+  reasonCode: string;
+  reasonMessage: string;
+};
+
 function sha256Hex(input: string): string {
   return createHash('sha256').update(input, 'utf8').digest('hex');
 }
@@ -380,6 +388,35 @@ export async function completeSettlementEntryByNonce(
     actor: args.actor,
     reasonCode: args.pendingReasonCode,
     reasonMessage: args.pendingReasonMessage,
+  });
+}
+
+export async function completeSettlementOutcomeByNonce(
+  args: CompleteSettlementOutcomeArgs,
+): Promise<{
+  updated: boolean;
+  reason:
+    | 'updated'
+    | 'missing'
+    | 'already_in_target'
+    | 'unexpected_state';
+  challengeId?: string;
+  currentState?: string;
+}> {
+  const toState =
+    args.outcome === 'confirmed'
+      ? 'SETTLEMENT_CONFIRMED'
+      : args.outcome === 'failed_retryable'
+        ? 'SETTLEMENT_FAILED_RETRYABLE'
+        : 'SETTLEMENT_FAILED_FINAL';
+
+  return transitionChallengeStateByNonce({
+    nonce: args.nonce,
+    fromState: 'SETTLEMENT_PENDING',
+    toState,
+    actor: args.actor,
+    reasonCode: args.reasonCode,
+    reasonMessage: args.reasonMessage,
   });
 }
 

@@ -88,6 +88,7 @@ import type { ContractResolver } from './contractResolver';
 import {
   completePolicyEvaluationByNonce,
   completeSettlementEntryByNonce,
+  completeSettlementOutcomeByNonce,
   completeSourceVerificationByNonce,
   persistIssuedChallenge,
   transitionChallengeStateByNonce,
@@ -1281,6 +1282,22 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     });
   };
 
+  const persistSettlementOutcomeIfNeeded = (
+    outcome: 'confirmed' | 'failed_retryable' | 'failed_final',
+    reasonCode: string,
+    reasonMessage: string,
+  ) => {
+    void completeSettlementOutcomeByNonce({
+      nonce,
+      outcome,
+      actor: 'gateway',
+      reasonCode,
+      reasonMessage,
+    }).catch((err) => {
+      console.error('Failed to persist settlement outcome:', err);
+    });
+  };
+
   const paymentResponseHeaderPayloadBase = (args: { receiptJws: string; proof: any }) => ({
     version: 'x402-v2',
     contractId: contract.contractId,
@@ -1374,6 +1391,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           });
         }
       }
+
+      persistSettlementOutcomeIfNeeded(
+        'confirmed',
+        'settlement_confirmed',
+        'Gateway marked settlement confirmed before serving protected resource',
+      );
 
       maybeSetPaymentResponseHeader(true, clientReceiptJws, proof);
 
@@ -1543,6 +1566,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     }
 
     // local mode
+    persistSettlementOutcomeIfNeeded(
+      'confirmed',
+      'settlement_confirmed',
+      'Gateway marked settlement confirmed before serving protected resource',
+    );
+
     maybeSetPaymentResponseHeader(true, effectiveDevReceiptJws, proof);
 
     return res.status(200).json({
@@ -1705,6 +1734,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   }
 
   // local mode
+  persistSettlementOutcomeIfNeeded(
+    'confirmed',
+    'settlement_confirmed',
+    'Gateway marked settlement confirmed before serving protected resource',
+  );
+
   maybeSetPaymentResponseHeader(true, receiptJws!, proof);
 
   return res.status(200).json({
