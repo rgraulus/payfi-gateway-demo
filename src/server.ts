@@ -1408,13 +1408,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         }
       }
 
-      persistSettlementOutcomeIfNeeded(
-        'confirmed',
-        'settlement_confirmed',
-        'Gateway marked settlement confirmed before serving protected resource',
-      );
-
-      persistReleaseIfNeeded(clientReceiptJws);
+      // Stage 2.1: settlement/release persistence decoupled from request serving.
       maybeSetPaymentResponseHeader(true, clientReceiptJws, proof);
 
       return res.status(200).json({
@@ -1583,13 +1577,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     }
 
     // local mode
-    persistSettlementOutcomeIfNeeded(
-      'confirmed',
-      'settlement_confirmed',
-      'Gateway marked settlement confirmed before serving protected resource',
-    );
-
-    persistReleaseIfNeeded(effectiveDevReceiptJws);
+    // Stage 2.1: settlement/release persistence decoupled from request serving.
     maybeSetPaymentResponseHeader(true, effectiveDevReceiptJws, proof);
 
     return res.status(200).json({
@@ -1752,13 +1740,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   }
 
   // local mode
-  persistSettlementOutcomeIfNeeded(
-    'confirmed',
-    'settlement_confirmed',
-    'Gateway marked settlement confirmed before serving protected resource',
-  );
-
-  persistReleaseIfNeeded(receiptJws!);
+  // Stage 2.1: settlement/release persistence decoupled from request serving.
   maybeSetPaymentResponseHeader(true, receiptJws!, proof);
 
   return res.status(200).json({
