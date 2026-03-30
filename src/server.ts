@@ -86,6 +86,7 @@ import { buildPaymentRequiredPayload, b64jsonHeader, ContractDefinition } from '
 import { FileContractResolver } from './contractResolver';
 import type { ContractResolver } from './contractResolver';
 import {
+  completePolicyEvaluationByNonce,
   completeSourceVerificationByNonce,
   persistIssuedChallenge,
   transitionChallengeStateByNonce,
@@ -1252,6 +1253,20 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     });
   };
 
+  const persistPolicySatisfiedIfNeeded = (
+    reasonCode: string,
+    reasonMessage: string,
+  ) => {
+    void completePolicyEvaluationByNonce({
+      nonce,
+      actor: 'gateway',
+      reasonCode,
+      reasonMessage,
+    }).catch((err) => {
+      console.error('Failed to persist policy evaluation outcome:', err);
+    });
+  };
+
   const paymentResponseHeaderPayloadBase = (args: { receiptJws: string; proof: any }) => ({
     version: 'x402-v2',
     contractId: contract.contractId,
@@ -1314,6 +1329,11 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         'verified',
         'client_receipt_verified',
         'Client-provided receipt verified successfully',
+      );
+
+      persistPolicySatisfiedIfNeeded(
+        'policy_implicit_allow',
+        'Client receipt satisfied implicit allow policy',
       );
 
       // M2 pending semantics (keep exact behavior)
@@ -1472,6 +1492,11 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       'Dev receipt verified successfully',
     );
 
+    persistPolicySatisfiedIfNeeded(
+      'policy_implicit_allow',
+      'Dev receipt satisfied implicit allow policy',
+    );
+
     // M2 tweak: post-verify guard (in case validation does not throw on pending)
     // KEEP EXACTLY AS-IS (NO REGRESSION).
     if (replyPendingFromVerifiedProof({ label: 'dev', verify, proof })) return;
@@ -1625,6 +1650,11 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     'verified',
     'real_receipt_verified',
     'Facilitator receipt verified successfully',
+  );
+
+  persistPolicySatisfiedIfNeeded(
+    'policy_implicit_allow',
+    'Facilitator receipt satisfied implicit allow policy',
   );
 
   // M2 tweak: post-verify guard (in case validation does not throw on pending)
