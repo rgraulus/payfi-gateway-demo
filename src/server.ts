@@ -87,6 +87,7 @@ import { FileContractResolver } from './contractResolver';
 import type { ContractResolver } from './contractResolver';
 import {
   completePolicyEvaluationByNonce,
+  completeSettlementEntryByNonce,
   completeSourceVerificationByNonce,
   persistIssuedChallenge,
   transitionChallengeStateByNonce,
@@ -1267,6 +1268,19 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     });
   };
 
+  const persistSettlementEntryIfNeeded = () => {
+    void completeSettlementEntryByNonce({
+      nonce,
+      actor: 'gateway',
+      requestedReasonCode: 'settlement_requested',
+      requestedReasonMessage: 'Gateway initiated settlement workflow',
+      pendingReasonCode: 'settlement_pending',
+      pendingReasonMessage: 'Gateway entered settlement pending state',
+    }).catch((err) => {
+      console.error('Failed to persist settlement entry workflow:', err);
+    });
+  };
+
   const paymentResponseHeaderPayloadBase = (args: { receiptJws: string; proof: any }) => ({
     version: 'x402-v2',
     contractId: contract.contractId,
@@ -1335,6 +1349,8 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         'policy_implicit_allow',
         'Client receipt satisfied implicit allow policy',
       );
+
+      persistSettlementEntryIfNeeded();
 
       // M2 pending semantics (keep exact behavior)
       if (replyPendingFromVerifiedProof({ label: 'client', verify, proof })) return;
@@ -1497,6 +1513,8 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       'Dev receipt satisfied implicit allow policy',
     );
 
+    persistSettlementEntryIfNeeded();
+
     // M2 tweak: post-verify guard (in case validation does not throw on pending)
     // KEEP EXACTLY AS-IS (NO REGRESSION).
     if (replyPendingFromVerifiedProof({ label: 'dev', verify, proof })) return;
@@ -1656,6 +1674,8 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     'policy_implicit_allow',
     'Facilitator receipt satisfied implicit allow policy',
   );
+
+  persistSettlementEntryIfNeeded();
 
   // M2 tweak: post-verify guard (in case validation does not throw on pending)
   // KEEP EXACTLY AS-IS (NO REGRESSION).

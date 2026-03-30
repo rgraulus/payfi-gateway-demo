@@ -37,6 +37,15 @@ type CompletePolicyEvaluationArgs = {
   reasonMessage: string;
 };
 
+type CompleteSettlementEntryArgs = {
+  nonce: string;
+  actor: string;
+  requestedReasonCode: string;
+  requestedReasonMessage: string;
+  pendingReasonCode: string;
+  pendingReasonMessage: string;
+};
+
 function sha256Hex(input: string): string {
   return createHash('sha256').update(input, 'utf8').digest('hex');
 }
@@ -336,6 +345,41 @@ export async function completePolicyEvaluationByNonce(
     actor: args.actor,
     reasonCode: args.reasonCode,
     reasonMessage: args.reasonMessage,
+  });
+}
+
+export async function completeSettlementEntryByNonce(
+  args: CompleteSettlementEntryArgs,
+): Promise<{
+  updated: boolean;
+  reason:
+    | 'updated'
+    | 'missing'
+    | 'already_in_target'
+    | 'unexpected_state';
+  challengeId?: string;
+  currentState?: string;
+}> {
+  const requested = await transitionChallengeStateByNonce({
+    nonce: args.nonce,
+    fromState: 'POLICY_SATISFIED',
+    toState: 'SETTLEMENT_REQUESTED',
+    actor: args.actor,
+    reasonCode: args.requestedReasonCode,
+    reasonMessage: args.requestedReasonMessage,
+  });
+
+  if (!requested.updated) {
+    return requested;
+  }
+
+  return transitionChallengeStateByNonce({
+    nonce: args.nonce,
+    fromState: 'SETTLEMENT_REQUESTED',
+    toState: 'SETTLEMENT_PENDING',
+    actor: args.actor,
+    reasonCode: args.pendingReasonCode,
+    reasonMessage: args.pendingReasonMessage,
   });
 }
 
