@@ -148,6 +148,10 @@ const port = Number(process.env.PORT ?? 3005);
 const crpBaseUrl = (process.env.CRP_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 const jwksUrl = process.env.CRP_JWKS_URL ?? `${crpBaseUrl}/.well-known/jwks.json`;
 
+const orchestratorBaseUrl =
+  (process.env.ORCHESTRATOR_BASE_URL ?? 'http://localhost:8090').replace(/\/$/, '');
+const orchestratorApiKey = process.env.ORCHESTRATOR_API_KEY ?? 'dev-internal-key';
+
 const expectedKid = process.env.X402_EXPECTED_KID;
 
 const x402Debug = String(process.env.X402_DEBUG ?? '').toLowerCase() === 'true';
@@ -251,6 +255,42 @@ app.options(/.*/, (_req, res) => res.status(204).end());
 function b64json(obj: unknown): string {
   // Spec/client interop: use standard base64 (not base64url) for header payloads.
   return Buffer.from(JSON.stringify(obj), 'utf8').toString('base64');
+}
+
+async function sendIntentToOrchestrator(input: {
+  challengeId: string;
+  contract: ContractDefinition;
+  nonce: string;
+  issuedAt: number;
+  expiresAt: number;
+}) {
+  try {
+    const res = await fetch(`${orchestratorBaseUrl}/internal/payments/intents`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-internal-api-key': orchestratorApiKey,
+      },
+      body: JSON.stringify({
+        challengeId: input.challengeId,
+        merchantId: input.contract.merchantId,
+        nonce: input.nonce,
+        network: input.contract.network,
+        asset: input.contract.asset,
+        amount: input.contract.amount,
+        payTo: input.contract.payTo,
+        resource: input.contract.resource,
+        issuedAt: input.issuedAt,
+        expiresAt: input.expiresAt,
+      }),
+    });
+
+    if (!res.ok) {
+      console.warn('[orchestrator] intent call failed:', res.status);
+    }
+  } catch (err) {
+    console.warn('[orchestrator] intent call error:', err);
+  }
 }
 
 function normalizeB64(b64: string): string {
@@ -938,6 +978,17 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   const persistIssuedChallengeIfNeeded = () => {
     if (issuedPersistStarted) return;
     issuedPersistStarted = true;
+
+    const issuedAt = paymentRequiredHeaderPayload.issuedAt;
+    const expiresAt = paymentRequiredHeaderPayload.expiresAt;
+
+    void sendIntentToOrchestrator({
+      challengeId: nonce,
+      contract,
+      nonce,
+      issuedAt,
+      expiresAt,
+    });
 
     void persistIssuedChallenge({
       contract,
