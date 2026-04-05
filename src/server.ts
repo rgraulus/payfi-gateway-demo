@@ -293,6 +293,34 @@ async function sendIntentToOrchestrator(input: {
   }
 }
 
+
+async function sendProofToOrchestrator(input: {
+  challengeId: string;
+  proofType: string;
+  proofPayload: unknown;
+}) {
+  try {
+    const res = await fetch(`${orchestratorBaseUrl}/internal/payments/proof`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-internal-api-key': orchestratorApiKey,
+      },
+      body: JSON.stringify({
+        challengeId: input.challengeId,
+        proofType: input.proofType,
+        proofPayload: input.proofPayload,
+      }),
+    });
+
+    if (!res.ok) {
+      console.warn('[orchestrator] proof call failed:', res.status);
+    }
+  } catch (err) {
+    console.warn('[orchestrator] proof call error:', err);
+  }
+}
+
 function normalizeB64(b64: string): string {
   // Tolerate base64url inputs (from some clients), and missing padding.
   let s = b64.trim().replace(/-/g, '+').replace(/_/g, '/');
@@ -1064,6 +1092,14 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   }
 
   if (!paymentSignatureParseError && paymentSignatureB64 && (nonceFromQuery || nonceFromSig)) {
+    void sendProofToOrchestrator({
+      challengeId: nonce,
+      proofType: 'payment_signature',
+      proofPayload: {
+        paymentSignature: paymentSignatureB64,
+      },
+    });
+
     await persistProofWorkflowForCurrentNonceIfNeeded(
       'payment_signature_submitted',
       'payment_signature_verification_started',
