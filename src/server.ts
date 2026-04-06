@@ -272,7 +272,7 @@ async function sendIntentToOrchestrator(input: {
         'x-internal-api-key': orchestratorApiKey,
       },
       body: JSON.stringify({
-        challengeId: input.challengeId,
+        challengeId: input.nonce,
         merchantId: input.contract.merchantId,
         nonce: input.nonce,
         network: input.contract.network,
@@ -296,6 +296,7 @@ async function sendIntentToOrchestrator(input: {
 
 async function sendProofToOrchestrator(input: {
   challengeId: string;
+  nonce: string;
   proofType: string;
   proofPayload: unknown;
 }) {
@@ -307,7 +308,7 @@ async function sendProofToOrchestrator(input: {
         'x-internal-api-key': orchestratorApiKey,
       },
       body: JSON.stringify({
-        challengeId: input.challengeId,
+        challengeId: input.nonce,
         proofType: input.proofType,
         proofPayload: input.proofPayload,
       }),
@@ -1002,32 +1003,40 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   rebuildPaymentRequired(nonce);
 
   let issuedPersistStarted = false;
+  let issuedPersistPromise: Promise<void> | null = null;
 
-  const persistIssuedChallengeIfNeeded = () => {
-    if (issuedPersistStarted) return;
+  const persistIssuedChallengeIfNeeded = (): Promise<void> => {
+    if (issuedPersistStarted && issuedPersistPromise) return issuedPersistPromise;
+
     issuedPersistStarted = true;
 
     const issuedAt = paymentRequiredHeaderPayload.issuedAt;
     const expiresAt = paymentRequiredHeaderPayload.expiresAt;
 
-    void sendIntentToOrchestrator({
-      challengeId: nonce,
-      contract,
-      nonce,
-      issuedAt,
-      expiresAt,
-    });
+    issuedPersistPromise = (async () => {
+      await sendIntentToOrchestrator({
+        challengeId: nonce,
+        contract,
+        nonce,
+        issuedAt,
+        expiresAt,
+      });
 
-    void persistIssuedChallenge({
-      contract,
-      nonce,
-      paymentRequiredHeaderPayload,
-    }).catch((err) => {
+      await persistIssuedChallenge({
+        contract,
+        nonce,
+        paymentRequiredHeaderPayload,
+      });
+    })().catch((err) => {
       // Keep current 402 behavior intact for this first persistence step.
       // Later phases may tighten this to fail closed.
       issuedPersistStarted = false;
+      issuedPersistPromise = null;
       console.error('Failed to persist issued payment challenge:', err);
+      throw err;
     });
+
+    return issuedPersistPromise;
   };
 
   let proofWorkflowPersistStarted = false;
@@ -1073,7 +1082,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
 
   // Helper to issue a "payment required" response consistently
   const reply402 = (body: any) => {
-    persistIssuedChallengeIfNeeded();
+    void persistIssuedChallengeIfNeeded();
     res.setHeader('PAYMENT-REQUIRED', prB64);
     if (legacyHeaders) res.setHeader('X-PAYMENT-REQUIRED', prB64);
     return res.status(402).json(body);
@@ -1092,8 +1101,11 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   }
 
   if (!paymentSignatureParseError && paymentSignatureB64 && (nonceFromQuery || nonceFromSig)) {
+    await persistIssuedChallengeIfNeeded();
+
     void sendProofToOrchestrator({
       challengeId: nonce,
+      nonce: nonce,
       proofType: 'payment_signature',
       proofPayload: {
         paymentSignature: paymentSignatureB64,
