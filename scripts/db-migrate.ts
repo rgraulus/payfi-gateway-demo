@@ -4,7 +4,7 @@ import { pool } from "../src/db/client";
 
 async function ensureMigrationsTable(): Promise<void> {
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
+    CREATE TABLE IF NOT EXISTS gateway_schema_migrations (
       filename TEXT PRIMARY KEY,
       applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
@@ -13,7 +13,7 @@ async function ensureMigrationsTable(): Promise<void> {
 
 async function getAppliedMigrations(): Promise<Set<string>> {
   const result = await pool.query<{ filename: string }>(
-    "SELECT filename FROM schema_migrations ORDER BY filename ASC"
+    "SELECT filename FROM gateway_schema_migrations ORDER BY filename ASC"
   );
   return new Set(result.rows.map((row) => row.filename));
 }
@@ -24,7 +24,7 @@ async function applyMigration(filename: string, sql: string): Promise<void> {
     await client.query("BEGIN");
     await client.query(sql);
     await client.query(
-      "INSERT INTO schema_migrations (filename) VALUES ($1)",
+      "INSERT INTO gateway_schema_migrations (filename) VALUES ($1)",
       [filename],
     );
     await client.query("COMMIT");
