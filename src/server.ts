@@ -322,6 +322,31 @@ async function sendProofToOrchestrator(input: {
   }
 }
 
+
+async function sendReleaseCheckToOrchestrator(input: {
+  challengeId: string;
+  nonce: string;
+}) {
+  try {
+    const res = await fetch(`${orchestratorBaseUrl}/internal/payments/release-check`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-internal-api-key': orchestratorApiKey,
+      },
+      body: JSON.stringify({
+        challengeId: input.nonce,
+      }),
+    });
+
+    if (!res.ok) {
+      console.warn('[orchestrator] release-check call failed:', res.status);
+    }
+  } catch (err) {
+    console.warn('[orchestrator] release-check call error:', err);
+  }
+}
+
 function normalizeB64(b64: string): string {
   // Tolerate base64url inputs (from some clients), and missing padding.
   let s = b64.trim().replace(/-/g, '+').replace(/_/g, '/');
@@ -1491,6 +1516,11 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       const replay = await enforceReplay({ receiptJws: clientReceiptJws, verify, proof });
       if (!replay.ok) return;
 
+      void sendReleaseCheckToOrchestrator({
+        challengeId: nonce,
+        nonce,
+      });
+
       // Serve locally or proxy upstream
       if ((contract.mode ?? 'local') === 'proxy') {
         try {
@@ -1656,6 +1686,11 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     const replay = await enforceReplay({ receiptJws: effectiveDevReceiptJws, verify, proof });
     if (!replay.ok) return;
 
+    void sendReleaseCheckToOrchestrator({
+      challengeId: nonce,
+      nonce,
+    });
+
     // Serve locally or proxy upstream
     if ((contract.mode ?? 'local') === 'proxy') {
       try {
@@ -1818,6 +1853,11 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   // Replay protection BEFORE serving any paid content
   const replay = await enforceReplay({ receiptJws: receiptJws!, verify, proof, match, fulfill });
   if (!replay.ok) return;
+
+  void sendReleaseCheckToOrchestrator({
+    challengeId: nonce,
+    nonce,
+  });
 
   // Serve locally or proxy upstream
   if ((contract.mode ?? 'local') === 'proxy') {
