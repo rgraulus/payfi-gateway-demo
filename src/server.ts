@@ -341,6 +341,16 @@ async function sendReleaseCheckToOrchestrator(input: {
 
     if (!res.ok) {
       console.warn('[orchestrator] release-check call failed:', res.status);
+      return;
+    }
+
+    const data = await res.json().catch(() => null);
+
+    if (data && data.ready === false) {
+      console.warn('[orchestrator] release-check advisory not ready:', {
+        challengeId: input.nonce,
+        reason: data.reason ?? null,
+      });
     }
   } catch (err) {
     console.warn('[orchestrator] release-check call error:', err);
