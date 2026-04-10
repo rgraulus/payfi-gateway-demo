@@ -81,6 +81,45 @@
       },
 
       "attestations": []
+    },
+
+    {
+      "contractId": "",
+      "contractVersion": "1.0.0",
+      "isFrozen": false,
+
+      "mode": "local",
+      "merchantId": "demo-merchant",
+      "resource": { "method": "GET", "path": "/paid-gated" },
+
+      "network": "concordium:testnet",
+      "asset": { "type": "PLT", "tokenId": "EUDemo", "decimals": 6 },
+      "amount": "0.050101",
+      "payTo": "4jPLfUuSeFeP5SFLrf2eDeZEnT7ixbqXyQp9bg6qrgXyHReDfZ",
+
+      "attestations": [],
+
+      "policyRequired": true,
+      "policyVersion": "v1",
+      "policy": {
+        "kind": "composite",
+        "version": "v1",
+        "rules": [
+          {
+            "kind": "age_min_by_region",
+            "regionSource": "policy_evidence",
+            "thresholds": {
+              "EU": 18,
+              "US": 21
+            },
+            "defaultDecision": "deny"
+          }
+        ],
+        "ext": {
+          "allowExternalTrustRefs": true,
+          "allowFutureAgentRefs": true
+        }
+      }
     }
   ]
 }

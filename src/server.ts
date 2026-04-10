@@ -1914,6 +1914,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
 
 // Existing local/demo endpoint (still supported)
 app.get('/paid', async (req, res) => handleX402(req, res, '/paid'));
+app.get('/paid-gated', async (req, res) => handleX402(req, res, '/paid-gated'));
 
 // Generic edge gateway route: /x402/... (regex because path-to-regexp v6 rejects '/x402/*')
 // Example: GET /x402/premium?nonce=...  -> resolves contract for GET /premium
