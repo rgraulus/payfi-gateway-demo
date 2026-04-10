@@ -35,6 +35,38 @@ export type Upstream = {
 
 export type ContractMode = 'local' | 'proxy';
 
+export type PolicyRule =
+  | {
+      kind: 'age_min_by_region';
+      regionSource: 'policy_evidence';
+      thresholds: Record<string, number>;
+      defaultDecision: 'allow' | 'deny';
+    }
+  | {
+      kind: 'age_min';
+      minimumAge: number;
+    };
+
+export type PolicyDefinition =
+  | {
+      kind: 'composite';
+      version: 'v1';
+      rules: PolicyRule[];
+      ext?: {
+        allowExternalTrustRefs?: boolean;
+        allowFutureAgentRefs?: boolean;
+      };
+    }
+  | {
+      kind: 'age_min_by_region' | 'age_min';
+      version: 'v1';
+      rule: PolicyRule;
+      ext?: {
+        allowExternalTrustRefs?: boolean;
+        allowFutureAgentRefs?: boolean;
+      };
+    };
+
 export type ContractDefinition = {
   // Metadata/lifecycle (NOT hashed)
   contractId: string; // cid_<sha256-hex>
@@ -59,6 +91,11 @@ export type ContractDefinition = {
 
   // Future identity requirements (hashed)
   attestations?: Attestation[];
+
+  // Optional policy/gating requirements (hashed when policyRequired=true)
+  policyRequired?: boolean;
+  policyVersion?: 'v1';
+  policy?: PolicyDefinition;
 };
 
 type ContractRegistryFile = { contracts: ContractDefinition[] };
@@ -85,6 +122,12 @@ export function computeContractId(def: ContractDefinition): string {
     attestations,
     mode,
   };
+
+  if (def.policyRequired) {
+    hashInput.policyRequired = true;
+    hashInput.policyVersion = def.policyVersion ?? 'v1';
+    hashInput.policy = def.policy ?? null;
+  }
 
   if (mode === 'proxy') {
     if (!def.upstream?.baseUrl) {
@@ -259,7 +302,7 @@ export function buildPaymentRequiredPayload(args: {
 }) {
   const { contract, nonce, issuedAtSec, expiresAtSec } = args;
 
-  return {
+  const payload: any = {
     version: 'x402-v2',
     contractId: contract.contractId,
     contractVersion: contract.contractVersion,
@@ -278,7 +321,16 @@ export function buildPaymentRequiredPayload(args: {
     payTo: contract.payTo,
 
     attestations: contract.attestations ?? [],
+    policyRequired: contract.policyRequired === true,
   };
+
+  if (contract.policyRequired) {
+    payload.policyVersion = contract.policyVersion ?? 'v1';
+    payload.policy = contract.policy ?? null;
+    payload.policyKind = contract.policy?.kind ?? null;
+  }
+
+  return payload;
 }
 
 // Header-friendly standard base64 JSON (not base64url)
