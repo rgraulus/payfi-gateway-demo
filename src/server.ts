@@ -1396,6 +1396,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   ) => {
     void completePolicyEvaluationByNonce({
       nonce,
+      outcome: 'satisfied',
       actor: 'gateway',
       reasonCode,
       reasonMessage,
