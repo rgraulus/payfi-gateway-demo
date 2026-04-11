@@ -1908,6 +1908,156 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   });
 }
 
+type GatedPolicyEvidence = {
+  nonce?: string;
+  policyKind?: string;
+  region?: string;
+  claims?: {
+    ageOver?: number;
+    ageAtLeast?: number;
+    [k: string]: unknown;
+  };
+  subjectRef?: string;
+  issuer?: string;
+  issuedAt?: string;
+  expiresAt?: string;
+  externalValidationRef?: string | null;
+  signature?: string | null;
+};
+
+function getPaidGatedContract(): ContractDefinition {
+  return contractResolver.resolveByResource({
+    method: 'GET',
+    pathname: '/paid-gated',
+  });
+}
+
+function evaluatePaidGatedPolicy(args: {
+  nonce: string;
+  policyEvidence: GatedPolicyEvidence | null | undefined;
+}):
+  | { ok: true; policyStatus: 'POLICY_SATISFIED'; region: string; minimumAge: number; actualAge: number }
+  | { ok: false; code: string; reason: string; message: string } {
+  const { nonce, policyEvidence } = args;
+
+  if (!policyEvidence) {
+    return {
+      ok: false,
+      code: 'missing_policy_evidence',
+      reason: 'missing_policy_evidence',
+      message: 'Policy evidence is required for this resource.',
+    };
+  }
+
+  if (typeof policyEvidence.nonce !== 'string' || policyEvidence.nonce.length === 0) {
+    return {
+      ok: false,
+      code: 'invalid_policy_evidence',
+      reason: 'invalid_policy_evidence',
+      message: 'Policy evidence is missing nonce.',
+    };
+  }
+
+  if (policyEvidence.nonce !== nonce) {
+    return {
+      ok: false,
+      code: 'policy_binding_mismatch',
+      reason: 'policy_binding_mismatch',
+      message: 'Policy evidence nonce does not match the issued challenge.',
+    };
+  }
+
+  if (policyEvidence.policyKind !== 'composite') {
+    return {
+      ok: false,
+      code: 'invalid_policy_evidence',
+      reason: 'invalid_policy_evidence',
+      message: 'Policy evidence must declare policyKind="composite" for this route.',
+    };
+  }
+
+  const contract = getPaidGatedContract();
+  const policy: any = (contract as any).policy ?? null;
+  const rules = Array.isArray(policy?.rules) ? policy.rules : [];
+  const ageRule = rules.find((r: any) => r?.kind === 'age_min_by_region');
+
+  if (!ageRule) {
+    return {
+      ok: false,
+      code: 'policy_not_supported',
+      reason: 'policy_not_supported',
+      message: 'No supported age_min_by_region rule found on /paid-gated contract.',
+    };
+  }
+
+  const region = typeof policyEvidence.region === 'string' ? policyEvidence.region : '';
+  if (!region) {
+    return {
+      ok: false,
+      code: 'invalid_policy_evidence',
+      reason: 'invalid_policy_evidence',
+      message: 'Policy evidence is missing region.',
+    };
+  }
+
+  const thresholds = ageRule?.thresholds ?? {};
+  const defaultDecision = ageRule?.defaultDecision ?? 'deny';
+  const minimumAge = thresholds[region];
+
+  if (minimumAge == null) {
+    if (defaultDecision === 'allow') {
+      return {
+        ok: true,
+        policyStatus: 'POLICY_SATISFIED',
+        region,
+        minimumAge: 0,
+        actualAge: 0,
+      };
+    }
+
+    return {
+      ok: false,
+      code: 'region_not_allowed',
+      reason: 'region_not_allowed',
+      message: `Region ${region} is not allowed by policy.`,
+    };
+  }
+
+  const claims = policyEvidence.claims ?? {};
+  const actualAge =
+    typeof claims.ageOver === 'number'
+      ? claims.ageOver
+      : typeof claims.ageAtLeast === 'number'
+        ? claims.ageAtLeast
+        : null;
+
+  if (actualAge == null) {
+    return {
+      ok: false,
+      code: 'invalid_policy_evidence',
+      reason: 'invalid_policy_evidence',
+      message: 'Policy evidence must include a numeric age claim.',
+    };
+  }
+
+  if (actualAge < minimumAge) {
+    return {
+      ok: false,
+      code: 'age_requirement_not_met',
+      reason: 'age_requirement_not_met',
+      message: `Access denied: region ${region} requires age >= ${minimumAge}.`,
+    };
+  }
+
+  return {
+    ok: true,
+    policyStatus: 'POLICY_SATISFIED',
+    region,
+    minimumAge,
+    actualAge,
+  };
+}
+
 // -----------------------------------------------------------------------------
 // Routes
 // -----------------------------------------------------------------------------
@@ -1915,6 +2065,45 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
 // Existing local/demo endpoint (still supported)
 app.get('/paid', async (req, res) => handleX402(req, res, '/paid'));
 app.get('/paid-gated', async (req, res) => handleX402(req, res, '/paid-gated'));
+
+app.post('/paid-gated/redeem', async (req, res) => {
+  const body = req.body ?? {};
+  const nonce = typeof body.nonce === 'string' ? body.nonce : '';
+  const policyEvidence = (body as any).policyEvidence ?? null;
+
+  if (!nonce) {
+    return res.status(400).json({
+      ok: false,
+      code: 'invalid_request',
+      reason: 'invalid_request',
+      message: 'Request body must include nonce.',
+    });
+  }
+
+  const result = evaluatePaidGatedPolicy({ nonce, policyEvidence });
+
+  if (!result.ok) {
+    const status = result.code === 'policy_binding_mismatch' ? 409 : 403;
+    return res.status(status).json({
+      ok: false,
+      nonce,
+      code: result.code,
+      reason: result.reason,
+      message: result.message,
+      policyStatus: 'POLICY_FAILED',
+    });
+  }
+
+  return res.status(200).json({
+    ok: true,
+    nonce,
+    access: 'policy-satisfied',
+    policyStatus: 'POLICY_SATISFIED',
+    region: result.region,
+    minimumAge: result.minimumAge,
+    actualAge: result.actualAge,
+  });
+});
 
 // Generic edge gateway route: /x402/... (regex because path-to-regexp v6 rejects '/x402/*')
 // Example: GET /x402/premium?nonce=...  -> resolves contract for GET /premium
