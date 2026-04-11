@@ -1396,6 +1396,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   ) => {
     void completePolicyEvaluationByNonce({
       nonce,
+      fromState: 'SOURCE_VERIFIED',
       outcome: 'satisfied',
       actor: 'gateway',
       reasonCode,
@@ -2078,6 +2079,7 @@ app.post('/paid-gated/redeem', async (req, res) => {
   ) => {
     void completePolicyEvaluationByNonce({
       nonce,
+      fromState: 'ISSUED',
       outcome: 'failed',
       actor: 'gateway',
       reasonCode,
@@ -2093,6 +2095,7 @@ app.post('/paid-gated/redeem', async (req, res) => {
   ) => {
     void completePolicyEvaluationByNonce({
       nonce,
+      fromState: 'ISSUED',
       outcome: 'satisfied',
       actor: 'gateway',
       reasonCode,

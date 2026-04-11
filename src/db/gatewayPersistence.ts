@@ -32,6 +32,7 @@ type CompleteSourceVerificationArgs = {
 
 type CompletePolicyEvaluationArgs = {
   nonce: string;
+  fromState: string;
   outcome: 'satisfied' | 'failed';
   actor: string;
   reasonCode: string;
@@ -361,7 +362,7 @@ export async function completePolicyEvaluationByNonce(
 
   return transitionChallengeStateByNonce({
     nonce: args.nonce,
-    fromState: 'SOURCE_VERIFIED',
+    fromState: args.fromState,
     toState,
     actor: args.actor,
     reasonCode: args.reasonCode,
