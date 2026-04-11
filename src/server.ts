@@ -2072,6 +2072,36 @@ app.post('/paid-gated/redeem', async (req, res) => {
   const nonce = typeof body.nonce === 'string' ? body.nonce : '';
   const policyEvidence = (body as any).policyEvidence ?? null;
 
+  const persistPolicyFailedIfNeeded = (
+    reasonCode: string,
+    reasonMessage: string,
+  ) => {
+    void completePolicyEvaluationByNonce({
+      nonce,
+      outcome: 'failed',
+      actor: 'gateway',
+      reasonCode,
+      reasonMessage,
+    }).catch((err) => {
+      console.error('Failed to persist policy evaluation outcome:', err);
+    });
+  };
+
+  const persistPolicySatisfiedForRedeemIfNeeded = (
+    reasonCode: string,
+    reasonMessage: string,
+  ) => {
+    void completePolicyEvaluationByNonce({
+      nonce,
+      outcome: 'satisfied',
+      actor: 'gateway',
+      reasonCode,
+      reasonMessage,
+    }).catch((err) => {
+      console.error('Failed to persist policy evaluation outcome:', err);
+    });
+  };
+
   if (!nonce) {
     return res.status(400).json({
       ok: false,
@@ -2084,6 +2114,8 @@ app.post('/paid-gated/redeem', async (req, res) => {
   const result = evaluatePaidGatedPolicy({ nonce, policyEvidence });
 
   if (!result.ok) {
+    persistPolicyFailedIfNeeded(result.code, result.message);
+
     const status = result.code === 'policy_binding_mismatch' ? 409 : 403;
     return res.status(status).json({
       ok: false,
@@ -2094,6 +2126,11 @@ app.post('/paid-gated/redeem', async (req, res) => {
       policyStatus: 'POLICY_FAILED',
     });
   }
+
+  persistPolicySatisfiedForRedeemIfNeeded(
+    'policy_satisfied',
+    `Policy satisfied for region ${result.region} with age ${result.actualAge}.`,
+  );
 
   return res.status(200).json({
     ok: true,
