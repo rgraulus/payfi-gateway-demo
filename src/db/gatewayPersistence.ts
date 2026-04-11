@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 
 import type { ContractDefinition } from '../contracts';
-import { pool } from './client';
+import { pool, query } from './client';
 
 type PersistIssuedChallengeArgs = {
   contract: ContractDefinition;
@@ -211,6 +211,39 @@ export async function persistIssuedChallenge(
   } finally {
     client.release();
   }
+}
+
+export async function getChallengeStatusByNonce(
+  nonce: string,
+): Promise<{
+  found: boolean;
+  challengeId?: string;
+  status?: string;
+  releaseStatus?: string;
+}> {
+  const rows = await query<{
+    challenge_id: string;
+    status: string;
+    release_status: string;
+  }>(
+    `
+    SELECT challenge_id, status, release_status
+    FROM payment_challenges
+    WHERE nonce = $1
+    `,
+    [nonce],
+  );
+
+  if (rows.length !== 1) {
+    return { found: false };
+  }
+
+  return {
+    found: true,
+    challengeId: rows[0].challenge_id,
+    status: rows[0].status,
+    releaseStatus: rows[0].release_status,
+  };
 }
 
 export async function transitionChallengeStateByNonce(

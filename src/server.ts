@@ -91,6 +91,7 @@ import {
   completeSettlementEntryByNonce,
   completeSettlementOutcomeByNonce,
   completeSourceVerificationByNonce,
+  getChallengeStatusByNonce,
   persistIssuedChallenge,
   transitionChallengeStateByNonce,
 } from './db/gatewayPersistence';
@@ -1419,6 +1420,43 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     });
   };
 
+  const requirePolicySatisfiedIfGated = async (): Promise<
+    | { ok: true }
+    | { ok: false; responseSent: true }
+  > => {
+    if (resourcePathname !== '/paid-gated') {
+      return { ok: true };
+    }
+
+    const challenge = await getChallengeStatusByNonce(nonce);
+
+    if (!challenge.found) {
+      reply402({
+        ok: false,
+        paid: false,
+        paymentRequired: paymentRequiredBody,
+        error: 'Missing canonical challenge for gated route',
+        ...(x402Debug ? { debug: { reason: 'missing_canonical_challenge' } } : {}),
+      });
+      return { ok: false, responseSent: true };
+    }
+
+    if (challenge.status !== 'POLICY_SATISFIED') {
+      reply402({
+        ok: false,
+        paid: false,
+        paymentRequired: paymentRequiredBody,
+        error: 'Policy requirements not yet satisfied',
+        ...(x402Debug
+          ? { debug: { reason: 'policy_not_satisfied', challengeStatus: challenge.status } }
+          : {}),
+      });
+      return { ok: false, responseSent: true };
+    }
+
+    return { ok: true };
+  };
+
   const persistSettlementOutcomeIfNeeded = (
     outcome: 'confirmed' | 'failed_retryable' | 'failed_final',
     reasonCode: string,
@@ -1518,6 +1556,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         'policy_implicit_allow',
         'Client receipt satisfied implicit allow policy',
       );
+
+      const clientPolicyGate = await requirePolicySatisfiedIfGated();
+      if (!clientPolicyGate.ok) return;
 
       persistSettlementEntryIfNeeded();
 
@@ -1688,6 +1729,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       'Dev receipt satisfied implicit allow policy',
     );
 
+    const devPolicyGate = await requirePolicySatisfiedIfGated();
+    if (!devPolicyGate.ok) return;
+
     persistSettlementEntryIfNeeded();
 
     // M2 tweak: post-verify guard (in case validation does not throw on pending)
@@ -1855,6 +1899,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     'policy_implicit_allow',
     'Facilitator receipt satisfied implicit allow policy',
   );
+
+  const realPolicyGate = await requirePolicySatisfiedIfGated();
+  if (!realPolicyGate.ok) return;
 
   persistSettlementEntryIfNeeded();
 
