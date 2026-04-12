@@ -1488,6 +1488,55 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     });
   };
 
+  const finalizeSuccessfulSettlementAndRelease = async (args: {
+    receiptJws: string;
+    settlementReasonMessage: string;
+  }) => {
+    try {
+      const entry = await completeSettlementEntryByNonce({
+        nonce,
+        actor: 'gateway',
+        requestedReasonCode: 'settlement_requested',
+        requestedReasonMessage: 'Gateway initiated settlement workflow',
+        pendingReasonCode: 'settlement_pending',
+        pendingReasonMessage: 'Gateway entered settlement pending state',
+      });
+
+      if (!entry.updated && entry.reason !== 'already_in_target') {
+        console.warn('Settlement entry did not advance as expected:', entry);
+      }
+
+      const outcome = await completeSettlementOutcomeByNonce({
+        nonce,
+        outcome: 'confirmed',
+        actor: 'gateway',
+        reasonCode: 'settlement_confirmed',
+        reasonMessage: args.settlementReasonMessage,
+      });
+
+      if (!outcome.updated && outcome.reason !== 'already_in_target') {
+        console.warn('Settlement outcome did not advance as expected:', outcome);
+      }
+
+      const release = await completeReleaseByNonce({
+        nonce,
+        actor: 'gateway',
+        reasonCode: 'resource_released',
+        reasonMessage: 'Gateway released protected resource',
+        receiptJws: args.receiptJws,
+        responseHeaders: {
+          'PAYMENT-RESPONSE': 'set',
+        },
+      });
+
+      if (!release.updated && release.reason !== 'already_in_target') {
+        console.warn('Release did not advance as expected:', release);
+      }
+    } catch (err) {
+      console.error('Failed to finalize settlement and release:', err);
+    }
+  };
+
   const paymentResponseHeaderPayloadBase = (args: { receiptJws: string; proof: any }) => ({
     version: 'x402-v2',
     contractId: contract.contractId,
@@ -1560,8 +1609,6 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       const clientPolicyGate = await requirePolicySatisfiedIfGated();
       if (!clientPolicyGate.ok) return;
 
-      persistSettlementEntryIfNeeded();
-
       // M2 pending semantics (keep exact behavior)
       if (replyPendingFromVerifiedProof({ label: 'client', verify, proof })) return;
 
@@ -1578,6 +1625,15 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       if ((contract.mode ?? 'local') === 'proxy') {
         try {
           const upstream = await fetchFromUpstream({ req, contract, resourcePathname });
+
+          if (upstream.ok) {
+            await finalizeSuccessfulSettlementAndRelease({
+              receiptJws: clientReceiptJws,
+              settlementReasonMessage:
+                'Gateway accepted finalized settlement for client-provided receipt',
+            });
+          }
+
           maybeSetPaymentResponseHeader(upstream.ok, clientReceiptJws, proof);
           return applyUpstreamResponse(res, upstream);
         } catch (e: any) {
@@ -1590,7 +1646,13 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         }
       }
 
-      // Stage 2.1: settlement/release persistence decoupled from request serving.
+      // Stage 4.5: finalize canonical lifecycle on successful local release.
+      await finalizeSuccessfulSettlementAndRelease({
+        receiptJws: clientReceiptJws,
+        settlementReasonMessage:
+          'Gateway accepted finalized settlement for client-provided receipt',
+      });
+
       maybeSetPaymentResponseHeader(true, clientReceiptJws, proof);
 
       return res.status(200).json({
@@ -1732,8 +1794,6 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     const devPolicyGate = await requirePolicySatisfiedIfGated();
     if (!devPolicyGate.ok) return;
 
-    persistSettlementEntryIfNeeded();
-
     // M2 tweak: post-verify guard (in case validation does not throw on pending)
     // KEEP EXACTLY AS-IS (NO REGRESSION).
     if (replyPendingFromVerifiedProof({ label: 'dev', verify, proof })) return;
@@ -1752,6 +1812,14 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       try {
         const upstream = await fetchFromUpstream({ req, contract, resourcePathname });
 
+        if (upstream.ok) {
+          await finalizeSuccessfulSettlementAndRelease({
+            receiptJws: effectiveDevReceiptJws,
+            settlementReasonMessage:
+              'Gateway accepted finalized settlement for dev receipt',
+          });
+        }
+
         // M1 hardening: only emit PAYMENT-RESPONSE if the paid content is a success response.
         maybeSetPaymentResponseHeader(upstream.ok, effectiveDevReceiptJws, proof);
 
@@ -1767,7 +1835,13 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     }
 
     // local mode
-    // Stage 2.1: settlement/release persistence decoupled from request serving.
+    // Stage 4.5: finalize canonical lifecycle on successful local release.
+    await finalizeSuccessfulSettlementAndRelease({
+      receiptJws: effectiveDevReceiptJws,
+      settlementReasonMessage:
+        'Gateway accepted finalized settlement for dev receipt',
+    });
+
     maybeSetPaymentResponseHeader(true, effectiveDevReceiptJws, proof);
 
     return res.status(200).json({
@@ -1903,8 +1977,6 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   const realPolicyGate = await requirePolicySatisfiedIfGated();
   if (!realPolicyGate.ok) return;
 
-  persistSettlementEntryIfNeeded();
-
   // M2 tweak: post-verify guard (in case validation does not throw on pending)
   // KEEP EXACTLY AS-IS (NO REGRESSION).
   if (replyPendingFromVerifiedProof({ label: 'real', verify, proof, match, fulfill })) return;
@@ -1923,6 +1995,14 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     try {
       const upstream = await fetchFromUpstream({ req, contract, resourcePathname });
 
+      if (upstream.ok) {
+        await finalizeSuccessfulSettlementAndRelease({
+          receiptJws: receiptJws!,
+          settlementReasonMessage:
+            'Gateway accepted finalized settlement for facilitator receipt',
+        });
+      }
+
       // M1 hardening: only emit PAYMENT-RESPONSE if the paid content is a success response.
       maybeSetPaymentResponseHeader(upstream.ok, receiptJws!, proof);
 
@@ -1938,7 +2018,13 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   }
 
   // local mode
-  // Stage 2.1: settlement/release persistence decoupled from request serving.
+  // Stage 4.5: finalize canonical lifecycle on successful local release.
+  await finalizeSuccessfulSettlementAndRelease({
+    receiptJws: receiptJws!,
+    settlementReasonMessage:
+      'Gateway accepted finalized settlement for facilitator receipt',
+  });
+
   maybeSetPaymentResponseHeader(true, receiptJws!, proof);
 
   return res.status(200).json({
