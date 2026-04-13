@@ -84,9 +84,9 @@
     },
 
     {
-      "contractId": "",
+      "contractId": "cid_e7fb8ef3933f5b45c7a246267858baf5b84ba60a7c178d0b84cc4e90fc564d98",
       "contractVersion": "1.0.0",
-      "isFrozen": false,
+      "isFrozen": true,
 
       "mode": "local",
       "merchantId": "demo-merchant",
