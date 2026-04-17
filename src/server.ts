@@ -83,6 +83,7 @@ import { randomUUID, createHash } from 'crypto';
 
 import { CrpClient, MatchPaymentRequest } from './crpClient';
 import { buildPaymentRequiredPayload, b64jsonHeader, ContractDefinition } from './contracts';
+import { resolveConcordiumChain } from './chainId';
 import { FileContractResolver } from './contractResolver';
 import type { ContractResolver } from './contractResolver';
 import {
@@ -932,6 +933,7 @@ app.get('/healthz', async (_req, res) => {
       merchantId: c.merchantId,
       resource: c.resource,
       network: c.network,
+      chain_id: resolveConcordiumChain(c.network).chainId,
       asset: c.asset,
       amount: c.amount,
       payTo: c.payTo,
@@ -1018,13 +1020,17 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
 
   const rebuildPaymentRequired = (nonceValue: string) => {
     nonce = nonceValue;
+    const chain = resolveConcordiumChain(contract.network);
 
-    paymentRequiredHeaderPayload = buildPaymentRequiredPayload({
-      contract,
-      nonce,
-      issuedAtSec: nowSec,
-      expiresAtSec: nowSec + ttlSec,
-    });
+    paymentRequiredHeaderPayload = {
+      ...buildPaymentRequiredPayload({
+        contract,
+        nonce,
+        issuedAtSec: nowSec,
+        expiresAtSec: nowSec + ttlSec,
+      }),
+      chain_id: chain.chainId,
+    };
 
     paymentRequiredBody = {
       ...paymentRequiredHeaderPayload,
@@ -1543,6 +1549,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     contractVersion: contract.contractVersion,
     merchantId: contract.merchantId,
     resource: contract.resource,
+    chain_id: resolveConcordiumChain(contract.network).chainId,
     nonce,
     settled: true,
     receipt: {
