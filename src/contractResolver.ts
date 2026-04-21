@@ -5,6 +5,7 @@ import {
   compileContracts,
   resolveContractFromRegistry,
   ContractDefinition,
+  LoadedContractDefinition,
   CompiledContractRegistry,
 } from './contracts';
 
@@ -14,12 +15,12 @@ export type ResolveByResourceArgs = {
 };
 
 export interface ContractResolver {
-  resolveByResource(args: ResolveByResourceArgs): ContractDefinition;
-  list(): ContractDefinition[];
+  resolveByResource(args: ResolveByResourceArgs): LoadedContractDefinition;
+  list(): LoadedContractDefinition[];
 }
 
 export class FileContractResolver implements ContractResolver {
-  private readonly contracts: ContractDefinition[];
+  private readonly contracts: LoadedContractDefinition[];
   private readonly registry: CompiledContractRegistry;
 
   constructor(configPath: string) {
@@ -28,14 +29,14 @@ export class FileContractResolver implements ContractResolver {
     this.registry = compileContracts(this.contracts);
   }
 
-  resolveByResource(args: ResolveByResourceArgs): ContractDefinition {
+  resolveByResource(args: ResolveByResourceArgs): LoadedContractDefinition {
     return resolveContractFromRegistry(this.registry, {
       method: args.method,
       pathname: args.pathname,
     });
   }
 
-  list(): ContractDefinition[] {
+  list(): LoadedContractDefinition[] {
     return this.contracts;
   }
 }
