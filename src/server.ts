@@ -82,7 +82,7 @@ import bodyParser from 'body-parser';
 import { randomUUID, createHash } from 'crypto';
 
 import { CrpClient, MatchPaymentRequest } from './crpClient';
-import { buildPaymentRequiredPayload, b64jsonHeader, ContractDefinition } from './contracts';
+import { buildPaymentRequiredPayload, b64jsonHeader, ContractDefinition, LoadedContractDefinition } from './contracts';
 import { resolveConcordiumChain } from './chainId';
 import { FileContractResolver } from './contractResolver';
 import type { ContractResolver } from './contractResolver';
@@ -194,7 +194,7 @@ const DIRECT_RECEIPT_HEADER = 'x402-receipt';
 
 // Load contracts once at startup via resolver (fail fast if frozen mismatch)
 let contractResolver: ContractResolver;
-let contracts: ContractDefinition[] = [];
+let contracts: LoadedContractDefinition[] = [];
 
 try {
   contractResolver = new FileContractResolver(contractsPath);
@@ -933,7 +933,7 @@ app.get('/healthz', async (_req, res) => {
       merchantId: c.merchantId,
       resource: c.resource,
       network: c.network,
-      chain_id: resolveConcordiumChain(c.network).chainId,
+      chain_id: c.chain_id,
       asset: c.asset,
       amount: c.amount,
       payTo: c.payTo,
@@ -964,7 +964,7 @@ app.get('/readyz', async (_req, res) => {
 
 async function handleX402(req: express.Request, res: express.Response, resourcePathname: string) {
   // Resolve contract based on the underlying resource path (e.g. /premium or /paid/demo.pdf)
-  let contract: ContractDefinition;
+  let contract: LoadedContractDefinition;
   try {
     contract = contractResolver.resolveByResource({
       method: req.method,
@@ -1029,7 +1029,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         issuedAtSec: nowSec,
         expiresAtSec: nowSec + ttlSec,
       }),
-      chain_id: chain.chainId,
+      chain_id: contract.chain_id,
     };
 
     paymentRequiredBody = {
@@ -1549,7 +1549,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     contractVersion: contract.contractVersion,
     merchantId: contract.merchantId,
     resource: contract.resource,
-    chain_id: resolveConcordiumChain(contract.network).chainId,
+    chain_id: contract.chain_id,
     nonce,
     settled: true,
     receipt: {

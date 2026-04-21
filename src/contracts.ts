@@ -21,6 +21,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
+import { resolveConcordiumChain } from './chainId';
+
 export type Resource = { method: string; path: string };
 export type Asset = { type: 'PLT'; tokenId: string; decimals: number };
 
@@ -98,6 +100,13 @@ export type ContractDefinition = {
   policy?: PolicyDefinition;
 };
 
+export type LoadedContractDefinition = ContractDefinition & {
+  chain_id: string;
+  network_alias: 'concordium:testnet' | 'concordium:mainnet';
+  network_label: 'testnet' | 'mainnet';
+  display_name: 'Concordium Testnet' | 'Concordium Mainnet';
+};
+
 type ContractRegistryFile = { contracts: ContractDefinition[] };
 
 // Deterministic JSON: objects sorted by key; arrays preserve order.
@@ -146,7 +155,7 @@ export function computeContractId(def: ContractDefinition): string {
   return `cid_${hex}`;
 }
 
-export function loadContracts(configPath = 'config/contracts.json'): { contracts: ContractDefinition[] } {
+export function loadContracts(configPath = 'config/contracts.json'): { contracts: LoadedContractDefinition[] } {
   const full = path.resolve(process.cwd(), configPath);
   const parsed = JSON.parse(fs.readFileSync(full, 'utf8')) as ContractRegistryFile;
 
@@ -164,7 +173,16 @@ export function loadContracts(configPath = 'config/contracts.json'): { contracts
     }
 
     const effectiveId = c.isFrozen ? declared : computed;
-    return { ...c, contractId: effectiveId };
+    const chain = resolveConcordiumChain(c.network);
+
+    return {
+      ...c,
+      contractId: effectiveId,
+      chain_id: chain.chainId,
+      network_alias: chain.networkAlias,
+      network_label: chain.networkLabel,
+      display_name: chain.displayName,
+    };
   });
 
   return { contracts };
@@ -176,13 +194,13 @@ export function loadContracts(configPath = 'config/contracts.json'): { contracts
 
 export type CompiledContractRegistry = {
   // Exact match: method -> pathname -> contract
-  exact: Map<string, Map<string, ContractDefinition>>;
+  exact: Map<string, Map<string, LoadedContractDefinition>>;
 
   // Prefix wildcards: method -> [{ prefix, contract }] sorted by longest prefix first
-  prefix: Map<string, Array<{ prefix: string; contract: ContractDefinition }>>;
+  prefix: Map<string, Array<{ prefix: string; contract: LoadedContractDefinition }>>;
 
   // Keep original list
-  all: ContractDefinition[];
+  all: LoadedContractDefinition[];
 };
 
 function isPrefixWildcardPath(p: string): boolean {
@@ -212,9 +230,9 @@ function wildcardPrefix(p: string): string {
  * - duplicate exact (method+path) is rejected
  * - duplicate wildcard prefixes are rejected
  */
-export function compileContracts(contracts: ContractDefinition[]): CompiledContractRegistry {
-  const exact = new Map<string, Map<string, ContractDefinition>>();
-  const prefix = new Map<string, Array<{ prefix: string; contract: ContractDefinition }>>();
+export function compileContracts(contracts: LoadedContractDefinition[]): CompiledContractRegistry {
+  const exact = new Map<string, Map<string, LoadedContractDefinition>>();
+  const prefix = new Map<string, Array<{ prefix: string; contract: LoadedContractDefinition }>>();
 
   const getExactBucket = (method: string) => {
     let m = exact.get(method);
@@ -276,7 +294,7 @@ export function compileContracts(contracts: ContractDefinition[]): CompiledContr
 export function resolveContractFromRegistry(
   reg: CompiledContractRegistry,
   req: { method: string; pathname: string },
-): ContractDefinition {
+): LoadedContractDefinition {
   const pathname = req.pathname;
   const method = (req.method || 'GET').toUpperCase();
 
