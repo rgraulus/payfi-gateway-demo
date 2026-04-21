@@ -1,4 +1,6 @@
 // src/proofPayload.ts
+
+import { resolveConcordiumChain } from './chainId';
 //
 // Phase B (real): Concordium PLT proof payload schema + validation.
 // This is the payload that must be inside the receipt JWS payload (claims).
@@ -25,7 +27,8 @@ export type ContractBinding = {
   merchantId: string;
   resource: { method: HttpMethod; path: string };
 
-  network: string; // e.g. "ccd:testnet"
+  chain_id?: string; // canonical CAIP-2 chain identifier (preferred during migration)
+  network: string; // legacy alias retained temporarily for compatibility
   asset: AssetPlt;
 
   // amount in decimal-string form (as in config/contracts.json), e.g. "0.050101"
@@ -148,6 +151,7 @@ export function assertCcdPltProofV1(u: unknown): asserts u is CcdPltProofV1 {
   requireMethod('contract.resource.method', c.resource.method);
   requireString('contract.resource.path', c.resource.path);
 
+  if (c.chain_id !== undefined) requireString('contract.chain_id', c.chain_id);
   requireString('contract.network', c.network);
 
   if (!isObject(c.asset)) throw proofPayloadError(`contract.asset must be object`);
@@ -218,6 +222,10 @@ export function validateCcdPltProofAgainstContract(args: {
   eq('merchantId', pc.merchantId, ec.merchantId);
   eq('resource.method', pc.resource.method, ec.resource.method);
   eq('resource.path', pc.resource.path, ec.resource.path);
+
+  const actualChainId = pc.chain_id ?? resolveConcordiumChain(pc.network).chainId;
+  const expectedChainId = ec.chain_id ?? resolveConcordiumChain(ec.network).chainId;
+  eq('chain_id', actualChainId, expectedChainId);
 
   eq('network', pc.network, ec.network);
 
