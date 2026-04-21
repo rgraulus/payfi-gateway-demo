@@ -608,13 +608,14 @@ function toHttpMethod(s: string): HttpMethod {
   return m as HttpMethod;
 }
 
-function toContractBinding(c: ContractDefinition): ContractBinding {
+function toContractBinding(c: LoadedContractDefinition): ContractBinding {
   return {
     contractId: c.contractId,
     contractVersion: c.contractVersion,
     isFrozen: c.isFrozen,
     merchantId: c.merchantId,
     resource: { method: toHttpMethod(c.resource.method), path: c.resource.path },
+    chain_id: c.chain_id,
     network: c.network,
     asset: {
       type: 'PLT',
