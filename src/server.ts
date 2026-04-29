@@ -86,6 +86,7 @@ import { buildPaymentRequiredPayload, b64jsonHeader, ContractDefinition, LoadedC
 import { resolveConcordiumChain } from './chainId';
 import { FileContractResolver } from './contractResolver';
 import { buildSiwChallenge } from './siw/challenge';
+import { getSiwVerifierForChainId } from './siw/registry';
 import type { ContractResolver } from './contractResolver';
 import {
   completePolicyEvaluationByNonce,
@@ -2236,6 +2237,8 @@ app.get('/siw/challenge', async (req, res) => {
     });
   }
 
+  const verifier = getSiwVerifierForChainId(chainId);
+
   const challenge = buildSiwChallenge({
     chainId,
     accountId,
@@ -2249,6 +2252,10 @@ app.get('/siw/challenge', async (req, res) => {
   return res.status(200).json({
     ok: true,
     siw: challenge,
+    verifier: {
+      available: verifier !== null,
+      chainIdPrefix: verifier?.chainIdPrefix ?? null,
+    },
   });
 });
 
