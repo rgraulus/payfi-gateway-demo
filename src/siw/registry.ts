@@ -11,5 +11,10 @@ function getChainIdPrefix(chainId: string): string {
 
 export function getSiwVerifierForChainId(chainId: string): SiwVerifier | null {
   const prefix = getChainIdPrefix(chainId);
+
+  if (prefix === 'concordium') {
+    return verifiers.find((verifier) => verifier.chainIdPrefix === 'ccd') ?? null;
+  }
+
   return verifiers.find((verifier) => verifier.chainIdPrefix === prefix) ?? null;
 }

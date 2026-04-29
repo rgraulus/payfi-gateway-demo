@@ -24,7 +24,7 @@ export type SiwVerifyProofInput = {
   accountId: SiwAccountId;
   message: string;
   signature: unknown;
-  accountInfo: unknown;
+  accountInfo?: unknown;
 };
 
 export type SiwVerifyProofResult =
