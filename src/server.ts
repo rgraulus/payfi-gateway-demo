@@ -86,7 +86,9 @@ import { buildPaymentRequiredPayload, b64jsonHeader, ContractDefinition, LoadedC
 import { resolveConcordiumChain } from './chainId';
 import { FileContractResolver } from './contractResolver';
 import { buildSiwChallenge } from './siw/challenge';
+import { getSiwChallenge, isSiwChallengeExpired, putSiwChallenge } from './siw/challengeStore';
 import { getSiwVerifierForChainId } from './siw/registry';
+import type { SiwAuthChallenge } from './siw/types';
 import type { SiwVerifyProofInput } from './siw/types';
 import type { ContractResolver } from './contractResolver';
 import {
@@ -256,6 +258,10 @@ app.options(/.*/, (_req, res) => res.status(204).end());
 // -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
+
+function normalizeSiwMessage(value: string): string {
+  return String(value).replace(/\r\n/g, '\n');
+}
 
 function b64json(obj: unknown): string {
   // Spec/client interop: use standard base64 (not base64url) for header payloads.
@@ -2250,6 +2256,8 @@ app.get('/siw/challenge', async (req, res) => {
     ttlSec,
   });
 
+  putSiwChallenge(challenge);
+
   return res.status(200).json({
     ok: true,
     siw: challenge,
@@ -2263,6 +2271,8 @@ app.get('/siw/challenge', async (req, res) => {
 app.post('/siw/verify', async (req, res) => {
   const body = req.body ?? {};
 
+  const challengeId = typeof body.challengeId === 'string' ? body.challengeId.trim() : '';
+
   const input: SiwVerifyProofInput = {
     chainId: typeof body.chainId === 'string' ? body.chainId.trim() : '',
     accountId: typeof body.accountId === 'string' ? body.accountId.trim() : '',
@@ -2270,12 +2280,59 @@ app.post('/siw/verify', async (req, res) => {
     signature: typeof body.signature === 'string' ? body.signature : '',
   };
 
-  if (!input.chainId || !input.accountId || !input.message || !input.signature) {
+  if (!challengeId || !input.chainId || !input.accountId || !input.message || !input.signature) {
     return res.status(400).json({
       ok: false,
       code: 'invalid_request',
       reason: 'invalid_request',
-      message: 'chainId, accountId, message, and signature are required.',
+      message: 'challengeId, chainId, accountId, message, and signature are required.',
+    });
+  }
+
+  const challenge: SiwAuthChallenge | null = getSiwChallenge(challengeId);
+
+  if (!challenge) {
+    return res.status(404).json({
+      ok: false,
+      code: 'unknown_challenge',
+      reason: 'unknown_challenge',
+      message: `No SIW challenge found for challengeId ${challengeId}.`,
+    });
+  }
+
+  if (isSiwChallengeExpired(challenge)) {
+    return res.status(410).json({
+      ok: false,
+      code: 'challenge_expired',
+      reason: 'challenge_expired',
+      message: `SIW challenge ${challengeId} has expired.`,
+    });
+  }
+
+  if (challenge.chainId !== input.chainId) {
+    return res.status(409).json({
+      ok: false,
+      code: 'challenge_binding_mismatch',
+      reason: 'challenge_binding_mismatch',
+      message: 'SIW challenge chainId does not match verification request.',
+    });
+  }
+
+  if (challenge.accountId !== input.accountId) {
+    return res.status(409).json({
+      ok: false,
+      code: 'challenge_binding_mismatch',
+      reason: 'challenge_binding_mismatch',
+      message: 'SIW challenge accountId does not match verification request.',
+    });
+  }
+
+  if (normalizeSiwMessage(challenge.message) !== normalizeSiwMessage(input.message)) {
+    return res.status(409).json({
+      ok: false,
+      code: 'challenge_binding_mismatch',
+      reason: 'challenge_binding_mismatch',
+      message: 'SIW challenge message does not match verification request.',
     });
   }
 
