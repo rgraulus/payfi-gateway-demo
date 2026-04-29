@@ -85,6 +85,7 @@ import { CrpClient, MatchPaymentRequest } from './crpClient';
 import { buildPaymentRequiredPayload, b64jsonHeader, ContractDefinition, LoadedContractDefinition } from './contracts';
 import { resolveConcordiumChain } from './chainId';
 import { FileContractResolver } from './contractResolver';
+import { buildSiwChallenge } from './siw/challenge';
 import type { ContractResolver } from './contractResolver';
 import {
   completePolicyEvaluationByNonce,
@@ -2204,6 +2205,52 @@ function evaluatePaidGatedPolicy(args: {
 // -----------------------------------------------------------------------------
 // Routes
 // -----------------------------------------------------------------------------
+
+app.get('/siw/challenge', async (req, res) => {
+  const chainId =
+    typeof req.query.chainId === 'string' && req.query.chainId.trim().length > 0
+      ? req.query.chainId.trim()
+      : 'ccd:testnet';
+
+  const accountId =
+    typeof req.query.accountId === 'string' && req.query.accountId.trim().length > 0
+      ? req.query.accountId.trim()
+      : '';
+
+  const resourcePath =
+    typeof req.query.resourcePath === 'string' && req.query.resourcePath.trim().length > 0
+      ? req.query.resourcePath.trim()
+      : '/paid';
+
+  const resourceMethod =
+    typeof req.query.resourceMethod === 'string' && req.query.resourceMethod.trim().length > 0
+      ? req.query.resourceMethod.trim().toUpperCase()
+      : 'GET';
+
+  if (!accountId) {
+    return res.status(400).json({
+      ok: false,
+      code: 'invalid_request',
+      reason: 'invalid_request',
+      message: 'Query parameter accountId is required.',
+    });
+  }
+
+  const challenge = buildSiwChallenge({
+    chainId,
+    accountId,
+    scope: {
+      resourcePath,
+      resourceMethod,
+    },
+    ttlSec,
+  });
+
+  return res.status(200).json({
+    ok: true,
+    siw: challenge,
+  });
+});
 
 // Existing local/demo endpoint (still supported)
 app.get('/paid', async (req, res) => handleX402(req, res, '/paid'));
