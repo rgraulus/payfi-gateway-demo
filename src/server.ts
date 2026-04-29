@@ -2277,15 +2277,16 @@ app.post('/siw/verify', async (req, res) => {
     chainId: typeof body.chainId === 'string' ? body.chainId.trim() : '',
     accountId: typeof body.accountId === 'string' ? body.accountId.trim() : '',
     message: typeof body.message === 'string' ? body.message : '',
-    signature: typeof body.signature === 'string' ? body.signature : '',
+    signature: body.signature,
+    accountInfo: body.accountInfo,
   };
 
-  if (!challengeId || !input.chainId || !input.accountId || !input.message || !input.signature) {
+  if (!challengeId || !input.chainId || !input.accountId || !input.message || !input.signature || !input.accountInfo) {
     return res.status(400).json({
       ok: false,
       code: 'invalid_request',
       reason: 'invalid_request',
-      message: 'challengeId, chainId, accountId, message, and signature are required.',
+      message: 'challengeId, chainId, accountId, message, signature, and accountInfo are required.',
     });
   }
 
@@ -2350,7 +2351,9 @@ app.post('/siw/verify', async (req, res) => {
   const result = await verifier.verify(input);
 
   if (!result.ok) {
-    return res.status(501).json({
+    const status = result.code === 'not_implemented' ? 501 : 401;
+
+    return res.status(status).json({
       ok: false,
       code: result.code,
       reason: result.code,

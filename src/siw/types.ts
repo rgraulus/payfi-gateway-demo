@@ -23,7 +23,8 @@ export type SiwVerifyProofInput = {
   chainId: SiwChainId;
   accountId: SiwAccountId;
   message: string;
-  signature: string;
+  signature: unknown;
+  accountInfo: unknown;
 };
 
 export type SiwVerifyProofResult =
