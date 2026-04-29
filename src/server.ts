@@ -87,6 +87,7 @@ import { resolveConcordiumChain } from './chainId';
 import { FileContractResolver } from './contractResolver';
 import { buildSiwChallenge } from './siw/challenge';
 import { getSiwChallenge, isSiwChallengeExpired, putSiwChallenge } from './siw/challengeStore';
+import { getConcordiumAccountInfo } from './siw/concordiumAccountLookup';
 import { getSiwVerifierForChainId } from './siw/registry';
 import type { SiwAuthChallenge } from './siw/types';
 import type { SiwVerifyProofInput } from './siw/types';
@@ -166,6 +167,11 @@ const legacyHeaders = String(process.env.X402_LEGACY_HEADERS ?? '').toLowerCase(
 
 const ttlSec = Number(process.env.X402_TTL_SEC ?? 300);
 const contractsPath = process.env.X402_CONTRACTS_PATH ?? 'config/contracts.json';
+const concordiumGrpcTestnetHost = process.env.CONCORDIUM_GRPC_TESTNET_HOST ?? '127.0.0.1';
+const concordiumGrpcTestnetPort = Number(process.env.CONCORDIUM_GRPC_TESTNET_PORT ?? 20000);
+const concordiumGrpcMainnetHost = process.env.CONCORDIUM_GRPC_MAINNET_HOST ?? '127.0.0.1';
+const concordiumGrpcMainnetPort = Number(process.env.CONCORDIUM_GRPC_MAINNET_PORT ?? 20000);
+
 
 // Replay backend selection (Phase E)
 const replayBackend = String(process.env.X402_REPLAY_BACKEND ?? 'memory').toLowerCase(); // memory|redis
@@ -2218,7 +2224,7 @@ app.get('/siw/challenge', async (req, res) => {
   const chainId =
     typeof req.query.chainId === 'string' && req.query.chainId.trim().length > 0
       ? req.query.chainId.trim()
-      : 'ccd:testnet';
+      : 'concordium:testnet';
 
   const accountId =
     typeof req.query.accountId === 'string' && req.query.accountId.trim().length > 0
@@ -2278,15 +2284,14 @@ app.post('/siw/verify', async (req, res) => {
     accountId: typeof body.accountId === 'string' ? body.accountId.trim() : '',
     message: typeof body.message === 'string' ? body.message : '',
     signature: body.signature,
-    accountInfo: body.accountInfo,
   };
 
-  if (!challengeId || !input.chainId || !input.accountId || !input.message || !input.signature || !input.accountInfo) {
+  if (!challengeId || !input.chainId || !input.accountId || !input.message || !input.signature) {
     return res.status(400).json({
       ok: false,
       code: 'invalid_request',
       reason: 'invalid_request',
-      message: 'challengeId, chainId, accountId, message, signature, and accountInfo are required.',
+      message: 'challengeId, chainId, accountId, message, and signature are required.',
     });
   }
 
@@ -2336,6 +2341,40 @@ app.post('/siw/verify', async (req, res) => {
       message: 'SIW challenge message does not match verification request.',
     });
   }
+
+  let gatewayAccountInfo: unknown;
+  try {
+    gatewayAccountInfo = await getConcordiumAccountInfo(input.chainId, input.accountId, {
+      testnet: {
+        host: concordiumGrpcTestnetHost,
+        port: concordiumGrpcTestnetPort,
+      },
+      mainnet: {
+        host: concordiumGrpcMainnetHost,
+        port: concordiumGrpcMainnetPort,
+      },
+    });
+  } catch (err: any) {
+    const lookupMessage = String(err?.message ?? err);
+
+    if (lookupMessage.includes('Unsupported account identifier')) {
+      return res.status(400).json({
+        ok: false,
+        code: 'invalid_account_identifier',
+        reason: 'invalid_account_identifier',
+        message: 'Account identifier is not a valid Concordium account address.',
+      });
+    }
+
+    return res.status(502).json({
+      ok: false,
+      code: 'account_lookup_failed',
+      reason: 'account_lookup_failed',
+      message: lookupMessage,
+    });
+  }
+
+  input.accountInfo = gatewayAccountInfo;
 
   const verifier = getSiwVerifierForChainId(input.chainId);
 
