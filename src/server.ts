@@ -87,6 +87,7 @@ import { resolveConcordiumChain } from './chainId';
 import { FileContractResolver } from './contractResolver';
 import { buildSiwChallenge } from './siw/challenge';
 import { getSiwVerifierForChainId } from './siw/registry';
+import type { SiwVerifyProofInput } from './siw/types';
 import type { ContractResolver } from './contractResolver';
 import {
   completePolicyEvaluationByNonce,
@@ -2256,6 +2257,59 @@ app.get('/siw/challenge', async (req, res) => {
       available: verifier !== null,
       chainIdPrefix: verifier?.chainIdPrefix ?? null,
     },
+  });
+});
+
+app.post('/siw/verify', async (req, res) => {
+  const body = req.body ?? {};
+
+  const input: SiwVerifyProofInput = {
+    chainId: typeof body.chainId === 'string' ? body.chainId.trim() : '',
+    accountId: typeof body.accountId === 'string' ? body.accountId.trim() : '',
+    message: typeof body.message === 'string' ? body.message : '',
+    signature: typeof body.signature === 'string' ? body.signature : '',
+  };
+
+  if (!input.chainId || !input.accountId || !input.message || !input.signature) {
+    return res.status(400).json({
+      ok: false,
+      code: 'invalid_request',
+      reason: 'invalid_request',
+      message: 'chainId, accountId, message, and signature are required.',
+    });
+  }
+
+  const verifier = getSiwVerifierForChainId(input.chainId);
+
+  if (!verifier) {
+    return res.status(400).json({
+      ok: false,
+      code: 'unsupported_chain',
+      reason: 'unsupported_chain',
+      message: `No SIW verifier is registered for chainId ${input.chainId}.`,
+    });
+  }
+
+  const result = await verifier.verify(input);
+
+  if (!result.ok) {
+    return res.status(501).json({
+      ok: false,
+      code: result.code,
+      reason: result.code,
+      message: result.message,
+      verifier: {
+        chainIdPrefix: verifier.chainIdPrefix,
+      },
+    });
+  }
+
+  return res.status(200).json({
+    ok: true,
+    verifier: {
+      chainIdPrefix: verifier.chainIdPrefix,
+    },
+    signerAccountId: result.signerAccountId,
   });
 });
 
