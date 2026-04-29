@@ -30,12 +30,16 @@ export async function getConcordiumAccountInfo(
   const grpcModulePath = path.join(sdkDir, 'nodejs', 'grpc.js');
   const grpcModuleUrl = pathToFileURL(grpcModulePath).href;
   const { ConcordiumGRPCNodeClient, credentials } = await import(grpcModuleUrl as any);
+  const webSdk = await import('@concordium/web-sdk');
+  const { AccountAddress } = webSdk as any;
 
   const client = new ConcordiumGRPCNodeClient(
     node.host,
     node.port,
-    credentials.createInsecure(),
+    credentials.createSsl(),
   );
 
-  return await client.getAccountInfo(accountId);
+  const accountAddress = AccountAddress.fromBase58(accountId);
+
+  return await client.getAccountInfo(accountAddress);
 }
