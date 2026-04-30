@@ -87,6 +87,7 @@ import { resolveConcordiumChain } from './chainId';
 import { FileContractResolver } from './contractResolver';
 import { buildSiwChallenge } from './siw/challenge';
 import { getSiwChallenge, isSiwChallengeExpired, putSiwChallenge } from './siw/challengeStore';
+import { createSiwSession } from './siw/sessionStore';
 import { getConcordiumAccountInfo } from './siw/concordiumAccountLookup';
 import { getSiwVerifierForChainId } from './siw/registry';
 import type { SiwAuthChallenge } from './siw/types';
@@ -167,6 +168,7 @@ const legacyHeaders = String(process.env.X402_LEGACY_HEADERS ?? '').toLowerCase(
 
 const ttlSec = Number(process.env.X402_TTL_SEC ?? 300);
 const contractsPath = process.env.X402_CONTRACTS_PATH ?? 'config/contracts.json';
+const siwSessionTtlSec = Number(process.env.X402_SIW_SESSION_TTL_SEC ?? 3600);
 const concordiumGrpcTestnetHost = process.env.CONCORDIUM_GRPC_TESTNET_HOST ?? '127.0.0.1';
 const concordiumGrpcTestnetPort = Number(process.env.CONCORDIUM_GRPC_TESTNET_PORT ?? 20000);
 const concordiumGrpcMainnetHost = process.env.CONCORDIUM_GRPC_MAINNET_HOST ?? '127.0.0.1';
@@ -2403,12 +2405,21 @@ app.post('/siw/verify', async (req, res) => {
     });
   }
 
+  const session = createSiwSession(challenge, siwSessionTtlSec);
+
   return res.status(200).json({
     ok: true,
     verifier: {
       chainIdPrefix: verifier.chainIdPrefix,
     },
     signerAccountId: result.signerAccountId,
+    session: {
+      sessionId: session.sessionId,
+      expiresAt: session.expiresAt,
+      accountId: session.accountId,
+      chainId: session.chainId,
+      scope: session.scope,
+    },
   });
 });
 
