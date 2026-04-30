@@ -33,10 +33,14 @@ export async function getConcordiumAccountInfo(
   const webSdk = await import('@concordium/web-sdk');
   const { AccountAddress } = webSdk as any;
 
+  const useInsecureGrpc =
+    node.host === '127.0.0.1' ||
+    node.host === 'localhost';
+
   const client = new ConcordiumGRPCNodeClient(
     node.host,
     node.port,
-    credentials.createSsl(),
+    useInsecureGrpc ? credentials.createInsecure() : credentials.createSsl(),
   );
 
   const accountAddress = AccountAddress.fromBase58(accountId);
