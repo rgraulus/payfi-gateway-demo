@@ -87,7 +87,7 @@ import { resolveConcordiumChain } from './chainId';
 import { FileContractResolver } from './contractResolver';
 import { buildSiwChallenge } from './siw/challenge';
 import { getSiwChallenge, isSiwChallengeExpired, putSiwChallenge } from './siw/challengeStore';
-import { createSiwSession } from './siw/sessionStore';
+import { createSiwSession, getSiwSession, isSiwSessionExpired } from './siw/sessionStore';
 import { getConcordiumAccountInfo } from './siw/concordiumAccountLookup';
 import { getSiwVerifierForChainId } from './siw/registry';
 import type { SiwAuthChallenge } from './siw/types';
@@ -204,6 +204,8 @@ const DEV_RECEIPT_HEADER = 'x402-dev-receipt-jws';
 // PATCH: allow a “direct receipt JWS” header for real clients (matches what you were sending).
 // This is NOT a dev-only feature; it is the cleanest interop path for curl/harnesses.
 const DIRECT_RECEIPT_HEADER = 'x402-receipt';
+
+const SIW_SESSION_HEADER = 'x-siw-session-id';
 
 // Load contracts once at startup via resolver (fail fast if frozen mismatch)
 let contractResolver: ContractResolver;
@@ -2424,7 +2426,55 @@ app.post('/siw/verify', async (req, res) => {
 });
 
 // Existing local/demo endpoint (still supported)
-app.get('/paid', async (req, res) => handleX402(req, res, '/paid'));
+app.get('/paid', async (req, res) => {
+  const rawSessionId = req.header(SIW_SESSION_HEADER);
+  const sessionId = typeof rawSessionId === 'string' ? rawSessionId.trim() : '';
+
+  if (!sessionId) {
+    return handleX402(req, res, '/paid');
+  }
+
+  const session = getSiwSession(sessionId);
+
+  if (!session || isSiwSessionExpired(session)) {
+    return res.status(401).json({
+      ok: false,
+      code: 'invalid_siw_session',
+      reason: 'invalid_siw_session',
+      message: 'SIW session is missing, invalid, or expired.',
+    });
+  }
+
+  const scopeMatches =
+    session.scope.resourcePath === '/paid' &&
+    String(session.scope.resourceMethod || '').toUpperCase() === 'GET';
+
+  if (!scopeMatches) {
+    return res.status(403).json({
+      ok: false,
+      code: 'siw_session_scope_mismatch',
+      reason: 'siw_session_scope_mismatch',
+      message: 'SIW session scope does not allow access to GET /paid.',
+    });
+  }
+
+  return res.status(200).json({
+    ok: true,
+    paid: true,
+    via: 'siw_session',
+    session: {
+      sessionId: session.sessionId,
+      accountId: session.accountId,
+      chainId: session.chainId,
+      expiresAt: session.expiresAt,
+      scope: session.scope,
+    },
+    data: {
+      message: 'Hello from the paid resource',
+      resource: '/paid',
+    },
+  });
+});
 app.get('/paid-gated', async (req, res) => handleX402(req, res, '/paid-gated'));
 
 app.post('/paid-gated/redeem', async (req, res) => {
