@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { buildCaip10AccountId } from '../chainId';
 import type { SiwAuthChallenge, SiwChallengeScope } from './types';
 
 export type BuildSiwChallengeArgs = {
@@ -53,6 +54,7 @@ export function buildSiwChallenge(args: BuildSiwChallengeArgs): SiwAuthChallenge
     nonce,
     chainId: args.chainId,
     accountId: args.accountId,
+    subjectAccountId: buildCaip10AccountId(args.chainId, args.accountId),
     scope: args.scope,
     issuedAt,
     expiresAt,

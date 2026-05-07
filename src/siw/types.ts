@@ -1,5 +1,6 @@
 export type SiwChainId = string;
 export type SiwAccountId = string;
+export type SiwSubjectAccountId = string;
 export type SiwSessionId = string;
 export type SiwChallengeId = string;
 
@@ -13,6 +14,7 @@ export type SiwAuthChallenge = {
   nonce: string;
   chainId: SiwChainId;
   accountId: SiwAccountId;
+  subjectAccountId: SiwSubjectAccountId;
   scope: SiwChallengeScope;
   issuedAt: number;
   expiresAt: number;
@@ -42,6 +44,7 @@ export type GatewaySiwSession = {
   sessionId: SiwSessionId;
   chainId: SiwChainId;
   accountId: SiwAccountId;
+  subjectAccountId: SiwSubjectAccountId;
   challengeId: SiwChallengeId;
   nonce: string;
   scope: SiwChallengeScope;

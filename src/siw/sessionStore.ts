@@ -18,6 +18,7 @@ export function createSiwSession(
     sessionId: randomUUID(),
     chainId: challenge.chainId,
     accountId: challenge.accountId,
+    subjectAccountId: challenge.subjectAccountId,
     challengeId: challenge.challengeId,
     nonce: challenge.nonce,
     scope: challenge.scope,
