@@ -5,6 +5,9 @@ export type ConcordiumChainResolution = {
   displayName: 'Concordium Testnet' | 'Concordium Mainnet';
 };
 
+export type Caip10AccountId = string;
+
+
 export const CONCORDIUM_TESTNET_CHAIN_ID = 'ccd:4221332d34e1694168c2a0c0b3fd0f27';
 export const CONCORDIUM_MAINNET_CHAIN_ID = 'ccd:9dd9ca4d19e9393877d2c44b70f89acb';
 
@@ -39,3 +42,38 @@ export function isCanonicalConcordiumChainId(input: string): boolean {
   const v = String(input || '').trim();
   return v === CONCORDIUM_TESTNET_CHAIN_ID || v === CONCORDIUM_MAINNET_CHAIN_ID;
 }
+
+
+export function buildCaip10AccountId(chainId: string, accountId: string): Caip10AccountId {
+  const normalizedChainId = String(chainId || '').trim();
+  const normalizedAccountId = String(accountId || '').trim();
+
+  if (!normalizedChainId) {
+    throw new Error('chainId is required to build a CAIP-10 account identifier.');
+  }
+
+  if (!normalizedAccountId) {
+    throw new Error('accountId is required to build a CAIP-10 account identifier.');
+  }
+
+  return `${normalizedChainId}:${normalizedAccountId}`;
+}
+
+export function parseCaip10AccountId(value: string): { chainId: string; accountId: string } {
+  const v = String(value || '').trim();
+
+  if (!v) {
+    throw new Error('CAIP-10 account identifier is required.');
+  }
+
+  const lastColon = v.lastIndexOf(':');
+  if (lastColon <= 0 || lastColon >= v.length - 1) {
+    throw new Error(`Invalid CAIP-10 account identifier: "${v}"`);
+  }
+
+  return {
+    chainId: v.slice(0, lastColon),
+    accountId: v.slice(lastColon + 1),
+  };
+}
+
