@@ -2497,6 +2497,20 @@ app.post('/paid-gated/redeem', async (req, res) => {
     authorizationProof,
     policyEvidence: (body as any).policyEvidence ?? null,
   });
+  const verifierAudit = verifierResult.ok
+    ? {
+        ok: true,
+        type: verifierResult.verifierType,
+        subjectRef: verifierResult.subjectRef ?? null,
+        evidenceDigest: verifierResult.evidenceDigest ?? null,
+      }
+    : {
+        ok: false,
+        type: verifierResult.verifierType,
+        code: verifierResult.code,
+        reason: verifierResult.reason,
+      };
+
   const policyEvidence = verifierResult.ok ? verifierResult.policyEvidence : null;
 
   const persistPolicyFailedIfNeeded = (
@@ -2537,6 +2551,7 @@ app.post('/paid-gated/redeem', async (req, res) => {
       code: 'invalid_request',
       reason: 'invalid_request',
       message: 'Request body must include nonce.',
+      verifier: verifierAudit,
     });
   }
 
@@ -2553,6 +2568,7 @@ app.post('/paid-gated/redeem', async (req, res) => {
       reason: result.reason,
       message: result.message,
       policyStatus: 'POLICY_FAILED',
+      verifier: verifierAudit,
     });
   }
 
@@ -2569,6 +2585,7 @@ app.post('/paid-gated/redeem', async (req, res) => {
     region: result.region,
     minimumAge: result.minimumAge,
     actualAge: result.actualAge,
+    verifier: verifierAudit,
   });
 });
 
