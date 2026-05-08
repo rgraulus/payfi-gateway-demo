@@ -78,6 +78,11 @@
 // - Current implementation remains file-backed via FileContractResolver.
 
 import express from 'express';
+import {
+  type AuthorizationProofEnvelope,
+  type GatedPolicyEvidence,
+  verifyDemoPolicyAuthorization,
+} from './policyVerifier';
 import bodyParser from 'body-parser';
 import { randomUUID, createHash } from 'crypto';
 
@@ -2093,64 +2098,6 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   });
 }
 
-type GatedPolicyEvidence = {
-  nonce?: string;
-  policyKind?: string;
-  region?: string;
-  claims?: {
-    ageOver?: number;
-    ageAtLeast?: number;
-    [k: string]: unknown;
-  };
-  subjectRef?: string;
-  issuer?: string;
-  issuedAt?: string;
-  expiresAt?: string;
-  externalValidationRef?: string | null;
-  signature?: string | null;
-};
-
-type AuthorizationProofEnvelope = {
-  type?: string;
-  nonce?: string;
-  policyKind?: string;
-  subjectAccountId?: string;
-  subjectRef?: string;
-  issuer?: string;
-  claims?: {
-    region?: string;
-    ageOver?: number;
-    ageAtLeast?: number;
-    [k: string]: unknown;
-  };
-  issuedAt?: string;
-  expiresAt?: string;
-  externalValidationRef?: string | null;
-  signature?: string | null;
-};
-
-function normalizeAuthorizationProofToPolicyEvidence(
-  authorizationProof: AuthorizationProofEnvelope | null | undefined,
-): GatedPolicyEvidence | null {
-  if (!authorizationProof || typeof authorizationProof !== 'object') return null;
-
-  return {
-    nonce: authorizationProof.nonce,
-    policyKind: authorizationProof.policyKind ?? 'composite',
-    region:
-      typeof authorizationProof.claims?.region === 'string'
-        ? authorizationProof.claims.region
-        : undefined,
-    claims: authorizationProof.claims,
-    subjectRef: authorizationProof.subjectRef ?? authorizationProof.subjectAccountId,
-    issuer: authorizationProof.issuer,
-    issuedAt: authorizationProof.issuedAt,
-    expiresAt: authorizationProof.expiresAt,
-    externalValidationRef: authorizationProof.externalValidationRef,
-    signature: authorizationProof.signature,
-  };
-}
-
 function getPaidGatedContract(): ContractDefinition {
   return contractResolver.resolveByResource({
     method: 'GET',
@@ -2544,10 +2491,13 @@ app.get('/paid-gated', async (req, res) => handleX402(req, res, '/paid-gated'));
 app.post('/paid-gated/redeem', async (req, res) => {
   const body = req.body ?? {};
   const nonce = typeof body.nonce === 'string' ? body.nonce : '';
-  const authorizationProof = (body as any).authorizationProof ?? null;
-  const policyEvidence =
-    (body as any).policyEvidence ??
-    normalizeAuthorizationProofToPolicyEvidence(authorizationProof);
+  const authorizationProof = (body as any).authorizationProof as AuthorizationProofEnvelope | null;
+  const verifierResult = verifyDemoPolicyAuthorization({
+    nonce,
+    authorizationProof,
+    policyEvidence: (body as any).policyEvidence ?? null,
+  });
+  const policyEvidence = verifierResult.ok ? verifierResult.policyEvidence : null;
 
   const persistPolicyFailedIfNeeded = (
     reasonCode: string,
