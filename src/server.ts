@@ -1705,10 +1705,14 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         'Client-provided receipt verified successfully',
       );
 
-      persistPolicySatisfiedIfNeeded(
-        'policy_implicit_allow',
-        'Client receipt satisfied implicit allow policy',
-      );
+      // Non-gated resources may use payment verification as an implicit policy allow.
+      // Gated resources must have policy satisfied explicitly via /paid-gated/redeem.
+      if (resourcePathname !== '/paid-gated') {
+        persistPolicySatisfiedIfNeeded(
+          'policy_implicit_allow',
+          'Client receipt satisfied implicit allow policy',
+        );
+      }
 
       const clientPolicyGate = await requirePolicySatisfiedIfGated();
       if (!clientPolicyGate.ok) return;
@@ -1890,10 +1894,14 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       'Dev receipt verified successfully',
     );
 
-    persistPolicySatisfiedIfNeeded(
-      'policy_implicit_allow',
-      'Dev receipt satisfied implicit allow policy',
-    );
+    // Non-gated resources may use payment verification as an implicit policy allow.
+    // Gated resources must have policy satisfied explicitly via /paid-gated/redeem.
+    if (resourcePathname !== '/paid-gated') {
+      persistPolicySatisfiedIfNeeded(
+        'policy_implicit_allow',
+        'Dev receipt satisfied implicit allow policy',
+      );
+    }
 
     const devPolicyGate = await requirePolicySatisfiedIfGated();
     if (!devPolicyGate.ok) return;
@@ -2073,10 +2081,14 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     'Facilitator receipt verified successfully',
   );
 
-  persistPolicySatisfiedIfNeeded(
-    'policy_implicit_allow',
-    'Facilitator receipt satisfied implicit allow policy',
-  );
+  // Non-gated resources may use payment verification as an implicit policy allow.
+  // Gated resources must have policy satisfied explicitly via /paid-gated/redeem.
+  if (resourcePathname !== '/paid-gated') {
+    persistPolicySatisfiedIfNeeded(
+      'policy_implicit_allow',
+      'Facilitator receipt satisfied implicit allow policy',
+    );
+  }
 
   const realPolicyGate = await requirePolicySatisfiedIfGated();
   if (!realPolicyGate.ok) return;
