@@ -2110,6 +2110,47 @@ type GatedPolicyEvidence = {
   signature?: string | null;
 };
 
+type AuthorizationProofEnvelope = {
+  type?: string;
+  nonce?: string;
+  policyKind?: string;
+  subjectAccountId?: string;
+  subjectRef?: string;
+  issuer?: string;
+  claims?: {
+    region?: string;
+    ageOver?: number;
+    ageAtLeast?: number;
+    [k: string]: unknown;
+  };
+  issuedAt?: string;
+  expiresAt?: string;
+  externalValidationRef?: string | null;
+  signature?: string | null;
+};
+
+function normalizeAuthorizationProofToPolicyEvidence(
+  authorizationProof: AuthorizationProofEnvelope | null | undefined,
+): GatedPolicyEvidence | null {
+  if (!authorizationProof || typeof authorizationProof !== 'object') return null;
+
+  return {
+    nonce: authorizationProof.nonce,
+    policyKind: authorizationProof.policyKind ?? 'composite',
+    region:
+      typeof authorizationProof.claims?.region === 'string'
+        ? authorizationProof.claims.region
+        : undefined,
+    claims: authorizationProof.claims,
+    subjectRef: authorizationProof.subjectRef ?? authorizationProof.subjectAccountId,
+    issuer: authorizationProof.issuer,
+    issuedAt: authorizationProof.issuedAt,
+    expiresAt: authorizationProof.expiresAt,
+    externalValidationRef: authorizationProof.externalValidationRef,
+    signature: authorizationProof.signature,
+  };
+}
+
 function getPaidGatedContract(): ContractDefinition {
   return contractResolver.resolveByResource({
     method: 'GET',
@@ -2503,7 +2544,10 @@ app.get('/paid-gated', async (req, res) => handleX402(req, res, '/paid-gated'));
 app.post('/paid-gated/redeem', async (req, res) => {
   const body = req.body ?? {};
   const nonce = typeof body.nonce === 'string' ? body.nonce : '';
-  const policyEvidence = (body as any).policyEvidence ?? null;
+  const authorizationProof = (body as any).authorizationProof ?? null;
+  const policyEvidence =
+    (body as any).policyEvidence ??
+    normalizeAuthorizationProofToPolicyEvidence(authorizationProof);
 
   const persistPolicyFailedIfNeeded = (
     reasonCode: string,
