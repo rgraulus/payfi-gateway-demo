@@ -1474,6 +1474,48 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     });
   };
 
+  const getGatedAuthorizationReadiness = async (): Promise<
+    | {
+        ok: true;
+        status: 'POLICY_SATISFIED';
+        challengeId?: string;
+        releaseStatus?: string;
+      }
+    | {
+        ok: false;
+        reason: 'missing_canonical_challenge' | 'policy_not_satisfied';
+        status?: string;
+        challengeId?: string;
+        releaseStatus?: string;
+      }
+  > => {
+    const challenge = await getChallengeStatusByNonce(nonce);
+
+    if (!challenge.found) {
+      return {
+        ok: false,
+        reason: 'missing_canonical_challenge',
+      };
+    }
+
+    if (challenge.status !== 'POLICY_SATISFIED') {
+      return {
+        ok: false,
+        reason: 'policy_not_satisfied',
+        status: challenge.status,
+        challengeId: challenge.challengeId,
+        releaseStatus: challenge.releaseStatus,
+      };
+    }
+
+    return {
+      ok: true,
+      status: 'POLICY_SATISFIED',
+      challengeId: challenge.challengeId,
+      releaseStatus: challenge.releaseStatus,
+    };
+  };
+
   const requirePolicySatisfiedIfGated = async (): Promise<
     | { ok: true }
     | { ok: false; responseSent: true }
@@ -1482,27 +1524,34 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       return { ok: true };
     }
 
-    const challenge = await getChallengeStatusByNonce(nonce);
+    const readiness = await getGatedAuthorizationReadiness();
 
-    if (!challenge.found) {
+    if (!readiness.ok && readiness.reason === 'missing_canonical_challenge') {
       reply402({
         ok: false,
         paid: false,
         paymentRequired: paymentRequiredBody,
         error: 'Missing canonical challenge for gated route',
-        ...(x402Debug ? { debug: { reason: 'missing_canonical_challenge' } } : {}),
+        ...(x402Debug ? { debug: { reason: readiness.reason } } : {}),
       });
       return { ok: false, responseSent: true };
     }
 
-    if (challenge.status !== 'POLICY_SATISFIED') {
+    if (!readiness.ok) {
       reply402({
         ok: false,
         paid: false,
         paymentRequired: paymentRequiredBody,
         error: 'Policy requirements not yet satisfied',
         ...(x402Debug
-          ? { debug: { reason: 'policy_not_satisfied', challengeStatus: challenge.status } }
+          ? {
+              debug: {
+                reason: readiness.reason,
+                challengeStatus: readiness.status,
+                challengeId: readiness.challengeId,
+                releaseStatus: readiness.releaseStatus,
+              },
+            }
           : {}),
       });
       return { ok: false, responseSent: true };
