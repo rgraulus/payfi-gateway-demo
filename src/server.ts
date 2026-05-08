@@ -982,6 +982,26 @@ app.get('/readyz', async (_req, res) => {
 // Unified x402 handler (used by /paid and /x402/...)
 // -----------------------------------------------------------------------------
 
+function buildPolicyRequirements(contract: LoadedContractDefinition): Record<string, unknown> | null {
+  const c: any = contract;
+  if (c.policyRequired !== true) return null;
+
+  const policy = c.policy ?? null;
+
+  return {
+    required: true,
+    policyVersion: c.policyVersion ?? policy?.version ?? 'v1',
+    policyKind: policy?.kind ?? 'unknown',
+    rules: Array.isArray(policy?.rules) ? policy.rules : [],
+    acceptedProofTypes: [
+      'policy_evidence_v1',
+      'agent_attestation_v1',
+      'concordium_zkp_v1',
+    ],
+    ext: policy?.ext ?? {},
+  };
+}
+
 async function handleX402(req: express.Request, res: express.Response, resourcePathname: string) {
   // Resolve contract based on the underlying resource path (e.g. /premium or /paid/demo.pdf)
   let contract: LoadedContractDefinition;
@@ -1042,6 +1062,8 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     nonce = nonceValue;
     const chain = resolveConcordiumChain(contract.network);
 
+    const policyRequirements = buildPolicyRequirements(contract);
+
     paymentRequiredHeaderPayload = {
       ...buildPaymentRequiredPayload({
         contract,
@@ -1050,6 +1072,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         expiresAtSec: nowSec + ttlSec,
       }),
       chain_id: contract.chain_id,
+      ...(policyRequirements ? { policyRequirements } : {}),
     };
 
     paymentRequiredBody = {
