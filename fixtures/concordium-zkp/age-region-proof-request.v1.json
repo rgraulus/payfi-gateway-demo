@@ -1,0 +1,52 @@
+{
+  "proofRequestId": "age_min_by_region_v1",
+  "version": "v1",
+  "purpose": "Concordium ZKP proof request for age/region gated x402 access.",
+  "chain_id": "ccd:4221332d34e1694168c2a0c0b3fd0f27",
+  "policy": {
+    "kind": "age_min_by_region",
+    "thresholds": {
+      "EU": 18,
+      "US": 21
+    },
+    "regionSource": "credential_or_policy_input",
+    "defaultDecision": "deny"
+  },
+  "acceptedProofTypes": [
+    "concordium_zkp_v1",
+    "concordium_delegated_zkp_v1"
+  ],
+  "bindings": {
+    "nonce": true,
+    "merchantId": true,
+    "resource": true,
+    "contractId": true,
+    "amount": true,
+    "asset": true,
+    "payTo": true,
+    "expiresAt": true,
+    "chain_id": true
+  },
+  "x402ContextPlaceholder": {
+    "nonce": "demo-nonce-placeholder",
+    "merchantId": "demo-merchant",
+    "resource": {
+      "method": "GET",
+      "path": "/paid-gated"
+    },
+    "contractId": "cid_placeholder",
+    "amount": "0.050101",
+    "asset": {
+      "type": "PLT",
+      "tokenId": "EUDemo",
+      "decimals": 6
+    },
+    "payTo": "4jPLfUuSeFeP5SFLrf2eDeZEnT7ixbqXyQp9bg6qrgXyHReDfZ",
+    "expiresAt": 1778300325
+  },
+  "notes": [
+    "This is a Phase 3A draft fixture only.",
+    "The final Concordium proof request format must be aligned with the actual wallet/SDK proof-generation flow.",
+    "Do not treat this as a canonical Concordium SDK schema yet."
+  ]
+}
