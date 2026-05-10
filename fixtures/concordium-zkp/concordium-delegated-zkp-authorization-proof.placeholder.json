@@ -1,0 +1,48 @@
+{
+  "type": "concordium_delegated_zkp_v1",
+  "version": "v1",
+  "nonce": "demo-nonce-placeholder",
+  "chain_id": "ccd:4221332d34e1694168c2a0c0b3fd0f27",
+  "buyerProof": {
+    "subjectAccountId": "ccd:4221332d34e1694168c2a0c0b3fd0f27:<buyer-account-address>",
+    "proofRequestId": "age_min_by_region_v1",
+    "presentation": {
+      "format": "concordium_web3id_presentation",
+      "payload": {
+        "placeholder": true
+      }
+    }
+  },
+  "delegation": {
+    "issuerAccountId": "ccd:4221332d34e1694168c2a0c0b3fd0f27:<buyer-account-address>",
+    "delegateeAccountId": "ccd:4221332d34e1694168c2a0c0b3fd0f27:<agent-account-address>",
+    "scope": {
+      "merchantId": "demo-merchant",
+      "resource": {
+        "method": "GET",
+        "path": "/paid-gated"
+      },
+      "maxAmount": "0.050101",
+      "asset": {
+        "type": "PLT",
+        "tokenId": "EUDemo",
+        "decimals": 6
+      },
+      "payTo": "4jPLfUuSeFeP5SFLrf2eDeZEnT7ixbqXyQp9bg6qrgXyHReDfZ",
+      "expiresAt": 1778300325
+    },
+    "signature": "placeholder-buyer-delegation-signature"
+  },
+  "agentAttestation": {
+    "subjectAccountId": "ccd:4221332d34e1694168c2a0c0b3fd0f27:<agent-account-address>",
+    "challengeNonce": "demo-nonce-placeholder",
+    "signature": "placeholder-agent-nonce-signature"
+  },
+  "notes": [
+    "Phase 3A placeholder only.",
+    "Represents the intended delegated model.",
+    "Agent is the runtime proof generator / proof submitter.",
+    "Buyer remains the verified identity root / delegator.",
+    "The exact Concordium delegation primitive must be validated later, after Phase 3B establishes the direct Buyer-wallet proof baseline."
+  ]
+}
