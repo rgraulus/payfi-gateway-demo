@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Phase 3B Buyer Wallet Proof Harness</title>
+    <style>
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        margin: 2rem;
+        max-width: 1100px;
+        line-height: 1.45;
+      }
+
+      button {
+        margin: 0.25rem 0.5rem 0.25rem 0;
+        padding: 0.6rem 0.9rem;
+        cursor: pointer;
+      }
+
+      pre {
+        background: #f6f8fa;
+        border: 1px solid #d0d7de;
+        border-radius: 8px;
+        padding: 1rem;
+        overflow: auto;
+        white-space: pre-wrap;
+      }
+
+      .row {
+        margin: 1rem 0;
+      }
+
+      .muted {
+        color: #57606a;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Phase 3B Buyer Wallet Proof Harness</h1>
+
+    <p class="muted">
+      Isolated proof discovery harness. This page does not call the Gateway, CRP,
+      or policy verifier.
+    </p>
+
+    <div class="row">
+      <button id="detect">1. Detect Concordium Wallet</button>
+      <button id="connect">2. Connect Account</button>
+      <button id="proof">3. Request Presentation</button>
+      <button id="copy">Copy Output JSON</button>
+    </div>
+
+    <h2>State</h2>
+    <pre id="state">Not started.</pre>
+
+    <h2>Output</h2>
+    <pre id="output">No proof requested yet.</pre>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
