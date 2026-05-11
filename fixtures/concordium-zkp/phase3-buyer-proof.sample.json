@@ -1,0 +1,65 @@
+{
+  "type": "phase3_buyer_wallet_proof_sample",
+  "version": "v1",
+  "sanitized": true,
+  "doNotUseForVerification": true,
+  "rawProofCommitted": false,
+  "source": "Concordium Browser Wallet proof harness",
+  "captureContext": {
+    "harnessPath": "poc/phase3b-buyer-wallet-proof-harness",
+    "wallet": "Concordium Browser Wallet Chrome extension",
+    "network": "testnet",
+    "selectedChain": "4221332d34e1694168c2a0c0b3fd0f273809612cb13d000d5c2e00e85f50f796",
+    "selectedChainRedacted": false,
+    "account": "<redacted-buyer-account>",
+    "challenge": "<redacted-random-hex-challenge>",
+    "capturedAt": "<redacted-capture-timestamp>"
+  },
+  "requestedStatement": [
+    {
+      "idQualifier": {
+        "type": "cred",
+        "issuers": [0, 1, 2, 3, 4, 5]
+      },
+      "statement": [
+        {
+          "type": "AttributeInRange",
+          "attributeTag": "dob",
+          "lower": "18000101",
+          "upper": "<redacted-age-threshold-date>"
+        },
+        {
+          "type": "AttributeInSet",
+          "attributeTag": "countryOfResidence",
+          "set": ["AT", "BE", "BG", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE", "HR"]
+        }
+      ]
+    }
+  ],
+  "presentationShape": {
+    "presentationContext": "<redacted-random-hex-challenge>",
+    "proof": {
+      "created": "<redacted-proof-created-timestamp>",
+      "note": "Raw proof fields are intentionally omitted."
+    },
+    "note": "The real wallet response contains additional proof material. It must not be committed raw."
+  },
+  "mappingTowardAuthorizationProof": {
+    "authorizationProofType": "concordium_zkp_v1",
+    "nonce": "<x402-nonce-to-bind-in-later-integration>",
+    "chain_id": "ccd:4221332d34e1694168c2a0c0b3fd0f273809612cb13d000d5c2e00e85f50f796",
+    "subjectAccountId": "ccd:4221332d34e1694168c2a0c0b3fd0f273809612cb13d000d5c2e00e85f50f796:<redacted-buyer-account>",
+    "proofRequestId": "age_min_by_region_v1",
+    "presentation": {
+      "format": "concordium_verifiable_presentation",
+      "payload": "<redacted-wallet-presentation>"
+    }
+  },
+  "notes": [
+    "This fixture is a sanitized shape sample only.",
+    "It is not a valid cryptographic proof.",
+    "It must not be used for verification tests.",
+    "The raw wallet proof was not committed.",
+    "The broad issuer list [0, 1, 2, 3, 4, 5] is a discovery harness assumption, not a production trust policy."
+  ]
+}
