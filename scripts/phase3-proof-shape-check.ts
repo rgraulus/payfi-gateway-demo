@@ -4,8 +4,9 @@
  *
  * Safety-first skeleton for local Buyer Wallet proof verification work.
  *
- * This script does NOT perform live Concordium verification.
- * It does NOT call gRPC.
+ * By default, this script does NOT perform live Concordium verification.
+ * Live verification is attempted only when explicitly enabled with
+ * --live-verify or PHASE3_LIVE_VERIFY=true.
  * It does NOT print raw proof material.
  * It only checks that a local, uncommitted proof JSON file can be parsed
  * and classified into the expected artifact family.
@@ -31,6 +32,15 @@ Usage:
 Or:
   ts-node scripts/phase3-proof-shape-check.ts --proof /private/local/buyer-proof.raw.json
 
+Optional live verification attempt:
+  ts-node scripts/phase3-proof-shape-check.ts --proof /private/local/buyer-proof.raw.json --live-verify
+
+Live verification envs:
+  PHASE3_LIVE_VERIFY=true
+  PHASE3_GRPC_HOST=127.0.0.1
+  PHASE3_GRPC_PORT=20001
+  PHASE3_NETWORK=testnet
+
 Purpose:
   Parse and classify a local Buyer Wallet proof artifact without printing raw proof material.
 
@@ -38,7 +48,7 @@ Safety:
   - Raw wallet proof material must not be committed.
   - This script refuses the repo sanitized fixture.
   - This script prints safe shape metadata only.
-  - This script does not perform live gRPC verification.
+  - This script performs live gRPC verification only when explicitly enabled.
   - This script does not modify Gateway, CRP, or policy verifier behavior.
 `;
   console.error(msg.trim() + "\n");
@@ -85,6 +95,114 @@ function isRepoSanitizedFixture(absPath: string): boolean {
     rel === "fixtures/concordium-zkp/phase3-buyer-proof.sample.json" ||
     rel.endsWith("/fixtures/concordium-zkp/phase3-buyer-proof.sample.json")
   );
+}
+
+function envFlag(name: string): boolean {
+  const v = process.env[name];
+  if (!v) return false;
+  return ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
+}
+
+function shouldAttemptLiveVerify(args: Args): boolean {
+  return args["live-verify"] === true || envFlag("PHASE3_LIVE_VERIFY");
+}
+
+function getEnvInt(name: string, defaultValue: number): number {
+  const raw = process.env[name];
+  if (!raw || raw.trim() === "") return defaultValue;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) ? n : defaultValue;
+}
+
+function unwrapPresentationForVerification(json: unknown, family: ArtifactFamily): Record<string, unknown> | undefined {
+  const root = asRecord(json);
+  if (!root) return undefined;
+
+  if (family === "phase3_harness_capture_wrapper") {
+    return asRecord(root.presentation);
+  }
+
+  if (family === "verifiable_presentation") {
+    return root;
+  }
+
+  return undefined;
+}
+
+function safeError(err: unknown): string {
+  const msg = String((err as any)?.message ?? err);
+  return msg.length > 500 ? msg.slice(0, 500) + "..." : msg;
+}
+
+async function attemptLiveVerification(json: unknown, family: ArtifactFamily) {
+  const presentationJson = unwrapPresentationForVerification(json, family);
+
+  if (!presentationJson) {
+    return {
+      ok: false,
+      stage: "unsupported_artifact_family",
+      family,
+      reason: "Live verification currently supports current VerifiablePresentation artifacts only.",
+      rawProofPrinted: false,
+    };
+  }
+
+  const grpcHost = process.env.PHASE3_GRPC_HOST ?? "127.0.0.1";
+  const grpcPort = getEnvInt("PHASE3_GRPC_PORT", 20001);
+  const network = process.env.PHASE3_NETWORK ?? "testnet";
+
+  try {
+    const grpcMod: any = await import("@concordium/web-sdk/nodejs");
+    const sdkMod: any = await import("@concordium/web-sdk");
+    const web3IdMod: any = await import("@concordium/web-sdk/web3-id");
+    const wasmMod: any = await import("@concordium/web-sdk/wasm");
+
+    const grpc = new grpcMod.ConcordiumGRPCNodeClient(
+      grpcHost,
+      grpcPort,
+      grpcMod.credentials.createInsecure()
+    );
+
+    const presentation = sdkMod.VerifiablePresentation.fromString(
+      JSON.stringify(presentationJson)
+    );
+
+    const credentialMetadata = await web3IdMod.getPublicData(
+      grpc,
+      network,
+      presentation
+    );
+
+    const publicData = credentialMetadata.map((x: any) => x.inputs);
+    const cryptographicParameters = await grpc.getCryptographicParameters();
+
+    const verifiedRequest = wasmMod.verifyPresentation(
+      presentation,
+      cryptographicParameters,
+      publicData
+    );
+
+    return {
+      ok: true,
+      stage: "verified",
+      network,
+      grpcHost,
+      grpcPort,
+      credentialCount: credentialMetadata.length,
+      verifiedRequestKeys: safeKeys(verifiedRequest),
+      rawProofPrinted: false,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      stage: "verification_failed",
+      network,
+      grpcHost,
+      grpcPort,
+      reason: safeError(err),
+      rawProofPrinted: false,
+    };
+  }
 }
 
 function classifyArtifact(json: unknown): ArtifactFamily {
@@ -155,8 +273,9 @@ function buildSafeSummary(json: unknown, family: ArtifactFamily, proofPath: stri
       typeof inspected.presentationContext === "string",
     rawProofPrinted: false,
     liveVerificationAttempted: false,
+    liveVerification: null as unknown,
     nextStep:
-      "When Concordium Testnet/gRPC is healthy, extend a follow-up script to fetch public data and call verifyPresentation(...).",
+      "Run again with --live-verify or PHASE3_LIVE_VERIFY=true to fetch public data and call verifyPresentation(...).",
   };
 }
 
@@ -207,9 +326,19 @@ async function main() {
 
   const summary = buildSafeSummary(json, family, proofPath);
 
+  let liveVerificationFailed = false;
+
+  if (shouldAttemptLiveVerify(args)) {
+    summary.liveVerificationAttempted = true;
+    summary.liveVerification = await attemptLiveVerification(json, family);
+    liveVerificationFailed =
+      Boolean(asRecord(summary.liveVerification)) &&
+      asRecord(summary.liveVerification)?.ok !== true;
+  }
+
   process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
 
-  if (family === "unknown") {
+  if (family === "unknown" || liveVerificationFailed) {
     process.exit(1);
   }
 }
