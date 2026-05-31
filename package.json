@@ -17,7 +17,8 @@
     "ci:m4": "node scripts/ci_run_m4.mjs",
     "ci:m5-post": "node scripts/ci_run_m5_post.mjs",
     "phase3:proof-check": "ts-node scripts/phase3-proof-shape-check.ts",
-    "phase3:challenge-test": "ts-node scripts/phase3-zkp-challenge-selftest.ts"
+    "phase3:challenge-test": "ts-node scripts/phase3-zkp-challenge-selftest.ts",
+    "phase3:envelope-test": "ts-node scripts/phase3-authorization-envelope-selftest.ts"
   },
   "repository": {
     "type": "git",
