@@ -56,6 +56,7 @@ const directBuyerEnvelope = {
     placeholder: true,
     rawProofPrinted: false,
   },
+  walletChallenge: challengeHash,
   wallet: {
     network: 'testnet',
     selectedChain: 'ccd:testnet-genesis-hash-placeholder',
@@ -69,6 +70,10 @@ assert.equal(parsedDirect.ok, true);
 assert.equal(parsedDirect.type, 'xcf.concordium.authorization.direct-buyer.v1');
 assert.equal(parsedDirect.challengeHash, challengeHash);
 assert.equal(parsedDirect.expectedChallengeHash, challengeHash);
+if (parsedDirect.envelope.type !== 'xcf.concordium.authorization.direct-buyer.v1') {
+  throw new Error('expected direct Buyer envelope');
+}
+assert.equal(parsedDirect.envelope.walletChallenge, challengeHash);
 
 const delegatedEnvelope = {
   type: 'xcf.concordium.authorization.delegated-agent.v1',

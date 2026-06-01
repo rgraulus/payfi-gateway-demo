@@ -56,6 +56,7 @@ const directBuyerEnvelope = {
     placeholder: true,
     rawProofPrinted: false,
   },
+  walletChallenge: challengeHash,
   wallet: {
     network: 'testnet',
     selectedChain: 'ccd:testnet-genesis-hash-placeholder',
@@ -101,6 +102,9 @@ async function main() {
   assert.equal(parsedOnly.challengeHash, challengeHash);
   assert.equal(parsedOnly.expectedChallengeHash, challengeHash);
   assert.equal(parsedOnly.proofType, 'concordium.VerifiablePresentation');
+  assert.equal(parsedOnly.walletChallenge, challengeHash);
+  assert.equal(parsedOnly.verifiedChallenge, null);
+  assert.equal(parsedOnly.challengeBinding, 'not_checked');
   assert.equal(parsedOnly.delegatedAgentVerificationSupported, false);
   assert.equal(parsedOnly.agentRegistryLookupAttempted, false);
   assert.equal(parsedOnly.rawProofPrinted, false);
@@ -150,6 +154,8 @@ async function main() {
         directBuyerEnvelopeType: parsedOnly.envelopeType,
         delegatedStage: delegated.stage,
         unsupportedProofTypeStage: unsupportedProofType.stage,
+        walletChallengeBound: parsedOnly.walletChallenge === challengeHash,
+        challengeBinding: parsedOnly.challengeBinding,
         badHashRejected: !badHash.ok,
         missingPresentationRejected: !missingPresentation.ok,
         agentRegistryLookupAttempted: parsedOnly.agentRegistryLookupAttempted,
