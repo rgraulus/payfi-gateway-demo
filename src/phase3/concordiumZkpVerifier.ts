@@ -30,6 +30,9 @@ export type ConcordiumZkpVerifierResult = {
   grpcPort?: number;
   credentialCount?: number;
   verifiedRequestKeys?: string[];
+  walletChallenge?: string | null;
+  verifiedChallenge?: string | null;
+  challengeBinding?: 'walletChallenge' | 'challengeHash' | 'not_checked';
   delegatedAgentVerificationSupported: false;
   agentRegistryLookupAttempted: false;
   rawProofPrinted: false;
@@ -100,7 +103,10 @@ async function liveVerifyDirectBuyerEnvelope(
         ? verifiedRequestRecord.challenge
         : undefined;
 
-    if (verifiedChallenge !== undefined && verifiedChallenge !== envelope.challengeHash) {
+    const expectedWalletChallenge = envelope.walletChallenge ?? envelope.challengeHash;
+    const challengeBinding = envelope.walletChallenge ? 'walletChallenge' : 'challengeHash';
+
+    if (verifiedChallenge !== undefined && verifiedChallenge !== expectedWalletChallenge) {
       return {
         ok: false,
         stage: 'verification_failed',
@@ -113,10 +119,13 @@ async function liveVerifyDirectBuyerEnvelope(
         grpcPort,
         credentialCount: credentialMetadata.length,
         verifiedRequestKeys: safeKeys(verifiedRequest),
+        walletChallenge: envelope.walletChallenge ?? null,
+        verifiedChallenge: verifiedChallenge ?? null,
+        challengeBinding,
         delegatedAgentVerificationSupported: false,
         agentRegistryLookupAttempted: false,
         rawProofPrinted: false,
-        reason: 'verified request challenge does not match envelope challengeHash',
+        reason: 'verified request challenge does not match expected wallet challenge binding',
       };
     }
 
@@ -132,6 +141,9 @@ async function liveVerifyDirectBuyerEnvelope(
       grpcPort,
       credentialCount: credentialMetadata.length,
       verifiedRequestKeys: safeKeys(verifiedRequest),
+      walletChallenge: envelope.walletChallenge ?? null,
+      verifiedChallenge: verifiedChallenge ?? null,
+      challengeBinding,
       delegatedAgentVerificationSupported: false,
       agentRegistryLookupAttempted: false,
       rawProofPrinted: false,
@@ -147,6 +159,9 @@ async function liveVerifyDirectBuyerEnvelope(
       network,
       grpcHost,
       grpcPort,
+      walletChallenge: envelope.walletChallenge ?? null,
+      verifiedChallenge: null,
+      challengeBinding: envelope.walletChallenge ? 'walletChallenge' : 'challengeHash',
       delegatedAgentVerificationSupported: false,
       agentRegistryLookupAttempted: false,
       rawProofPrinted: false,
@@ -163,6 +178,9 @@ function parsedOnlyResult(envelope: DirectBuyerAuthorizationEnvelope): Concordiu
     challengeHash: envelope.challengeHash,
     expectedChallengeHash: envelope.challengeHash,
     proofType: envelope.proofType,
+    walletChallenge: envelope.walletChallenge ?? null,
+    verifiedChallenge: null,
+    challengeBinding: 'not_checked',
     delegatedAgentVerificationSupported: false,
     agentRegistryLookupAttempted: false,
     rawProofPrinted: false,

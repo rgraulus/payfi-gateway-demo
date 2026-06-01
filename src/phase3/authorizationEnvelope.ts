@@ -18,6 +18,7 @@ export type DirectBuyerAuthorizationEnvelope = {
   challengeHash: string;
   proofType: ConcordiumPresentationProofType;
   presentation: unknown;
+  walletChallenge?: string | null;
   wallet?: {
     network?: string | null;
     selectedChain?: string | null;
@@ -158,6 +159,7 @@ function parseDirectBuyerEnvelope(obj: Record<string, unknown>): DirectBuyerAuth
     challengeHash,
     proofType,
     presentation: obj.presentation,
+    walletChallenge: assertOptionalStringOrNull('walletChallenge', obj.walletChallenge) ?? null,
     wallet,
     submittedAt: assertOptionalStringOrNull('submittedAt', obj.submittedAt) ?? null,
   };

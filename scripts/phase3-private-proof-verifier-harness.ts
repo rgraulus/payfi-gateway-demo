@@ -177,6 +177,26 @@ function unwrapPresentation(json: unknown, family: PrivateProofFamily): Record<s
   return undefined;
 }
 
+function extractCapturedWalletChallenge(json: unknown, presentation: Record<string, unknown>): {
+  walletChallenge: string | null;
+  capturedWalletChallengePresent: boolean;
+  presentationContextPresent: boolean;
+  capturedWalletChallengeMatchesPresentationContext: boolean | null;
+} {
+  const root = asRecord(json) ?? {};
+  const captured = typeof root.challenge === 'string' ? root.challenge : null;
+  const presentationContext =
+    typeof presentation.presentationContext === 'string' ? presentation.presentationContext : null;
+
+  return {
+    walletChallenge: captured ?? presentationContext,
+    capturedWalletChallengePresent: captured !== null,
+    presentationContextPresent: presentationContext !== null,
+    capturedWalletChallengeMatchesPresentationContext:
+      captured !== null && presentationContext !== null ? captured === presentationContext : null,
+  };
+}
+
 function extractWalletMetadata(json: unknown): Record<string, string | null> {
   const root = asRecord(json) ?? {};
 
@@ -291,6 +311,7 @@ async function main() {
 
   const { challenge, challengeHash } = buildHarnessChallenge();
   const wallet = extractWalletMetadata(json);
+  const walletChallengeBinding = extractCapturedWalletChallenge(json, presentation);
   const liveVerificationAttempted = shouldLiveVerify(args);
 
   const envelope = {
@@ -299,6 +320,7 @@ async function main() {
     challengeHash,
     proofType: 'concordium.VerifiablePresentation',
     presentation,
+    walletChallenge: walletChallengeBinding.walletChallenge,
     wallet,
     submittedAt: new Date().toISOString(),
   };
@@ -323,6 +345,12 @@ async function main() {
         envelopeType: result.envelopeType,
         challengeHash: result.challengeHash,
         proofType: result.proofType,
+        capturedWalletChallengePresent: walletChallengeBinding.capturedWalletChallengePresent,
+        presentationContextPresent: walletChallengeBinding.presentationContextPresent,
+        capturedWalletChallengeMatchesPresentationContext:
+          walletChallengeBinding.capturedWalletChallengeMatchesPresentationContext,
+        walletChallengeBound: walletChallengeBinding.walletChallenge !== null,
+        challengeBinding: result.challengeBinding,
         credentialCount: result.credentialCount ?? null,
         verifiedRequestKeys: result.verifiedRequestKeys ?? [],
         liveVerificationAttempted,
