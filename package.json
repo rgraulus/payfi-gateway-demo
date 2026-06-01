@@ -20,7 +20,8 @@
     "phase3:challenge-test": "ts-node scripts/phase3-zkp-challenge-selftest.ts",
     "phase3:envelope-test": "ts-node scripts/phase3-authorization-envelope-selftest.ts",
     "phase3:verifier-test": "ts-node scripts/phase3-concordium-zkp-verifier-selftest.ts",
-    "phase3:private-proof-test": "ts-node scripts/phase3-private-proof-verifier-harness.ts"
+    "phase3:private-proof-test": "ts-node scripts/phase3-private-proof-verifier-harness.ts",
+    "phase3:policy-test": "ts-node scripts/phase3-policy-verifier-selftest.ts"
   },
   "repository": {
     "type": "git",
