@@ -63,6 +63,28 @@ function getGrpcPort(options: ConcordiumZkpVerifierOptions): number {
   return Number.isFinite(options.grpcPort) ? Number(options.grpcPort) : 20001;
 }
 
+export function resolveConcordiumWalletChallengeBinding(input: {
+  challengeHash: string;
+  walletChallenge?: string | null;
+  verifiedChallenge?: string | null;
+}): {
+  expectedChallenge: string;
+  challengeBinding: 'walletChallenge' | 'challengeHash';
+  matches: boolean | null;
+} {
+  const expectedChallenge = input.walletChallenge ?? input.challengeHash;
+  const challengeBinding = input.walletChallenge ? 'walletChallenge' : 'challengeHash';
+
+  return {
+    expectedChallenge,
+    challengeBinding,
+    matches:
+      input.verifiedChallenge === undefined || input.verifiedChallenge === null
+        ? null
+        : input.verifiedChallenge === expectedChallenge,
+  };
+}
+
 async function liveVerifyDirectBuyerEnvelope(
   envelope: DirectBuyerAuthorizationEnvelope,
   options: ConcordiumZkpVerifierOptions,
@@ -103,10 +125,13 @@ async function liveVerifyDirectBuyerEnvelope(
         ? verifiedRequestRecord.challenge
         : undefined;
 
-    const expectedWalletChallenge = envelope.walletChallenge ?? envelope.challengeHash;
-    const challengeBinding = envelope.walletChallenge ? 'walletChallenge' : 'challengeHash';
+    const binding = resolveConcordiumWalletChallengeBinding({
+      challengeHash: envelope.challengeHash,
+      walletChallenge: envelope.walletChallenge,
+      verifiedChallenge,
+    });
 
-    if (verifiedChallenge !== undefined && verifiedChallenge !== expectedWalletChallenge) {
+    if (binding.matches === false) {
       return {
         ok: false,
         stage: 'verification_failed',
@@ -121,7 +146,7 @@ async function liveVerifyDirectBuyerEnvelope(
         verifiedRequestKeys: safeKeys(verifiedRequest),
         walletChallenge: envelope.walletChallenge ?? null,
         verifiedChallenge: verifiedChallenge ?? null,
-        challengeBinding,
+        challengeBinding: binding.challengeBinding,
         delegatedAgentVerificationSupported: false,
         agentRegistryLookupAttempted: false,
         rawProofPrinted: false,
@@ -143,7 +168,7 @@ async function liveVerifyDirectBuyerEnvelope(
       verifiedRequestKeys: safeKeys(verifiedRequest),
       walletChallenge: envelope.walletChallenge ?? null,
       verifiedChallenge: verifiedChallenge ?? null,
-      challengeBinding,
+      challengeBinding: binding.challengeBinding,
       delegatedAgentVerificationSupported: false,
       agentRegistryLookupAttempted: false,
       rawProofPrinted: false,
