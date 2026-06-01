@@ -5,7 +5,10 @@ import {
   hashX402ZkpChallenge,
   type BuildX402ZkpChallengeInput,
 } from '../src/phase3/zkpChallenge';
-import { verifyConcordiumZkpAuthorizationEnvelope } from '../src/phase3/concordiumZkpVerifier';
+import {
+  resolveConcordiumWalletChallengeBinding,
+  verifyConcordiumZkpAuthorizationEnvelope,
+} from '../src/phase3/concordiumZkpVerifier';
 
 const baseInput: BuildX402ZkpChallengeInput = {
   merchantId: 'demo-merchant',
@@ -146,6 +149,78 @@ async function main() {
   assert.equal(missingPresentation.stage, 'verification_failed');
   assert.match(String(missingPresentation.reason), /presentation is required/);
 
+  const missingWalletChallenge = await verifyConcordiumZkpAuthorizationEnvelope({
+    ...directBuyerEnvelope,
+    walletChallenge: undefined,
+  });
+
+  assert.equal(missingWalletChallenge.ok, true);
+  assert.equal(missingWalletChallenge.stage, 'parsed');
+  assert.equal(missingWalletChallenge.walletChallenge, null);
+  assert.equal(missingWalletChallenge.verifiedChallenge, null);
+  assert.equal(missingWalletChallenge.challengeBinding, 'not_checked');
+  assert.equal(missingWalletChallenge.rawProofPrinted, false);
+
+  const nullWalletChallenge = await verifyConcordiumZkpAuthorizationEnvelope({
+    ...directBuyerEnvelope,
+    walletChallenge: null,
+  });
+
+  assert.equal(nullWalletChallenge.ok, true);
+  assert.equal(nullWalletChallenge.stage, 'parsed');
+  assert.equal(nullWalletChallenge.walletChallenge, null);
+  assert.equal(nullWalletChallenge.verifiedChallenge, null);
+  assert.equal(nullWalletChallenge.challengeBinding, 'not_checked');
+  assert.equal(nullWalletChallenge.rawProofPrinted, false);
+
+  const malformedWalletChallenge = await verifyConcordiumZkpAuthorizationEnvelope({
+    ...directBuyerEnvelope,
+    walletChallenge: 123,
+  });
+
+  assert.equal(malformedWalletChallenge.ok, false);
+  assert.equal(malformedWalletChallenge.stage, 'verification_failed');
+  assert.match(String(malformedWalletChallenge.reason), /walletChallenge must be a string or null/);
+  assert.equal(malformedWalletChallenge.rawProofPrinted, false);
+
+  const walletChallengeMatch = resolveConcordiumWalletChallengeBinding({
+    challengeHash,
+    walletChallenge: 'wallet-proof-challenge-001',
+    verifiedChallenge: 'wallet-proof-challenge-001',
+  });
+
+  assert.equal(walletChallengeMatch.expectedChallenge, 'wallet-proof-challenge-001');
+  assert.equal(walletChallengeMatch.challengeBinding, 'walletChallenge');
+  assert.equal(walletChallengeMatch.matches, true);
+
+  const walletChallengeMismatch = resolveConcordiumWalletChallengeBinding({
+    challengeHash,
+    walletChallenge: 'wallet-proof-challenge-001',
+    verifiedChallenge: 'wallet-proof-challenge-002',
+  });
+
+  assert.equal(walletChallengeMismatch.expectedChallenge, 'wallet-proof-challenge-001');
+  assert.equal(walletChallengeMismatch.challengeBinding, 'walletChallenge');
+  assert.equal(walletChallengeMismatch.matches, false);
+
+  const missingWalletChallengeFallbackMatch = resolveConcordiumWalletChallengeBinding({
+    challengeHash,
+    verifiedChallenge: challengeHash,
+  });
+
+  assert.equal(missingWalletChallengeFallbackMatch.expectedChallenge, challengeHash);
+  assert.equal(missingWalletChallengeFallbackMatch.challengeBinding, 'challengeHash');
+  assert.equal(missingWalletChallengeFallbackMatch.matches, true);
+
+  const missingVerifiedChallenge = resolveConcordiumWalletChallengeBinding({
+    challengeHash,
+    walletChallenge: 'wallet-proof-challenge-001',
+  });
+
+  assert.equal(missingVerifiedChallenge.expectedChallenge, 'wallet-proof-challenge-001');
+  assert.equal(missingVerifiedChallenge.challengeBinding, 'walletChallenge');
+  assert.equal(missingVerifiedChallenge.matches, null);
+
   console.log(
     JSON.stringify(
       {
@@ -158,6 +233,13 @@ async function main() {
         challengeBinding: parsedOnly.challengeBinding,
         badHashRejected: !badHash.ok,
         missingPresentationRejected: !missingPresentation.ok,
+        missingWalletChallengeFallbackOk: missingWalletChallenge.ok,
+        nullWalletChallengeAccepted: nullWalletChallenge.ok,
+        malformedWalletChallengeRejected: !malformedWalletChallenge.ok,
+        walletChallengeBindingMatch: walletChallengeMatch.matches,
+        walletChallengeBindingMismatchRejected: walletChallengeMismatch.matches === false,
+        missingWalletChallengeLiveFallbackBinding: missingWalletChallengeFallbackMatch.challengeBinding,
+        missingVerifiedChallengeBindingNotChecked: missingVerifiedChallenge.matches === null,
         agentRegistryLookupAttempted: parsedOnly.agentRegistryLookupAttempted,
         delegatedAgentVerificationSupported: parsedOnly.delegatedAgentVerificationSupported,
         rawProofPrinted: false,
