@@ -179,6 +179,12 @@ const concordiumGrpcTestnetPort = Number(process.env.CONCORDIUM_GRPC_TESTNET_POR
 const concordiumGrpcMainnetHost = process.env.CONCORDIUM_GRPC_MAINNET_HOST ?? '127.0.0.1';
 const concordiumGrpcMainnetPort = Number(process.env.CONCORDIUM_GRPC_MAINNET_PORT ?? 20000);
 
+// Phase 3 Gateway policy gate skeleton.
+// OFF by default. This prevents the existing /paid-gated demo path from becoming
+// active unless explicitly enabled for controlled Phase 3 testing.
+const phase3GatewayPolicyGateEnabled =
+  String(process.env.PHASE3_GATEWAY_POLICY_GATE_ENABLED ?? '').toLowerCase() === 'true';
+
 
 // Replay backend selection (Phase E)
 const replayBackend = String(process.env.X402_REPLAY_BACKEND ?? 'memory').toLowerCase(); // memory|redis
@@ -971,6 +977,9 @@ app.get('/healthz', async (_req, res) => {
       redisKeyPrefix: replayBackend === 'redis' ? replayRedisKeyPrefix : null,
       size: replaySize,
     },
+    phase3: {
+      gatewayPolicyGateEnabled: phase3GatewayPolicyGateEnabled,
+    },
   });
 });
 
@@ -1007,7 +1016,28 @@ function buildPolicyRequirements(contract: LoadedContractDefinition): Record<str
   };
 }
 
+function isPhase3GatewayPolicyGatePath(resourcePathname: string): boolean {
+  return resourcePathname === '/paid-gated';
+}
+
+function replyPhase3GatewayPolicyGateDisabled(res: express.Response) {
+  return res.status(404).json({
+    ok: false,
+    code: 'phase3_gateway_policy_gate_disabled',
+    reason: 'phase3_gateway_policy_gate_disabled',
+    message:
+      'Phase 3 Gateway policy gate is disabled. Set PHASE3_GATEWAY_POLICY_GATE_ENABLED=true to enable this experimental path.',
+    phase3: {
+      gatewayPolicyGateEnabled: false,
+    },
+  });
+}
+
 async function handleX402(req: express.Request, res: express.Response, resourcePathname: string) {
+  if (isPhase3GatewayPolicyGatePath(resourcePathname) && !phase3GatewayPolicyGateEnabled) {
+    return replyPhase3GatewayPolicyGateDisabled(res);
+  }
+
   // Resolve contract based on the underlying resource path (e.g. /premium or /paid/demo.pdf)
   let contract: LoadedContractDefinition;
   try {
@@ -2550,6 +2580,10 @@ app.get('/paid', async (req, res) => {
 app.get('/paid-gated', async (req, res) => handleX402(req, res, '/paid-gated'));
 
 app.post('/paid-gated/redeem', async (req, res) => {
+  if (!phase3GatewayPolicyGateEnabled) {
+    return replyPhase3GatewayPolicyGateDisabled(res);
+  }
+
   const body = req.body ?? {};
   const nonce = typeof body.nonce === 'string' ? body.nonce : '';
   const authorizationProof = (body as any).authorizationProof as AuthorizationProofEnvelope | null;
