@@ -21,7 +21,8 @@
     "phase3:envelope-test": "ts-node scripts/phase3-authorization-envelope-selftest.ts",
     "phase3:verifier-test": "ts-node scripts/phase3-concordium-zkp-verifier-selftest.ts",
     "phase3:private-proof-test": "ts-node scripts/phase3-private-proof-verifier-harness.ts",
-    "phase3:policy-test": "ts-node scripts/phase3-policy-verifier-selftest.ts"
+    "phase3:policy-test": "ts-node scripts/phase3-policy-verifier-selftest.ts",
+    "phase3:gateway-gate-test": "node scripts/ci_phase3_gateway_gate_disabled.mjs"
   },
   "repository": {
     "type": "git",
