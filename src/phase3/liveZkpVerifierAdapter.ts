@@ -6,6 +6,19 @@ import {
   type ConcordiumZkpVerifierResult,
 } from './concordiumZkpVerifier';
 
+export type LiveDirectBuyerProofFixtureContract = {
+  type: 'xcf.concordium.authorization.direct-buyer.v1';
+  proofType: 'concordium.VerifiablePresentation';
+  challengeHash: string;
+  presentation: Record<string, unknown> | string;
+  walletChallenge?: string | null;
+  wallet?: {
+    network?: string | null;
+    selectedChain?: string | null;
+    accountAddress?: string | null;
+  } | null;
+};
+
 function getStringField(value: unknown, key: string): string | undefined {
   const record = asRecord(value);
   return typeof record?.[key] === 'string' ? record[key] : undefined;
@@ -86,9 +99,13 @@ function liveVerificationFailedClosed(input: {
   };
 }
 
-function validateLiveVerifierBoundary(
+function isOptionalStringOrNull(value: unknown): boolean {
+  return value === undefined || value === null || typeof value === 'string';
+}
+
+export function validateLiveDirectBuyerProofFixtureContract(
   envelope: unknown,
-  options: ConcordiumZkpVerifierOptions,
+  options: ConcordiumZkpVerifierOptions = {},
 ): ConcordiumZkpVerifierResult | null {
   const record = asRecord(envelope);
 
@@ -98,6 +115,31 @@ function validateLiveVerifierBoundary(
       options,
       reason: 'live verifier input envelope must be an object',
       challengeBinding: 'not_checked',
+    });
+  }
+
+  if (record.type !== 'xcf.concordium.authorization.direct-buyer.v1') {
+    return liveVerificationFailedClosed({
+      envelope,
+      options,
+      reason: 'live verifier input type must be direct-buyer v1',
+      challengeBinding: 'not_checked',
+    });
+  }
+
+  if (record.proofType !== 'concordium.VerifiablePresentation') {
+    return liveVerificationFailedClosed({
+      envelope,
+      options,
+      reason: 'live verifier input proofType must be concordium.VerifiablePresentation',
+    });
+  }
+
+  if (typeof record.challengeHash !== 'string' || record.challengeHash.length === 0) {
+    return liveVerificationFailedClosed({
+      envelope,
+      options,
+      reason: 'live verifier input challengeHash must be a non-empty string',
     });
   }
 
@@ -117,6 +159,35 @@ function validateLiveVerifierBoundary(
     });
   }
 
+  if (!isOptionalStringOrNull(record.walletChallenge)) {
+    return liveVerificationFailedClosed({
+      envelope,
+      options,
+      reason: 'live verifier input walletChallenge must be a string or null',
+    });
+  }
+
+  if (record.wallet !== undefined && record.wallet !== null) {
+    const wallet = asRecord(record.wallet);
+    if (!wallet) {
+      return liveVerificationFailedClosed({
+        envelope,
+        options,
+        reason: 'live verifier input wallet must be an object or null',
+      });
+    }
+
+    for (const key of ['network', 'selectedChain', 'accountAddress']) {
+      if (!isOptionalStringOrNull(wallet[key])) {
+        return liveVerificationFailedClosed({
+          envelope,
+          options,
+          reason: `live verifier input wallet.${key} must be a string or null`,
+        });
+      }
+    }
+  }
+
   return null;
 }
 
@@ -128,7 +199,7 @@ export async function liveVerifyDirectBuyerEnvelope(
   const grpcPort = getGrpcPort(options);
   const network = options.network ?? 'testnet';
 
-  const boundaryFailure = validateLiveVerifierBoundary(envelope, options);
+  const boundaryFailure = validateLiveDirectBuyerProofFixtureContract(envelope, options);
   if (boundaryFailure) {
     return boundaryFailure;
   }
