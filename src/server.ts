@@ -87,6 +87,9 @@ import {
 import {
   verifyPhase3Policy,
 } from './phase3/policyVerifier';
+import {
+  validatePhase3DemoChallengeBinding,
+} from './phase3/demoChallengeBinding';
 import bodyParser from 'body-parser';
 import { randomUUID, createHash } from 'crypto';
 
@@ -2384,62 +2387,6 @@ function normalizePhase3DemoPresentationToPolicyEvidence(args: {
   };
 }
 
-function validatePhase3DemoChallengeBinding(args: {
-  nonce: string;
-  challenge: any;
-}): { ok: true } | { ok: false; code: string; message: string } {
-  const contract = getPaidGatedContract();
-
-  const checks: Array<[boolean, string, string]> = [
-    [
-      args.challenge?.nonce === args.nonce,
-      'policy_binding_mismatch',
-      'Authorization proof challenge nonce does not match request nonce.',
-    ],
-    [
-      args.challenge?.merchantId === contract.merchantId,
-      'policy_binding_mismatch',
-      'Authorization proof challenge merchantId does not match /paid-gated contract.',
-    ],
-    [
-      args.challenge?.resource?.method === 'GET' && args.challenge?.resource?.path === '/paid-gated',
-      'policy_binding_mismatch',
-      'Authorization proof challenge resource does not match /paid-gated.',
-    ],
-    [
-      args.challenge?.contract?.contractId === contract.contractId &&
-        args.challenge?.contract?.contractVersion === contract.contractVersion &&
-        args.challenge?.contract?.isFrozen === contract.isFrozen,
-      'policy_binding_mismatch',
-      'Authorization proof challenge contract snapshot does not match /paid-gated contract.',
-    ],
-    [
-      args.challenge?.network === contract.network &&
-        args.challenge?.chain_id === contract.chain_id,
-      'policy_binding_mismatch',
-      'Authorization proof challenge network does not match /paid-gated contract.',
-    ],
-    [
-      args.challenge?.asset?.type === contract.asset.type &&
-        args.challenge?.asset?.tokenId === contract.asset.tokenId &&
-        args.challenge?.asset?.decimals === contract.asset.decimals,
-      'policy_binding_mismatch',
-      'Authorization proof challenge asset does not match /paid-gated contract.',
-    ],
-    [
-      args.challenge?.amount === contract.amount &&
-        args.challenge?.payTo === contract.payTo,
-      'policy_binding_mismatch',
-      'Authorization proof challenge payment terms do not match /paid-gated contract.',
-    ],
-  ];
-
-  for (const [ok, code, message] of checks) {
-    if (!ok) return { ok: false, code, message };
-  }
-
-  return { ok: true };
-}
 
 // -----------------------------------------------------------------------------
 // Routes
@@ -2862,7 +2809,26 @@ app.post('/paid-gated/redeem', async (req, res) => {
     });
   }
 
-  const challengeBinding = validatePhase3DemoChallengeBinding({ nonce, challenge });
+  const paidGatedContract = getPaidGatedContract();
+  const challengeBinding = validatePhase3DemoChallengeBinding({
+    nonce,
+    challenge,
+    contract: {
+      merchantId: paidGatedContract.merchantId,
+      resource: {
+        method: 'GET',
+        path: '/paid-gated',
+      },
+      contractId: paidGatedContract.contractId,
+      contractVersion: paidGatedContract.contractVersion,
+      isFrozen: paidGatedContract.isFrozen,
+      network: paidGatedContract.network,
+      chain_id: paidGatedContract.chain_id,
+      asset: paidGatedContract.asset,
+      amount: paidGatedContract.amount,
+      payTo: paidGatedContract.payTo,
+    },
+  });
   if (!challengeBinding.ok) {
     persistPolicyFailedIfNeeded(challengeBinding.code, challengeBinding.message);
 
