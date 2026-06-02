@@ -112,6 +112,27 @@ async function main() {
   assert.equal(parsedOnly.agentRegistryLookupAttempted, false);
   assert.equal(parsedOnly.rawProofPrinted, false);
 
+  const liveUnavailable = await verifyConcordiumZkpAuthorizationEnvelope(directBuyerEnvelope, {
+    liveVerify: true,
+    grpcHost: '127.0.0.1',
+    grpcPort: 1,
+    network: 'testnet',
+  });
+
+  assert.equal(liveUnavailable.ok, false);
+  assert.equal(liveUnavailable.stage, 'verification_failed');
+  assert.equal(liveUnavailable.envelopeType, 'xcf.concordium.authorization.direct-buyer.v1');
+  assert.equal(liveUnavailable.proofType, 'concordium.VerifiablePresentation');
+  assert.equal(liveUnavailable.grpcHost, '127.0.0.1');
+  assert.equal(liveUnavailable.grpcPort, 1);
+  assert.equal(liveUnavailable.network, 'testnet');
+  assert.equal(liveUnavailable.walletChallenge, challengeHash);
+  assert.equal(liveUnavailable.verifiedChallenge, null);
+  assert.equal(liveUnavailable.challengeBinding, 'walletChallenge');
+  assert.equal(liveUnavailable.delegatedAgentVerificationSupported, false);
+  assert.equal(liveUnavailable.agentRegistryLookupAttempted, false);
+  assert.equal(liveUnavailable.rawProofPrinted, false);
+
   const unsupportedProofType = await verifyConcordiumZkpAuthorizationEnvelope({
     ...directBuyerEnvelope,
     proofType: 'concordium.VerifiablePresentationV1',
@@ -226,6 +247,8 @@ async function main() {
       {
         ok: true,
         parsedOnlyStage: parsedOnly.stage,
+        liveUnavailableStage: liveUnavailable.stage,
+        liveUnavailableFailsClosed: !liveUnavailable.ok,
         directBuyerEnvelopeType: parsedOnly.envelopeType,
         delegatedStage: delegated.stage,
         unsupportedProofTypeStage: unsupportedProofType.stage,
