@@ -2656,7 +2656,11 @@ app.post('/paid-gated/redeem', async (req, res) => {
 
   const verifierResult = authorizationProof
     ? await verifyConcordiumZkpAuthorizationEnvelope(authorizationProof, {
-        liveVerify: phase3RequireLiveZkp,
+        // Live ZKP verification is intentionally not invoked from this route yet.
+        // The route first parses the envelope, then verifyPhase3Policy() enforces
+        // PHASE3_REQUIRE_LIVE_ZKP by rejecting parsed-only proofs with
+        // verified_proof_required.
+        liveVerify: false,
         grpcHost: process.env.PHASE3_GRPC_HOST,
         grpcPort: process.env.PHASE3_GRPC_PORT ? Number(process.env.PHASE3_GRPC_PORT) : undefined,
         network: process.env.PHASE3_CONCORDIUM_NETWORK ?? 'testnet',

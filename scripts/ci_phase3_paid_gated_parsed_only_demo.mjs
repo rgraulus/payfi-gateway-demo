@@ -211,7 +211,7 @@ async function main() {
       HOST: "127.0.0.1",
       PHASE3_GATEWAY_POLICY_GATE_ENABLED: "true",
       PHASE3_ALLOW_PARSED_ONLY_POLICY: "false",
-      PHASE3_REQUIRE_LIVE_ZKP: "false",
+      PHASE3_REQUIRE_LIVE_ZKP: "true",
     };
 
     const strictChild = spawnGateway(strictEnv);
@@ -224,8 +224,10 @@ async function main() {
       const strictEnvelope = buildEnvelope(strictPr, { region: "EU", ageOver: 21 });
       const strictRedeem = await redeem(strictBase, strictPr, strictEnvelope);
 
-      assert.equal(strictRedeem.status, 403, `parsed-only disabled should fail: ${strictRedeem.text}`);
+      assert.equal(strictRedeem.status, 403, `live-required parsed-only should fail: ${strictRedeem.text}`);
       assert.equal(strictRedeem.json?.code, "verified_proof_required");
+      assert.equal(strictRedeem.json?.policyStatus, "POLICY_FAILED");
+      assert.equal(strictRedeem.headers.get("payment-response"), null, "live-required rejection must not emit PAYMENT-RESPONSE");
     } finally {
       strictChild.kill();
     }
@@ -234,7 +236,7 @@ async function main() {
       ok: true,
       parsedOnlyAllowedEu21: "POLICY_SATISFIED",
       parsedOnlyAllowedUs18: "age_requirement_not_met",
-      parsedOnlyDisabled: "verified_proof_required",
+      liveRequiredParsedOnlyRejected: "verified_proof_required",
       policyAloneDoesNotReleaseResource: true,
       rawProofPrinted: false,
     }, null, 2));
