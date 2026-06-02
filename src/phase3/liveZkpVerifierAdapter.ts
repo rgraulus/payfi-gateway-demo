@@ -6,6 +6,11 @@ import {
   type ConcordiumZkpVerifierResult,
 } from './concordiumZkpVerifier';
 
+function getStringField(value: unknown, key: string): string | undefined {
+  const record = asRecord(value);
+  return typeof record?.[key] === 'string' ? record[key] : undefined;
+}
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -48,6 +53,73 @@ function getGrpcPort(options: ConcordiumZkpVerifierOptions): number {
   return Number.isFinite(options.grpcPort) ? Number(options.grpcPort) : 20001;
 }
 
+function liveVerificationFailedClosed(input: {
+  envelope: unknown;
+  options: ConcordiumZkpVerifierOptions;
+  reason: string;
+  verifiedChallenge?: string | null;
+  challengeBinding?: 'walletChallenge' | 'challengeHash' | 'not_checked';
+}): ConcordiumZkpVerifierResult {
+  const grpcHost = input.options.grpcHost ?? '127.0.0.1';
+  const grpcPort = getGrpcPort(input.options);
+  const network = input.options.network ?? 'testnet';
+
+  return {
+    ok: false,
+    stage: 'verification_failed',
+    envelopeType: getStringField(input.envelope, 'type'),
+    challengeHash: getStringField(input.envelope, 'challengeHash'),
+    expectedChallengeHash: getStringField(input.envelope, 'challengeHash'),
+    proofType: getStringField(input.envelope, 'proofType'),
+    network,
+    grpcHost,
+    grpcPort,
+    walletChallenge: getStringField(input.envelope, 'walletChallenge') ?? null,
+    verifiedChallenge: input.verifiedChallenge ?? null,
+    challengeBinding:
+      input.challengeBinding ??
+      (getStringField(input.envelope, 'walletChallenge') ? 'walletChallenge' : 'challengeHash'),
+    delegatedAgentVerificationSupported: false,
+    agentRegistryLookupAttempted: false,
+    rawProofPrinted: false,
+    reason: input.reason,
+  };
+}
+
+function validateLiveVerifierBoundary(
+  envelope: unknown,
+  options: ConcordiumZkpVerifierOptions,
+): ConcordiumZkpVerifierResult | null {
+  const record = asRecord(envelope);
+
+  if (!record) {
+    return liveVerificationFailedClosed({
+      envelope,
+      options,
+      reason: 'live verifier input envelope must be an object',
+      challengeBinding: 'not_checked',
+    });
+  }
+
+  if (record.presentation === null || record.presentation === undefined) {
+    return liveVerificationFailedClosed({
+      envelope,
+      options,
+      reason: 'live verifier input presentation is required',
+    });
+  }
+
+  if (!asRecord(record.presentation) && typeof record.presentation !== 'string') {
+    return liveVerificationFailedClosed({
+      envelope,
+      options,
+      reason: 'live verifier input presentation must be an object or string',
+    });
+  }
+
+  return null;
+}
+
 export async function liveVerifyDirectBuyerEnvelope(
   envelope: DirectBuyerAuthorizationEnvelope,
   options: ConcordiumZkpVerifierOptions,
@@ -55,6 +127,11 @@ export async function liveVerifyDirectBuyerEnvelope(
   const grpcHost = options.grpcHost ?? '127.0.0.1';
   const grpcPort = getGrpcPort(options);
   const network = options.network ?? 'testnet';
+
+  const boundaryFailure = validateLiveVerifierBoundary(envelope, options);
+  if (boundaryFailure) {
+    return boundaryFailure;
+  }
 
   try {
     const grpcMod: any = await import('@concordium/web-sdk/nodejs');
@@ -137,23 +214,10 @@ export async function liveVerifyDirectBuyerEnvelope(
       rawProofPrinted: false,
     };
   } catch (err) {
-    return {
-      ok: false,
-      stage: 'verification_failed',
-      envelopeType: envelope.type,
-      challengeHash: envelope.challengeHash,
-      expectedChallengeHash: envelope.challengeHash,
-      proofType: envelope.proofType,
-      network,
-      grpcHost,
-      grpcPort,
-      walletChallenge: envelope.walletChallenge ?? null,
-      verifiedChallenge: null,
-      challengeBinding: envelope.walletChallenge ? 'walletChallenge' : 'challengeHash',
-      delegatedAgentVerificationSupported: false,
-      agentRegistryLookupAttempted: false,
-      rawProofPrinted: false,
+    return liveVerificationFailedClosed({
+      envelope,
+      options,
       reason: safeError(err),
-    };
+    });
   }
 }
