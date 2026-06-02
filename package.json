@@ -18,6 +18,7 @@
     "ci:m5-post": "node scripts/ci_run_m5_post.mjs",
     "phase3:proof-check": "ts-node scripts/phase3-proof-shape-check.ts",
     "phase3:challenge-test": "ts-node scripts/phase3-zkp-challenge-selftest.ts",
+    "phase3:binding-test": "ts-node scripts/phase3-demo-challenge-binding-selftest.ts",
     "phase3:envelope-test": "ts-node scripts/phase3-authorization-envelope-selftest.ts",
     "phase3:verifier-test": "ts-node scripts/phase3-concordium-zkp-verifier-selftest.ts",
     "phase3:private-proof-test": "ts-node scripts/phase3-private-proof-verifier-harness.ts",
