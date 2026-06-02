@@ -9,6 +9,7 @@ import {
   resolveConcordiumWalletChallengeBinding,
   verifyConcordiumZkpAuthorizationEnvelope,
 } from '../src/phase3/concordiumZkpVerifier';
+import { liveVerifyDirectBuyerEnvelope } from '../src/phase3/liveZkpVerifierAdapter';
 
 const baseInput: BuildX402ZkpChallengeInput = {
   merchantId: 'demo-merchant',
@@ -133,6 +134,52 @@ async function main() {
   assert.equal(liveUnavailable.agentRegistryLookupAttempted, false);
   assert.equal(liveUnavailable.rawProofPrinted, false);
 
+  const adapterNullEnvelope = await liveVerifyDirectBuyerEnvelope(null as any, {
+    liveVerify: true,
+    grpcHost: '127.0.0.1',
+    grpcPort: 1,
+    network: 'testnet',
+  });
+
+  assert.equal(adapterNullEnvelope.ok, false);
+  assert.equal(adapterNullEnvelope.stage, 'verification_failed');
+  assert.equal(adapterNullEnvelope.reason, 'live verifier input envelope must be an object');
+  assert.equal(adapterNullEnvelope.challengeBinding, 'not_checked');
+  assert.equal(adapterNullEnvelope.rawProofPrinted, false);
+
+  const adapterMissingPresentation = await liveVerifyDirectBuyerEnvelope({
+    ...directBuyerEnvelope,
+    presentation: undefined,
+  } as any, {
+    liveVerify: true,
+    grpcHost: '127.0.0.1',
+    grpcPort: 1,
+    network: 'testnet',
+  });
+
+  assert.equal(adapterMissingPresentation.ok, false);
+  assert.equal(adapterMissingPresentation.stage, 'verification_failed');
+  assert.equal(adapterMissingPresentation.reason, 'live verifier input presentation is required');
+  assert.equal(adapterMissingPresentation.envelopeType, 'xcf.concordium.authorization.direct-buyer.v1');
+  assert.equal(adapterMissingPresentation.proofType, 'concordium.VerifiablePresentation');
+  assert.equal(adapterMissingPresentation.walletChallenge, challengeHash);
+  assert.equal(adapterMissingPresentation.rawProofPrinted, false);
+
+  const adapterMalformedPresentation = await liveVerifyDirectBuyerEnvelope({
+    ...directBuyerEnvelope,
+    presentation: 123,
+  } as any, {
+    liveVerify: true,
+    grpcHost: '127.0.0.1',
+    grpcPort: 1,
+    network: 'testnet',
+  });
+
+  assert.equal(adapterMalformedPresentation.ok, false);
+  assert.equal(adapterMalformedPresentation.stage, 'verification_failed');
+  assert.equal(adapterMalformedPresentation.reason, 'live verifier input presentation must be an object or string');
+  assert.equal(adapterMalformedPresentation.rawProofPrinted, false);
+
   const unsupportedProofType = await verifyConcordiumZkpAuthorizationEnvelope({
     ...directBuyerEnvelope,
     proofType: 'concordium.VerifiablePresentationV1',
@@ -249,6 +296,9 @@ async function main() {
         parsedOnlyStage: parsedOnly.stage,
         liveUnavailableStage: liveUnavailable.stage,
         liveUnavailableFailsClosed: !liveUnavailable.ok,
+        adapterNullEnvelopeRejected: !adapterNullEnvelope.ok,
+        adapterMissingPresentationRejected: !adapterMissingPresentation.ok,
+        adapterMalformedPresentationRejected: !adapterMalformedPresentation.ok,
         directBuyerEnvelopeType: parsedOnly.envelopeType,
         delegatedStage: delegated.stage,
         unsupportedProofTypeStage: unsupportedProofType.stage,
