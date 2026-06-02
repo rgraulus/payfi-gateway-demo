@@ -79,10 +79,14 @@
 
 import express from 'express';
 import {
-  type AuthorizationProofEnvelope,
   type GatedPolicyEvidence,
-  verifyDemoPolicyAuthorization,
 } from './policyVerifier';
+import {
+  verifyConcordiumZkpAuthorizationEnvelope,
+} from './phase3/concordiumZkpVerifier';
+import {
+  verifyPhase3Policy,
+} from './phase3/policyVerifier';
 import bodyParser from 'body-parser';
 import { randomUUID, createHash } from 'crypto';
 
@@ -184,6 +188,23 @@ const concordiumGrpcMainnetPort = Number(process.env.CONCORDIUM_GRPC_MAINNET_POR
 // active unless explicitly enabled for controlled Phase 3 testing.
 const phase3GatewayPolicyGateEnabled =
   String(process.env.PHASE3_GATEWAY_POLICY_GATE_ENABLED ?? '').toLowerCase() === 'true';
+
+// PR #100 demo controls.
+// Both remain conservative by default:
+// - parsed-only policy satisfaction is NOT accepted unless explicitly enabled.
+// - live ZKP verification is NOT required until explicitly enabled by a later PR.
+const phase3AllowParsedOnlyPolicy =
+  String(process.env.PHASE3_ALLOW_PARSED_ONLY_POLICY ?? '').toLowerCase() === 'true';
+const phase3RequireLiveZkp =
+  String(process.env.PHASE3_REQUIRE_LIVE_ZKP ?? '').toLowerCase() === 'true';
+
+// PR #100 demo requirement, aligned with existing Phase 3 harness fixtures.
+// Do not treat this as production policy discovery; live policy derivation belongs in a later PR.
+const phase3DirectBuyerDemoRequirement = {
+  policyId: 'age-region-v1',
+  policyVersion: '1.0.0',
+  requirementsHash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+};
 
 
 // Replay backend selection (Phase E)
@@ -979,6 +1000,8 @@ app.get('/healthz', async (_req, res) => {
     },
     phase3: {
       gatewayPolicyGateEnabled: phase3GatewayPolicyGateEnabled,
+      allowParsedOnlyPolicy: phase3AllowParsedOnlyPolicy,
+      requireLiveZkp: phase3RequireLiveZkp,
     },
   });
 });
@@ -2189,7 +2212,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   });
 }
 
-function getPaidGatedContract(): ContractDefinition {
+function getPaidGatedContract(): LoadedContractDefinition {
   return contractResolver.resolveByResource({
     method: 'GET',
     pathname: '/paid-gated',
@@ -2320,6 +2343,102 @@ function evaluatePaidGatedPolicy(args: {
     minimumAge,
     actualAge,
   };
+}
+
+function normalizePhase3DemoPresentationToPolicyEvidence(args: {
+  nonce: string;
+  authorizationProof: any;
+}): GatedPolicyEvidence | null {
+  const presentation = args.authorizationProof?.presentation;
+  const claims =
+    presentation && typeof presentation === 'object' && !Array.isArray(presentation)
+      ? (presentation as any).claims
+      : null;
+
+  const region = typeof claims?.region === 'string' ? claims.region : undefined;
+  const ageOver = typeof claims?.ageOver === 'number' ? claims.ageOver : undefined;
+  const ageAtLeast = typeof claims?.ageAtLeast === 'number' ? claims.ageAtLeast : undefined;
+
+  if (!region || (ageOver === undefined && ageAtLeast === undefined)) {
+    return null;
+  }
+
+  return {
+    nonce: args.nonce,
+    policyKind: 'composite',
+    region,
+    claims: {
+      ...(ageOver !== undefined ? { ageOver } : {}),
+      ...(ageAtLeast !== undefined ? { ageAtLeast } : {}),
+    },
+    subjectRef:
+      typeof args.authorizationProof?.wallet?.accountAddress === 'string'
+        ? args.authorizationProof.wallet.accountAddress
+        : undefined,
+    issuer: 'phase3-direct-buyer-demo',
+    externalValidationRef:
+      typeof args.authorizationProof?.challengeHash === 'string'
+        ? args.authorizationProof.challengeHash
+        : null,
+    signature: null,
+  };
+}
+
+function validatePhase3DemoChallengeBinding(args: {
+  nonce: string;
+  challenge: any;
+}): { ok: true } | { ok: false; code: string; message: string } {
+  const contract = getPaidGatedContract();
+
+  const checks: Array<[boolean, string, string]> = [
+    [
+      args.challenge?.nonce === args.nonce,
+      'policy_binding_mismatch',
+      'Authorization proof challenge nonce does not match request nonce.',
+    ],
+    [
+      args.challenge?.merchantId === contract.merchantId,
+      'policy_binding_mismatch',
+      'Authorization proof challenge merchantId does not match /paid-gated contract.',
+    ],
+    [
+      args.challenge?.resource?.method === 'GET' && args.challenge?.resource?.path === '/paid-gated',
+      'policy_binding_mismatch',
+      'Authorization proof challenge resource does not match /paid-gated.',
+    ],
+    [
+      args.challenge?.contract?.contractId === contract.contractId &&
+        args.challenge?.contract?.contractVersion === contract.contractVersion &&
+        args.challenge?.contract?.isFrozen === contract.isFrozen,
+      'policy_binding_mismatch',
+      'Authorization proof challenge contract snapshot does not match /paid-gated contract.',
+    ],
+    [
+      args.challenge?.network === contract.network &&
+        args.challenge?.chain_id === contract.chain_id,
+      'policy_binding_mismatch',
+      'Authorization proof challenge network does not match /paid-gated contract.',
+    ],
+    [
+      args.challenge?.asset?.type === contract.asset.type &&
+        args.challenge?.asset?.tokenId === contract.asset.tokenId &&
+        args.challenge?.asset?.decimals === contract.asset.decimals,
+      'policy_binding_mismatch',
+      'Authorization proof challenge asset does not match /paid-gated contract.',
+    ],
+    [
+      args.challenge?.amount === contract.amount &&
+        args.challenge?.payTo === contract.payTo,
+      'policy_binding_mismatch',
+      'Authorization proof challenge payment terms do not match /paid-gated contract.',
+    ],
+  ];
+
+  for (const [ok, code, message] of checks) {
+    if (!ok) return { ok: false, code, message };
+  }
+
+  return { ok: true };
 }
 
 // -----------------------------------------------------------------------------
@@ -2586,27 +2705,37 @@ app.post('/paid-gated/redeem', async (req, res) => {
 
   const body = req.body ?? {};
   const nonce = typeof body.nonce === 'string' ? body.nonce : '';
-  const authorizationProof = (body as any).authorizationProof as AuthorizationProofEnvelope | null;
-  const verifierResult = verifyDemoPolicyAuthorization({
-    nonce,
-    authorizationProof,
-    policyEvidence: (body as any).policyEvidence ?? null,
-  });
-  const verifierAudit = verifierResult.ok
+  const authorizationProof = (body as any).authorizationProof ?? null;
+
+  const verifierResult = authorizationProof
+    ? await verifyConcordiumZkpAuthorizationEnvelope(authorizationProof, {
+        liveVerify: phase3RequireLiveZkp,
+        grpcHost: process.env.PHASE3_GRPC_HOST,
+        grpcPort: process.env.PHASE3_GRPC_PORT ? Number(process.env.PHASE3_GRPC_PORT) : undefined,
+        network: process.env.PHASE3_CONCORDIUM_NETWORK ?? 'testnet',
+      })
+    : null;
+
+  const verifierAudit = verifierResult
     ? {
-        ok: true,
-        type: verifierResult.verifierType,
-        subjectRef: verifierResult.subjectRef ?? null,
-        evidenceDigest: verifierResult.evidenceDigest ?? null,
+        ok: verifierResult.ok,
+        type: 'concordium_zkp_authorization_v1',
+        stage: verifierResult.stage,
+        envelopeType: verifierResult.envelopeType ?? null,
+        challengeHash: verifierResult.challengeHash ?? null,
+        proofType: verifierResult.proofType ?? null,
+        challengeBinding: verifierResult.challengeBinding ?? null,
+        rawProofPrinted: verifierResult.rawProofPrinted,
+        code: verifierResult.ok ? null : verifierResult.stage,
+        reason: verifierResult.reason ?? null,
       }
     : {
         ok: false,
-        type: verifierResult.verifierType,
-        code: verifierResult.code,
-        reason: verifierResult.reason,
+        type: 'concordium_zkp_authorization_v1',
+        code: 'missing_authorization_proof',
+        reason: 'missing_authorization_proof',
+        rawProofPrinted: false,
       };
-
-  const policyEvidence = verifierResult.ok ? verifierResult.policyEvidence : null;
 
   const persistPolicyFailedIfNeeded = (
     reasonCode: string,
@@ -2650,26 +2779,130 @@ app.post('/paid-gated/redeem', async (req, res) => {
     });
   }
 
-  const result = evaluatePaidGatedPolicy({ nonce, policyEvidence });
+  if (!authorizationProof) {
+    persistPolicyFailedIfNeeded(
+      'missing_authorization_proof',
+      'Authorization proof is required for this resource.',
+    );
 
-  if (!result.ok) {
-    persistPolicyFailedIfNeeded(result.code, result.message);
-
-    const status = result.code === 'policy_binding_mismatch' ? 409 : 403;
-    return res.status(status).json({
+    return res.status(403).json({
       ok: false,
       nonce,
-      code: result.code,
-      reason: result.reason,
-      message: result.message,
+      code: 'missing_authorization_proof',
+      reason: 'missing_authorization_proof',
+      message: 'Authorization proof is required for this resource.',
       policyStatus: 'POLICY_FAILED',
       verifier: verifierAudit,
     });
   }
 
+  if (!verifierResult) {
+    persistPolicyFailedIfNeeded(
+      'verifier_failed',
+      'Authorization proof verifier did not return a result.',
+    );
+
+    return res.status(403).json({
+      ok: false,
+      nonce,
+      code: 'verifier_failed',
+      reason: 'verifier_failed',
+      message: 'Authorization proof verifier did not return a result.',
+      policyStatus: 'POLICY_FAILED',
+      verifier: verifierAudit,
+    });
+  }
+
+  const challenge = (authorizationProof as any).challenge;
+
+  if (!challenge || typeof challenge !== 'object' || !(challenge as any).policy) {
+    persistPolicyFailedIfNeeded(
+      'invalid_authorization_challenge',
+      'Authorization proof must include a valid Phase 3 challenge.',
+    );
+
+    return res.status(403).json({
+      ok: false,
+      nonce,
+      code: 'invalid_authorization_challenge',
+      reason: 'invalid_authorization_challenge',
+      message: 'Authorization proof must include a valid Phase 3 challenge.',
+      policyStatus: 'POLICY_FAILED',
+      verifier: verifierAudit,
+    });
+  }
+
+  const policyDecision = verifyPhase3Policy({
+    challenge,
+    verifierResult,
+    requirement: {
+      ...phase3DirectBuyerDemoRequirement,
+      requireVerifiedProof: phase3RequireLiveZkp,
+      allowParsedOnly: phase3AllowParsedOnlyPolicy,
+    },
+    now: Math.floor(Date.now() / 1000),
+  });
+
+  if (!policyDecision.allowed) {
+    persistPolicyFailedIfNeeded(
+      policyDecision.code,
+      policyDecision.reason ?? policyDecision.code,
+    );
+
+    const status = policyDecision.code === 'policy_mismatch' ? 409 : 403;
+    return res.status(status).json({
+      ok: false,
+      nonce,
+      code: policyDecision.code,
+      reason: policyDecision.code,
+      message: policyDecision.reason ?? policyDecision.code,
+      policyStatus: 'POLICY_FAILED',
+      verifier: verifierAudit,
+      policyDecision,
+    });
+  }
+
+  const challengeBinding = validatePhase3DemoChallengeBinding({ nonce, challenge });
+  if (!challengeBinding.ok) {
+    persistPolicyFailedIfNeeded(challengeBinding.code, challengeBinding.message);
+
+    return res.status(409).json({
+      ok: false,
+      nonce,
+      code: challengeBinding.code,
+      reason: challengeBinding.code,
+      message: challengeBinding.message,
+      policyStatus: 'POLICY_FAILED',
+      verifier: verifierAudit,
+      policyDecision,
+    });
+  }
+
+  const policyEvidence = normalizePhase3DemoPresentationToPolicyEvidence({
+    nonce,
+    authorizationProof,
+  });
+  const gatedPolicyResult = evaluatePaidGatedPolicy({ nonce, policyEvidence });
+
+  if (!gatedPolicyResult.ok) {
+    persistPolicyFailedIfNeeded(gatedPolicyResult.code, gatedPolicyResult.message);
+
+    const status = gatedPolicyResult.code === 'policy_binding_mismatch' ? 409 : 403;
+    return res.status(status).json({
+      ok: false,
+      nonce,
+      code: gatedPolicyResult.code,
+      reason: gatedPolicyResult.reason,
+      message: gatedPolicyResult.message,
+      policyStatus: 'POLICY_FAILED',
+      verifier: verifierAudit,
+      policyDecision,
+    });
+  }
+
   persistPolicySatisfiedForRedeemIfNeeded(
     'policy_satisfied',
-    `Policy satisfied for region ${result.region} with age ${result.actualAge}.`,
+    `Phase 3 policy satisfied with verifier stage ${verifierResult.stage}; age/region policy satisfied for ${gatedPolicyResult.region}.`,
   );
 
   return res.status(200).json({
@@ -2677,10 +2910,11 @@ app.post('/paid-gated/redeem', async (req, res) => {
     nonce,
     access: 'policy-satisfied',
     policyStatus: 'POLICY_SATISFIED',
-    region: result.region,
-    minimumAge: result.minimumAge,
-    actualAge: result.actualAge,
+    region: gatedPolicyResult.region,
+    minimumAge: gatedPolicyResult.minimumAge,
+    actualAge: gatedPolicyResult.actualAge,
     verifier: verifierAudit,
+    policyDecision,
   });
 });
 
