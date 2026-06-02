@@ -9,7 +9,7 @@ import {
   resolveConcordiumWalletChallengeBinding,
   verifyConcordiumZkpAuthorizationEnvelope,
 } from '../src/phase3/concordiumZkpVerifier';
-import { liveVerifyDirectBuyerEnvelope } from '../src/phase3/liveZkpVerifierAdapter';
+import { liveVerifyDirectBuyerEnvelope, validateLiveDirectBuyerProofFixtureContract } from '../src/phase3/liveZkpVerifierAdapter';
 
 const baseInput: BuildX402ZkpChallengeInput = {
   merchantId: 'demo-merchant',
@@ -180,6 +180,75 @@ async function main() {
   assert.equal(adapterMalformedPresentation.reason, 'live verifier input presentation must be an object or string');
   assert.equal(adapterMalformedPresentation.rawProofPrinted, false);
 
+  const fixtureContractValid = validateLiveDirectBuyerProofFixtureContract(directBuyerEnvelope, {
+    liveVerify: true,
+    grpcHost: '127.0.0.1',
+    grpcPort: 1,
+    network: 'testnet',
+  });
+
+  assert.equal(fixtureContractValid, null);
+
+  const fixtureMissingType = validateLiveDirectBuyerProofFixtureContract({
+    ...directBuyerEnvelope,
+    type: undefined,
+  } as any, {
+    liveVerify: true,
+    grpcHost: '127.0.0.1',
+    grpcPort: 1,
+    network: 'testnet',
+  });
+
+  assert.equal(fixtureMissingType?.ok, false);
+  assert.equal(fixtureMissingType?.stage, 'verification_failed');
+  assert.equal(fixtureMissingType?.reason, 'live verifier input type must be direct-buyer v1');
+  assert.equal(fixtureMissingType?.rawProofPrinted, false);
+
+  const fixtureWrongProofType = validateLiveDirectBuyerProofFixtureContract({
+    ...directBuyerEnvelope,
+    proofType: 'concordium.VerifiablePresentationV1',
+  } as any, {
+    liveVerify: true,
+    grpcHost: '127.0.0.1',
+    grpcPort: 1,
+    network: 'testnet',
+  });
+
+  assert.equal(fixtureWrongProofType?.ok, false);
+  assert.equal(fixtureWrongProofType?.stage, 'verification_failed');
+  assert.equal(fixtureWrongProofType?.reason, 'live verifier input proofType must be concordium.VerifiablePresentation');
+  assert.equal(fixtureWrongProofType?.rawProofPrinted, false);
+
+  const fixtureMissingChallengeHash = validateLiveDirectBuyerProofFixtureContract({
+    ...directBuyerEnvelope,
+    challengeHash: '',
+  } as any, {
+    liveVerify: true,
+    grpcHost: '127.0.0.1',
+    grpcPort: 1,
+    network: 'testnet',
+  });
+
+  assert.equal(fixtureMissingChallengeHash?.ok, false);
+  assert.equal(fixtureMissingChallengeHash?.stage, 'verification_failed');
+  assert.equal(fixtureMissingChallengeHash?.reason, 'live verifier input challengeHash must be a non-empty string');
+  assert.equal(fixtureMissingChallengeHash?.rawProofPrinted, false);
+
+  const fixtureMalformedWallet = validateLiveDirectBuyerProofFixtureContract({
+    ...directBuyerEnvelope,
+    wallet: 123,
+  } as any, {
+    liveVerify: true,
+    grpcHost: '127.0.0.1',
+    grpcPort: 1,
+    network: 'testnet',
+  });
+
+  assert.equal(fixtureMalformedWallet?.ok, false);
+  assert.equal(fixtureMalformedWallet?.stage, 'verification_failed');
+  assert.equal(fixtureMalformedWallet?.reason, 'live verifier input wallet must be an object or null');
+  assert.equal(fixtureMalformedWallet?.rawProofPrinted, false);
+
   const unsupportedProofType = await verifyConcordiumZkpAuthorizationEnvelope({
     ...directBuyerEnvelope,
     proofType: 'concordium.VerifiablePresentationV1',
@@ -299,6 +368,11 @@ async function main() {
         adapterNullEnvelopeRejected: !adapterNullEnvelope.ok,
         adapterMissingPresentationRejected: !adapterMissingPresentation.ok,
         adapterMalformedPresentationRejected: !adapterMalformedPresentation.ok,
+        fixtureContractValid: fixtureContractValid === null,
+        fixtureMissingTypeRejected: !fixtureMissingType?.ok,
+        fixtureWrongProofTypeRejected: !fixtureWrongProofType?.ok,
+        fixtureMissingChallengeHashRejected: !fixtureMissingChallengeHash?.ok,
+        fixtureMalformedWalletRejected: !fixtureMalformedWallet?.ok,
         directBuyerEnvelopeType: parsedOnly.envelopeType,
         delegatedStage: delegated.stage,
         unsupportedProofTypeStage: unsupportedProofType.stage,
