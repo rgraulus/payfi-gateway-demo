@@ -81,6 +81,25 @@ const verifiedVerifierResult: ConcordiumZkpVerifierResult = {
   challengeBinding: 'walletChallenge',
 };
 
+const mockedLiveVerifiedVerifierResult: ConcordiumZkpVerifierResult = {
+  ...parsedVerifierResult,
+  stage: 'verified',
+  network: 'testnet',
+  grpcHost: '127.0.0.1',
+  grpcPort: 1,
+  credentialCount: 2,
+  verifiedRequestKeys: ['challenge', 'proofOk'],
+  walletChallenge: challengeHash,
+  verifiedChallenge: challengeHash,
+  challengeBinding: 'walletChallenge',
+};
+
+const mockedLiveVerifiedPolicyRequirement: Phase3PolicyRequirement = {
+  ...requirement,
+  requireVerifiedProof: true,
+  allowParsedOnly: false,
+};
+
 function main() {
   const parsedAllowed = verifyPhase3Policy({
     challenge,
@@ -109,6 +128,52 @@ function main() {
   assert.equal(verifiedRequiredAllowed.allowed, true);
   assert.equal(verifiedRequiredAllowed.code, 'policy_satisfied');
   assert.equal(verifiedRequiredAllowed.challengeBinding, 'walletChallenge');
+
+  const mockedLiveVerifiedPolicyAllowed = verifyPhase3Policy({
+    challenge,
+    verifierResult: mockedLiveVerifiedVerifierResult,
+    requirement: mockedLiveVerifiedPolicyRequirement,
+    now: challenge.issuedAt + 10,
+  });
+
+  assert.equal(mockedLiveVerifiedPolicyAllowed.ok, true);
+  assert.equal(mockedLiveVerifiedPolicyAllowed.allowed, true);
+  assert.equal(mockedLiveVerifiedPolicyAllowed.code, 'policy_satisfied');
+  assert.equal(mockedLiveVerifiedPolicyAllowed.verifierStage, 'verified');
+  assert.equal(mockedLiveVerifiedPolicyAllowed.challengeBinding, 'walletChallenge');
+  assert.equal(mockedLiveVerifiedPolicyAllowed.rawProofPrinted, false);
+
+  const mockedLiveVerifiedPolicyDeniedByAgeRegion = verifyPhase3Policy({
+    challenge,
+    verifierResult: {
+      ...mockedLiveVerifiedVerifierResult,
+      ok: false,
+      stage: 'verification_failed',
+      reason: 'age_requirement_not_met',
+    },
+    requirement: mockedLiveVerifiedPolicyRequirement,
+    now: challenge.issuedAt + 10,
+  });
+
+  assert.equal(mockedLiveVerifiedPolicyDeniedByAgeRegion.ok, false);
+  assert.equal(mockedLiveVerifiedPolicyDeniedByAgeRegion.allowed, false);
+  assert.equal(mockedLiveVerifiedPolicyDeniedByAgeRegion.code, 'verifier_failed');
+  assert.equal(mockedLiveVerifiedPolicyDeniedByAgeRegion.rawProofPrinted, false);
+
+  const mockedLiveVerifiedPolicyChallengeMismatch = verifyPhase3Policy({
+    challenge,
+    verifierResult: {
+      ...mockedLiveVerifiedVerifierResult,
+      verifiedChallenge: 'wrong-wallet-challenge',
+    },
+    requirement: mockedLiveVerifiedPolicyRequirement,
+    now: challenge.issuedAt + 10,
+  });
+
+  assert.equal(mockedLiveVerifiedPolicyChallengeMismatch.ok, false);
+  assert.equal(mockedLiveVerifiedPolicyChallengeMismatch.allowed, false);
+  assert.equal(mockedLiveVerifiedPolicyChallengeMismatch.code, 'wallet_challenge_mismatch');
+  assert.equal(mockedLiveVerifiedPolicyChallengeMismatch.rawProofPrinted, false);
 
   const parsedRejectedWhenLiveRequired = verifyPhase3Policy({
     challenge,
@@ -250,6 +315,9 @@ function main() {
         ok: true,
         parsedAllowed: parsedAllowed.allowed,
         verifiedRequiredAllowed: verifiedRequiredAllowed.allowed,
+        mockedLiveVerifiedPolicyAllowed: mockedLiveVerifiedPolicyAllowed.allowed,
+        mockedLiveVerifiedPolicyDeniedByAgeRegion: mockedLiveVerifiedPolicyDeniedByAgeRegion.code,
+        mockedLiveVerifiedPolicyChallengeMismatch: mockedLiveVerifiedPolicyChallengeMismatch.code,
         parsedRejectedWhenLiveRequired: parsedRejectedWhenLiveRequired.code,
         parsedRejectedByDefault: parsedRejectedByDefault.code,
         policyMismatchRejected: policyMismatch.code,
