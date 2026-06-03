@@ -19,6 +19,29 @@ export type LiveDirectBuyerProofFixtureContract = {
   } | null;
 };
 
+export type LiveZkpSdkInvocationDeps = {
+  createGrpcClient(input: {
+    grpcHost: string;
+    grpcPort: number;
+  }): unknown;
+  parsePresentation(input: {
+    presentation: unknown;
+  }): unknown;
+  getPublicData(input: {
+    grpc: unknown;
+    network: string;
+    presentation: unknown;
+  }): Promise<Array<{ inputs?: unknown }> | Array<Record<string, unknown>>>;
+  getCryptographicParameters(input: {
+    grpc: unknown;
+  }): Promise<unknown>;
+  verifyPresentation(input: {
+    presentation: unknown;
+    cryptographicParameters: unknown;
+    publicData: unknown[];
+  }): unknown;
+};
+
 function getStringField(value: unknown, key: string): string | undefined {
   const record = asRecord(value);
   return typeof record?.[key] === 'string' ? record[key] : undefined;
@@ -191,9 +214,63 @@ export function validateLiveDirectBuyerProofFixtureContract(
   return null;
 }
 
+async function loadDefaultLiveZkpSdkInvocationDeps(): Promise<LiveZkpSdkInvocationDeps> {
+  const grpcMod: any = await import('@concordium/web-sdk/nodejs');
+  const sdkMod: any = await import('@concordium/web-sdk');
+  const web3IdMod: any = await import('@concordium/web-sdk/web3-id');
+  const wasmMod: any = await import('@concordium/web-sdk/wasm');
+
+  return {
+    createGrpcClient(input) {
+      return new grpcMod.ConcordiumGRPCNodeClient(
+        input.grpcHost,
+        input.grpcPort,
+        grpcMod.credentials.createInsecure(),
+      );
+    },
+    parsePresentation(input) {
+      return sdkMod.VerifiablePresentation.fromString(JSON.stringify(input.presentation));
+    },
+    async getPublicData(input) {
+      return web3IdMod.getPublicData(input.grpc, input.network, input.presentation);
+    },
+    async getCryptographicParameters(input) {
+      const grpc = input.grpc as { getCryptographicParameters(): Promise<unknown> };
+      return grpc.getCryptographicParameters();
+    },
+    verifyPresentation(input) {
+      return wasmMod.verifyPresentation(
+        input.presentation,
+        input.cryptographicParameters,
+        input.publicData,
+      );
+    },
+  };
+}
+
+export async function liveVerifyDirectBuyerEnvelopeWithDeps(
+  envelope: DirectBuyerAuthorizationEnvelope,
+  options: ConcordiumZkpVerifierOptions,
+  deps: LiveZkpSdkInvocationDeps,
+): Promise<ConcordiumZkpVerifierResult> {
+  return liveVerifyDirectBuyerEnvelopeInternal(envelope, options, deps);
+}
+
 export async function liveVerifyDirectBuyerEnvelope(
   envelope: DirectBuyerAuthorizationEnvelope,
   options: ConcordiumZkpVerifierOptions,
+): Promise<ConcordiumZkpVerifierResult> {
+  return liveVerifyDirectBuyerEnvelopeInternal(
+    envelope,
+    options,
+    await loadDefaultLiveZkpSdkInvocationDeps(),
+  );
+}
+
+async function liveVerifyDirectBuyerEnvelopeInternal(
+  envelope: DirectBuyerAuthorizationEnvelope,
+  options: ConcordiumZkpVerifierOptions,
+  deps: LiveZkpSdkInvocationDeps,
 ): Promise<ConcordiumZkpVerifierResult> {
   const grpcHost = options.grpcHost ?? '127.0.0.1';
   const grpcPort = getGrpcPort(options);
@@ -205,30 +282,16 @@ export async function liveVerifyDirectBuyerEnvelope(
   }
 
   try {
-    const grpcMod: any = await import('@concordium/web-sdk/nodejs');
-    const sdkMod: any = await import('@concordium/web-sdk');
-    const web3IdMod: any = await import('@concordium/web-sdk/web3-id');
-    const wasmMod: any = await import('@concordium/web-sdk/wasm');
-
-    const grpc = new grpcMod.ConcordiumGRPCNodeClient(
-      grpcHost,
-      grpcPort,
-      grpcMod.credentials.createInsecure(),
-    );
-
-    const presentation = sdkMod.VerifiablePresentation.fromString(
-      JSON.stringify(envelope.presentation),
-    );
-
-    const credentialMetadata = await web3IdMod.getPublicData(grpc, network, presentation);
+    const grpc = deps.createGrpcClient({ grpcHost, grpcPort });
+    const presentation = deps.parsePresentation({ presentation: envelope.presentation });
+    const credentialMetadata = await deps.getPublicData({ grpc, network, presentation });
     const publicData = credentialMetadata.map((x: any) => x.inputs);
-    const cryptographicParameters = await grpc.getCryptographicParameters();
-
-    const verifiedRequest = wasmMod.verifyPresentation(
+    const cryptographicParameters = await deps.getCryptographicParameters({ grpc });
+    const verifiedRequest = deps.verifyPresentation({
       presentation,
       cryptographicParameters,
       publicData,
-    );
+    });
 
     const verifiedRequestRecord = asRecord(verifiedRequest);
     const verifiedChallenge =
