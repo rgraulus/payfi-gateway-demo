@@ -97,6 +97,57 @@ const delegatedEnvelope = {
   submittedAt: '2026-05-31T00:00:00.000Z',
 };
 
+function assertCommonVerifierResultContract(result: any): void {
+  assert.equal(typeof result.ok, 'boolean');
+  assert.equal(typeof result.stage, 'string');
+  assert.equal(result.delegatedAgentVerificationSupported, false);
+  assert.equal(result.agentRegistryLookupAttempted, false);
+  assert.equal(result.rawProofPrinted, false);
+}
+
+function assertParsedOnlyOutputContract(result: any): void {
+  assertCommonVerifierResultContract(result);
+  assert.equal(result.ok, true);
+  assert.equal(result.stage, 'parsed');
+  assert.equal(result.envelopeType, 'xcf.concordium.authorization.direct-buyer.v1');
+  assert.equal(result.challengeHash, challengeHash);
+  assert.equal(result.expectedChallengeHash, challengeHash);
+  assert.equal(result.proofType, 'concordium.VerifiablePresentation');
+  assert.equal(result.walletChallenge, challengeHash);
+  assert.equal(result.verifiedChallenge, null);
+  assert.equal(result.challengeBinding, 'not_checked');
+  assert.equal(result.credentialCount, undefined);
+  assert.equal(result.verifiedRequestKeys, undefined);
+  assert.equal(result.reason, undefined);
+}
+
+function assertLiveFailureOutputContract(result: any): void {
+  assertCommonVerifierResultContract(result);
+  assert.equal(result.ok, false);
+  assert.equal(result.stage, 'verification_failed');
+  assert.equal(result.envelopeType, 'xcf.concordium.authorization.direct-buyer.v1');
+  assert.equal(result.challengeHash, challengeHash);
+  assert.equal(result.expectedChallengeHash, challengeHash);
+  assert.equal(result.proofType, 'concordium.VerifiablePresentation');
+  assert.equal(result.network, 'testnet');
+  assert.equal(result.grpcHost, '127.0.0.1');
+  assert.equal(result.grpcPort, 1);
+  assert.equal(result.walletChallenge, challengeHash);
+  assert.equal(result.verifiedChallenge, null);
+  assert.equal(result.challengeBinding, 'walletChallenge');
+  assert.equal(typeof result.reason, 'string');
+  assert.ok(result.reason.length > 0);
+}
+
+function assertRejectedOutputContract(result: any, stage: string): void {
+  assertCommonVerifierResultContract(result);
+  assert.equal(result.ok, false);
+  assert.equal(result.stage, stage);
+  assert.equal(typeof result.reason, 'string');
+  assert.ok(result.reason.length > 0);
+}
+
+
 async function main() {
   const parsedOnly = await verifyConcordiumZkpAuthorizationEnvelope(directBuyerEnvelope);
 
@@ -112,6 +163,7 @@ async function main() {
   assert.equal(parsedOnly.delegatedAgentVerificationSupported, false);
   assert.equal(parsedOnly.agentRegistryLookupAttempted, false);
   assert.equal(parsedOnly.rawProofPrinted, false);
+  assertParsedOnlyOutputContract(parsedOnly);
 
   const liveUnavailable = await verifyConcordiumZkpAuthorizationEnvelope(directBuyerEnvelope, {
     liveVerify: true,
@@ -133,6 +185,7 @@ async function main() {
   assert.equal(liveUnavailable.delegatedAgentVerificationSupported, false);
   assert.equal(liveUnavailable.agentRegistryLookupAttempted, false);
   assert.equal(liveUnavailable.rawProofPrinted, false);
+  assertLiveFailureOutputContract(liveUnavailable);
 
   const adapterNullEnvelope = await liveVerifyDirectBuyerEnvelope(null as any, {
     liveVerify: true,
@@ -258,6 +311,7 @@ async function main() {
   assert.equal(unsupportedProofType.stage, 'unsupported_proof_type');
   assert.equal(unsupportedProofType.agentRegistryLookupAttempted, false);
   assert.equal(unsupportedProofType.rawProofPrinted, false);
+  assertRejectedOutputContract(unsupportedProofType, 'unsupported_proof_type');
 
   const delegated = await verifyConcordiumZkpAuthorizationEnvelope(delegatedEnvelope);
 
@@ -267,6 +321,7 @@ async function main() {
   assert.equal(delegated.delegatedAgentVerificationSupported, false);
   assert.equal(delegated.agentRegistryLookupAttempted, false);
   assert.equal(delegated.rawProofPrinted, false);
+  assertRejectedOutputContract(delegated, 'delegated_not_supported');
 
   const badHash = await verifyConcordiumZkpAuthorizationEnvelope({
     ...directBuyerEnvelope,
@@ -365,6 +420,11 @@ async function main() {
         parsedOnlyStage: parsedOnly.stage,
         liveUnavailableStage: liveUnavailable.stage,
         liveUnavailableFailsClosed: !liveUnavailable.ok,
+        parsedOnlyOutputContract: parsedOnly.ok && parsedOnly.stage === 'parsed',
+        liveFailureOutputContract: !liveUnavailable.ok && liveUnavailable.stage === 'verification_failed',
+        unsupportedProofTypeOutputContract:
+          !unsupportedProofType.ok && unsupportedProofType.stage === 'unsupported_proof_type',
+        delegatedOutputContract: !delegated.ok && delegated.stage === 'delegated_not_supported',
         adapterNullEnvelopeRejected: !adapterNullEnvelope.ok,
         adapterMissingPresentationRejected: !adapterMissingPresentation.ok,
         adapterMalformedPresentationRejected: !adapterMalformedPresentation.ok,
