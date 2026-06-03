@@ -9,7 +9,7 @@ import {
   resolveConcordiumWalletChallengeBinding,
   verifyConcordiumZkpAuthorizationEnvelope,
 } from '../src/phase3/concordiumZkpVerifier';
-import { liveVerifyDirectBuyerEnvelope, validateLiveDirectBuyerProofFixtureContract } from '../src/phase3/liveZkpVerifierAdapter';
+import { liveVerifyDirectBuyerEnvelope, liveVerifyDirectBuyerEnvelopeWithDeps, validateLiveDirectBuyerProofFixtureContract, type LiveZkpSdkInvocationDeps } from '../src/phase3/liveZkpVerifierAdapter';
 
 const baseInput: BuildX402ZkpChallengeInput = {
   merchantId: 'demo-merchant',
@@ -139,6 +139,50 @@ function assertLiveFailureOutputContract(result: any): void {
   assert.ok(result.reason.length > 0);
 }
 
+function assertLiveVerifiedOutputContract(result: any): void {
+  assertCommonVerifierResultContract(result);
+  assert.equal(result.ok, true);
+  assert.equal(result.stage, 'verified');
+  assert.equal(result.envelopeType, 'xcf.concordium.authorization.direct-buyer.v1');
+  assert.equal(result.challengeHash, challengeHash);
+  assert.equal(result.expectedChallengeHash, challengeHash);
+  assert.equal(result.proofType, 'concordium.VerifiablePresentation');
+  assert.equal(result.network, 'testnet');
+  assert.equal(result.grpcHost, '127.0.0.1');
+  assert.equal(result.grpcPort, 1);
+  assert.equal(result.credentialCount, 2);
+  assert.deepEqual(result.verifiedRequestKeys, ['challenge', 'proofOk']);
+  assert.equal(result.walletChallenge, challengeHash);
+  assert.equal(result.verifiedChallenge, challengeHash);
+  assert.equal(result.challengeBinding, 'walletChallenge');
+  assert.equal(result.reason, undefined);
+}
+
+function makeFakeLiveZkpDeps(verifiedChallenge: string, shouldThrow = false): LiveZkpSdkInvocationDeps {
+  return {
+    createGrpcClient() {
+      if (shouldThrow) throw new Error('fake sdk createGrpcClient failed');
+      return { fake: 'grpc' };
+    },
+    parsePresentation(input) {
+      return { parsedPresentation: input.presentation };
+    },
+    async getPublicData() {
+      return [{ inputs: { credential: 1 } }, { inputs: { credential: 2 } }];
+    },
+    async getCryptographicParameters() {
+      return { fake: 'params' };
+    },
+    verifyPresentation() {
+      return {
+        challenge: verifiedChallenge,
+        proofOk: true,
+      };
+    },
+  };
+}
+
+
 function assertRejectedOutputContract(result: any, stage: string): void {
   assertCommonVerifierResultContract(result);
   assert.equal(result.ok, false);
@@ -186,6 +230,59 @@ async function main() {
   assert.equal(liveUnavailable.agentRegistryLookupAttempted, false);
   assert.equal(liveUnavailable.rawProofPrinted, false);
   assertLiveFailureOutputContract(liveUnavailable);
+
+  const fakeLiveVerified = await liveVerifyDirectBuyerEnvelopeWithDeps(
+    directBuyerEnvelope as any,
+    {
+      liveVerify: true,
+      grpcHost: '127.0.0.1',
+      grpcPort: 1,
+      network: 'testnet',
+    },
+    makeFakeLiveZkpDeps(challengeHash),
+  );
+
+  assertLiveVerifiedOutputContract(fakeLiveVerified);
+
+  const fakeLiveChallengeMismatch = await liveVerifyDirectBuyerEnvelopeWithDeps(
+    directBuyerEnvelope as any,
+    {
+      liveVerify: true,
+      grpcHost: '127.0.0.1',
+      grpcPort: 1,
+      network: 'testnet',
+    },
+    makeFakeLiveZkpDeps('wrong-wallet-challenge'),
+  );
+
+  assert.equal(fakeLiveChallengeMismatch.ok, false);
+  assert.equal(fakeLiveChallengeMismatch.stage, 'verification_failed');
+  assert.equal(fakeLiveChallengeMismatch.credentialCount, 2);
+  assert.deepEqual(fakeLiveChallengeMismatch.verifiedRequestKeys, ['challenge', 'proofOk']);
+  assert.equal(fakeLiveChallengeMismatch.walletChallenge, challengeHash);
+  assert.equal(fakeLiveChallengeMismatch.verifiedChallenge, 'wrong-wallet-challenge');
+  assert.equal(fakeLiveChallengeMismatch.challengeBinding, 'walletChallenge');
+  assert.equal(
+    fakeLiveChallengeMismatch.reason,
+    'verified request challenge does not match expected wallet challenge binding',
+  );
+  assert.equal(fakeLiveChallengeMismatch.rawProofPrinted, false);
+
+  const fakeLiveSdkFailure = await liveVerifyDirectBuyerEnvelopeWithDeps(
+    directBuyerEnvelope as any,
+    {
+      liveVerify: true,
+      grpcHost: '127.0.0.1',
+      grpcPort: 1,
+      network: 'testnet',
+    },
+    makeFakeLiveZkpDeps(challengeHash, true),
+  );
+
+  assert.equal(fakeLiveSdkFailure.ok, false);
+  assert.equal(fakeLiveSdkFailure.stage, 'verification_failed');
+  assert.equal(fakeLiveSdkFailure.reason, 'fake sdk createGrpcClient failed');
+  assert.equal(fakeLiveSdkFailure.rawProofPrinted, false);
 
   const adapterNullEnvelope = await liveVerifyDirectBuyerEnvelope(null as any, {
     liveVerify: true,
@@ -422,6 +519,11 @@ async function main() {
         liveUnavailableFailsClosed: !liveUnavailable.ok,
         parsedOnlyOutputContract: parsedOnly.ok && parsedOnly.stage === 'parsed',
         liveFailureOutputContract: !liveUnavailable.ok && liveUnavailable.stage === 'verification_failed',
+        fakeLiveVerifiedOutputContract: fakeLiveVerified.ok && fakeLiveVerified.stage === 'verified',
+        fakeLiveChallengeMismatchRejected:
+          !fakeLiveChallengeMismatch.ok && fakeLiveChallengeMismatch.stage === 'verification_failed',
+        fakeLiveSdkFailureRejected:
+          !fakeLiveSdkFailure.ok && fakeLiveSdkFailure.stage === 'verification_failed',
         unsupportedProofTypeOutputContract:
           !unsupportedProofType.ok && unsupportedProofType.stage === 'unsupported_proof_type',
         delegatedOutputContract: !delegated.ok && delegated.stage === 'delegated_not_supported',
