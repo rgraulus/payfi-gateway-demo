@@ -19,6 +19,18 @@ function presentationKind(value: unknown): 'object' | 'string' | 'missing' | 'un
   return 'unsupported';
 }
 
+function accountBindingStatus(record: Record<string, unknown>, wallet: Record<string, unknown> | null) {
+  if (typeof wallet?.accountAddress === 'string' && wallet.accountAddress.length > 0) {
+    return 'present';
+  }
+
+  if (record.type === 'xcf.concordium.authorization.direct-buyer.v1' && wallet !== null) {
+    return 'wallet_api_missing';
+  }
+
+  return 'not_provided';
+}
+
 export function normalizeWalletProofCapture(input: unknown): unknown {
   const record = isRecord(input) ? input : {};
 
@@ -81,6 +93,7 @@ export function buildSafeMetadata(envelope: unknown, validation: ReturnType<type
     walletNetworkPresent: typeof wallet?.network === 'string' && wallet.network.length > 0,
     walletSelectedChainPresent: typeof wallet?.selectedChain === 'string' && wallet.selectedChain.length > 0,
     walletAccountAddressPresent: typeof wallet?.accountAddress === 'string' && wallet.accountAddress.length > 0,
+    accountBindingStatus: accountBindingStatus(record, wallet),
     validationStage: validation?.stage ?? 'accepted',
     validationReason: validation?.reason ?? null,
     rawProofPrinted: false,

@@ -83,6 +83,22 @@ const browserWalletCapture = {
   },
 };
 
+const browserWalletCaptureMissingAccount = {
+  ...browserWalletCapture,
+  account: null,
+  accountPresent: false,
+};
+
+const rawWalletCaptureMissingWallet = {
+  challengeHash: 'demo-wallet-challenge-hash',
+  proofType: 'concordium.VerifiablePresentation',
+  presentation: {
+    kind: 'placeholder-wallet-presentation',
+  },
+  walletChallenge: 'demo-wallet-challenge',
+  submittedAt: '2026-06-03T00:00:00.000Z',
+};
+
 const malformedCapture = {
   type: 'xcf.concordium.authorization.direct-buyer.v1',
   challengeHash: '',
@@ -111,6 +127,7 @@ function assertAccepted(
   name: string,
   input: unknown,
   expectedWalletChallenge = 'demo-wallet-challenge',
+  expectedAccountBindingStatus = 'present',
 ) {
   const { envelope, metadata, validation } = validateAndSummarize(input);
 
@@ -127,7 +144,8 @@ function assertAccepted(
   assert.equal(metadata.walletPresent, true);
   assert.equal(metadata.walletNetworkPresent, true);
   assert.equal(metadata.walletSelectedChainPresent, true);
-  assert.equal(metadata.walletAccountAddressPresent, true);
+  assert.equal(metadata.walletAccountAddressPresent, expectedAccountBindingStatus === 'present');
+  assert.equal(metadata.accountBindingStatus, expectedAccountBindingStatus);
 
   assert.equal(metadata.rawProofPrinted, false);
   assert.equal(metadata.persisted, false);
@@ -143,7 +161,30 @@ function main() {
   const normalizedMetadata = assertAccepted('already-normalized envelope', normalizedEnvelope);
   const wrapperMetadata = assertAccepted('authorizationProof wrapper', wrapperCapture);
   const rawMetadata = assertAccepted('raw wallet capture', rawWalletCapture);
-  const browserWalletMetadata = assertAccepted('browser wallet capture wrapper', browserWalletCapture, 'demo-wallet-challenge-hash');
+  const browserWalletMetadata = assertAccepted(
+    'browser wallet capture wrapper',
+    browserWalletCapture,
+    'demo-wallet-challenge-hash',
+  );
+  const browserWalletMissingAccountMetadata = assertAccepted(
+    'browser wallet capture wrapper missing account',
+    browserWalletCaptureMissingAccount,
+    'demo-wallet-challenge-hash',
+    'wallet_api_missing',
+  );
+
+  const rawMissingWallet = validateAndSummarize(rawWalletCaptureMissingWallet);
+  assert.equal(rawMissingWallet.validation, null);
+  assert.equal(rawMissingWallet.metadata.ok, true);
+  assert.equal(rawMissingWallet.metadata.walletPresent, false);
+  assert.equal(rawMissingWallet.metadata.walletAccountAddressPresent, false);
+  assert.equal(rawMissingWallet.metadata.accountBindingStatus, 'not_provided');
+  assert.equal(rawMissingWallet.metadata.rawProofPrinted, false);
+  assert.equal(rawMissingWallet.metadata.persisted, false);
+  assert.equal(rawMissingWallet.metadata.paymentReleaseAttempted, false);
+  assert.equal(rawMissingWallet.metadata.paymentResponseEmitted, false);
+  assert.equal(rawMissingWallet.metadata.crpCalled, false);
+  assert.equal(rawMissingWallet.metadata.replayTouched, false);
 
   const malformed = validateAndSummarize(malformedCapture);
 
@@ -166,6 +207,10 @@ function main() {
         rawWalletCaptureAccepted: rawMetadata.ok,
         browserWalletCaptureAccepted: browserWalletMetadata.ok,
         browserWalletAccountAddressPresent: browserWalletMetadata.walletAccountAddressPresent,
+        browserWalletAccountBindingStatus: browserWalletMetadata.accountBindingStatus,
+        browserWalletMissingAccountAccepted: browserWalletMissingAccountMetadata.ok,
+        browserWalletMissingAccountBindingStatus: browserWalletMissingAccountMetadata.accountBindingStatus,
+        rawMissingWalletBindingStatus: rawMissingWallet.metadata.accountBindingStatus,
         malformedCaptureRejected: malformed.validation?.stage,
         malformedReason: malformed.metadata.validationReason,
         rawProofPrinted: false,
