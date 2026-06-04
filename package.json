@@ -25,7 +25,8 @@
     "phase3:policy-test": "ts-node scripts/phase3-policy-verifier-selftest.ts",
     "phase3:gateway-gate-test": "node scripts/ci_phase3_gateway_gate_disabled.mjs",
     "phase3:paid-gated-demo-test": "node scripts/ci_phase3_paid_gated_parsed_only_demo.mjs",
-    "phase3:wallet-proof-capture": "ts-node scripts/phase3-wallet-proof-capture-harness.ts"
+    "phase3:wallet-proof-capture": "ts-node scripts/phase3-wallet-proof-capture-harness.ts",
+    "phase3:wallet-proof-normalization-test": "ts-node scripts/phase3-wallet-proof-capture-normalization-selftest.ts"
   },
   "repository": {
     "type": "git",
