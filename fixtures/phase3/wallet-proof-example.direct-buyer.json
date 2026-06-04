@@ -1,0 +1,23 @@
+{
+  "type": "xcf.concordium.authorization.direct-buyer.v1",
+  "challengeHash": "demo-wallet-challenge-hash",
+  "proofType": "concordium.VerifiablePresentation",
+  "presentation": {
+    "kind": "sanitized-example-wallet-presentation",
+    "note": "This is not real wallet proof material.",
+    "credentialStatements": [
+      {
+        "statement": "age_min_by_region",
+        "region": "EU",
+        "minAge": 18
+      }
+    ]
+  },
+  "walletChallenge": "demo-wallet-challenge",
+  "wallet": {
+    "network": "testnet",
+    "selectedChain": "concordium:testnet",
+    "accountAddress": "4SanitizedExampleAccountAddressNotReal"
+  },
+  "submittedAt": "2026-06-03T00:00:00.000Z"
+}
