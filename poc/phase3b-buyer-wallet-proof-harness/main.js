@@ -48,7 +48,14 @@ async function connectAccount() {
   }
 
   const accounts = await provider.requestAccounts();
-  account = await provider.getMostRecentlySelectedAccount();
+  const mostRecent = await provider.getMostRecentlySelectedAccount();
+
+  account =
+    typeof mostRecent === 'string'
+      ? mostRecent
+      : Array.isArray(accounts) && typeof accounts[0] === 'string'
+        ? accounts[0]
+        : null;
 
   setState({
     ok: true,

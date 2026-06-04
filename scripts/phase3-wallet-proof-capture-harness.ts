@@ -33,6 +33,24 @@ export function normalizeWalletProofCapture(input: unknown): unknown {
     return authorizationProof;
   }
 
+  // Accept the existing browser wallet discovery harness output directly.
+  if (record.type === 'phase3b_browser_wallet_presentation_capture') {
+    return {
+      type: 'xcf.concordium.authorization.direct-buyer.v1',
+      challenge: record.challenge,
+      challengeHash: record.challenge,
+      proofType: 'concordium.VerifiablePresentation',
+      presentation: record.presentation,
+      walletChallenge: record.challenge,
+      wallet: {
+        network: 'testnet',
+        selectedChain: record.selectedChain ?? null,
+        accountAddress: record.account ?? null,
+      },
+      submittedAt: record.capturedAt ?? null,
+    };
+  }
+
   // Accept a raw wallet capture with the core fields at top level.
   return {
     type: 'xcf.concordium.authorization.direct-buyer.v1',

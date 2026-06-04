@@ -57,6 +57,32 @@ const rawWalletCapture = {
   submittedAt: '2026-06-03T00:00:00.000Z',
 };
 
+const browserWalletCapture = {
+  type: 'phase3b_browser_wallet_presentation_capture',
+  capturedAt: '2026-06-03T00:00:00.000Z',
+  warning: 'Sanitized browser wallet capture fixture. Not real proof material.',
+  account: '4FakeAccountAddressFromBrowserHarnessOnly',
+  selectedChain: 'concordium:testnet',
+  challenge: 'demo-wallet-challenge-hash',
+  statements: [
+    {
+      type: 'AttributeInRange',
+      attributeTag: 'dob',
+      lower: '19000101',
+      upper: '20080603',
+    },
+  ],
+  presentation: {
+    presentationContext: 'demo-wallet-challenge-hash',
+    type: ['VerifiablePresentation', 'ConcordiumVerifiablePresentationV1'],
+    verifiableCredential: [],
+    proof: {
+      type: 'ConcordiumWeb3IdProof',
+      proofValue: 'sanitized-placeholder-proof-value',
+    },
+  },
+};
+
 const malformedCapture = {
   type: 'xcf.concordium.authorization.direct-buyer.v1',
   challengeHash: '',
@@ -81,14 +107,18 @@ function validateAndSummarize(input: unknown) {
   };
 }
 
-function assertAccepted(name: string, input: unknown) {
+function assertAccepted(
+  name: string,
+  input: unknown,
+  expectedWalletChallenge = 'demo-wallet-challenge',
+) {
   const { envelope, metadata, validation } = validateAndSummarize(input);
 
   assert.equal(validation, null, `${name}: expected validation to pass`);
   assert.equal(envelope.type, 'xcf.concordium.authorization.direct-buyer.v1');
   assert.equal(envelope.proofType, 'concordium.VerifiablePresentation');
   assert.equal(envelope.challengeHash, 'demo-wallet-challenge-hash');
-  assert.equal(envelope.walletChallenge, 'demo-wallet-challenge');
+  assert.equal(envelope.walletChallenge, expectedWalletChallenge);
 
   assert.equal(metadata.ok, true);
   assert.equal(metadata.normalized, true);
@@ -113,6 +143,7 @@ function main() {
   const normalizedMetadata = assertAccepted('already-normalized envelope', normalizedEnvelope);
   const wrapperMetadata = assertAccepted('authorizationProof wrapper', wrapperCapture);
   const rawMetadata = assertAccepted('raw wallet capture', rawWalletCapture);
+  const browserWalletMetadata = assertAccepted('browser wallet capture wrapper', browserWalletCapture, 'demo-wallet-challenge-hash');
 
   const malformed = validateAndSummarize(malformedCapture);
 
@@ -133,6 +164,8 @@ function main() {
         normalizedEnvelopeAccepted: normalizedMetadata.ok,
         wrapperCaptureAccepted: wrapperMetadata.ok,
         rawWalletCaptureAccepted: rawMetadata.ok,
+        browserWalletCaptureAccepted: browserWalletMetadata.ok,
+        browserWalletAccountAddressPresent: browserWalletMetadata.walletAccountAddressPresent,
         malformedCaptureRejected: malformed.validation?.stage,
         malformedReason: malformed.metadata.validationReason,
         rawProofPrinted: false,
