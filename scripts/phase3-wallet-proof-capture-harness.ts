@@ -19,7 +19,7 @@ function presentationKind(value: unknown): 'object' | 'string' | 'missing' | 'un
   return 'unsupported';
 }
 
-function normalizeWalletProofCapture(input: unknown): unknown {
+export function normalizeWalletProofCapture(input: unknown): unknown {
   const record = isRecord(input) ? input : {};
 
   // Prefer an already-normalized Direct Buyer authorization envelope.
@@ -46,7 +46,7 @@ function normalizeWalletProofCapture(input: unknown): unknown {
   };
 }
 
-function buildSafeMetadata(envelope: unknown, validation: ReturnType<typeof validateLiveDirectBuyerProofFixtureContract>) {
+export function buildSafeMetadata(envelope: unknown, validation: ReturnType<typeof validateLiveDirectBuyerProofFixtureContract>) {
   const record = isRecord(envelope) ? envelope : {};
   const wallet = isRecord(record.wallet) ? record.wallet : null;
 
@@ -163,4 +163,6 @@ function main() {
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}
