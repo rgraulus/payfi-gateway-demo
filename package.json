@@ -31,7 +31,8 @@
     "phase3:model-a-eligibility-test": "ts-node scripts/phase3-model-a-eligibility-selftest.ts",
     "phase3:model-a-binding-test": "ts-node scripts/phase3-model-a-eligibility-binding-selftest.ts",
     "phase3:model-a-release-composition-test": "ts-node scripts/phase3-model-a-release-composition-selftest.ts",
-    "phase3:gateway-unpaid-eligible-denial-test": "node scripts/ci_phase3_gateway_unpaid_eligible_denial.mjs"
+    "phase3:gateway-unpaid-eligible-denial-test": "node scripts/ci_phase3_gateway_unpaid_eligible_denial.mjs",
+    "phase3:gateway-positive-composition-test": "ts-node --transpile-only scripts/ci_phase3_gateway_positive_composition_decision.ts"
   },
   "repository": {
     "type": "git",
