@@ -28,7 +28,8 @@
     "phase3:wallet-proof-capture": "ts-node scripts/phase3-wallet-proof-capture-harness.ts",
     "phase3:wallet-proof-normalization-test": "ts-node scripts/phase3-wallet-proof-capture-normalization-selftest.ts",
     "phase3:wallet-proof-example-fixture-test": "ts-node scripts/phase3-wallet-proof-example-fixture-selftest.ts",
-    "phase3:model-a-eligibility-test": "ts-node scripts/phase3-model-a-eligibility-selftest.ts"
+    "phase3:model-a-eligibility-test": "ts-node scripts/phase3-model-a-eligibility-selftest.ts",
+    "phase3:model-a-binding-test": "ts-node scripts/phase3-model-a-eligibility-binding-selftest.ts"
   },
   "repository": {
     "type": "git",
