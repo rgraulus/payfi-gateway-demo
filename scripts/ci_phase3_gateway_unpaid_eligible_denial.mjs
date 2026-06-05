@@ -334,7 +334,7 @@ async function main() {
           eligibleButUnpaidReturns402: unpaidAccess.status === 402,
           paymentRequiredHeaderPresent: unpaidAccess.headers.has("payment-required"),
           paymentResponseEmitted: unpaidAccess.headers.has("payment-response"),
-          crpCalled: false,
+          crpFulfillCalled: false,
           replayTouched: false,
           rawProofPrinted: false,
         },
