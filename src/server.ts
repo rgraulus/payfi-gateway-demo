@@ -197,6 +197,11 @@ const phase3GatewayPolicyGateEnabled =
 const phase3GatewayReleaseEnabled =
   String(process.env.PHASE3_GATEWAY_RELEASE_ENABLED ?? '').toLowerCase() === 'true';
 
+// Phase 3 test-only release guard.
+// OFF by default. PR #130A proves the release flag alone is insufficient.
+const phase3GatewayTestReleaseOnly =
+  String(process.env.PHASE3_GATEWAY_TEST_RELEASE_ONLY ?? '').toLowerCase() === 'true';
+
 // PR #100 demo controls.
 // Both remain conservative by default:
 // - parsed-only policy satisfaction is NOT accepted unless explicitly enabled.
@@ -1009,6 +1014,7 @@ app.get('/healthz', async (_req, res) => {
     phase3: {
       gatewayPolicyGateEnabled: phase3GatewayPolicyGateEnabled,
       gatewayReleaseEnabled: phase3GatewayReleaseEnabled,
+      gatewayTestReleaseOnly: phase3GatewayTestReleaseOnly,
       allowParsedOnlyPolicy: phase3AllowParsedOnlyPolicy,
       requireLiveZkp: phase3RequireLiveZkp,
     },
