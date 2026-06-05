@@ -35,7 +35,8 @@
     "phase3:gateway-positive-composition-test": "ts-node --transpile-only scripts/ci_phase3_gateway_positive_composition_decision.ts",
     "phase3:x402-receipt-payment-signal-test": "ts-node scripts/phase3-x402-receipt-payment-signal-selftest.ts",
     "phase3:gateway-x402-receipt-composition-test": "ts-node --transpile-only scripts/ci_phase3_gateway_x402_receipt_composition_decision.ts",
-    "phase3:gateway-release-decision-adapter-test": "ts-node scripts/phase3-gateway-release-decision-adapter-selftest.ts"
+    "phase3:gateway-release-decision-adapter-test": "ts-node scripts/phase3-gateway-release-decision-adapter-selftest.ts",
+    "phase3:gateway-decision-matrix-test": "ts-node --transpile-only scripts/ci_phase3_gateway_decision_matrix.ts"
   },
   "repository": {
     "type": "git",
