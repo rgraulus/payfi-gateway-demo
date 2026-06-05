@@ -192,6 +192,11 @@ const concordiumGrpcMainnetPort = Number(process.env.CONCORDIUM_GRPC_MAINNET_POR
 const phase3GatewayPolicyGateEnabled =
   String(process.env.PHASE3_GATEWAY_POLICY_GATE_ENABLED ?? '').toLowerCase() === 'true';
 
+// Phase 3 Gateway release seam.
+// OFF by default. PR #129 exposes the seam but does not enable runtime release.
+const phase3GatewayReleaseEnabled =
+  String(process.env.PHASE3_GATEWAY_RELEASE_ENABLED ?? '').toLowerCase() === 'true';
+
 // PR #100 demo controls.
 // Both remain conservative by default:
 // - parsed-only policy satisfaction is NOT accepted unless explicitly enabled.
@@ -1003,6 +1008,7 @@ app.get('/healthz', async (_req, res) => {
     },
     phase3: {
       gatewayPolicyGateEnabled: phase3GatewayPolicyGateEnabled,
+      gatewayReleaseEnabled: phase3GatewayReleaseEnabled,
       allowParsedOnlyPolicy: phase3AllowParsedOnlyPolicy,
       requireLiveZkp: phase3RequireLiveZkp,
     },
