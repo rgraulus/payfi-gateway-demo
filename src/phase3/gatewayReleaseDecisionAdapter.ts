@@ -6,6 +6,7 @@ import type {
   ModelAEligibilityBindingResult,
 } from './modelAEligibilityBinding';
 import type {
+  X402ReceiptContextMismatchField,
   X402ReceiptPaymentSignalResult,
 } from './x402ReceiptPaymentSignal';
 
@@ -16,7 +17,8 @@ export type Phase3GatewayReleaseDecisionReason =
   | 'receipt_not_verified'
   | 'settlement_not_finalized'
   | 'receipt_expired'
-  | 'invalid_receipt_source';
+  | 'invalid_receipt_source'
+  | 'receipt_context_mismatch';
 
 export type Phase3GatewayReleaseDecision = {
   ok: boolean;
@@ -35,6 +37,8 @@ export type Phase3GatewayReleaseDecision = {
   receiptVerified: boolean;
   settlementStatus: X402ReceiptPaymentSignalResult['settlementStatus'];
   receiptExpired: boolean;
+  receiptContextMatched: boolean;
+  receiptContextMismatchField: X402ReceiptContextMismatchField | null;
 
   paymentResponseAllowed: boolean;
   resourceReleaseAllowed: boolean;
@@ -82,6 +86,8 @@ export function buildPhase3GatewayReleaseDecision(input: {
     receiptVerified: input.payment.receiptVerified,
     settlementStatus: input.payment.settlementStatus,
     receiptExpired: input.payment.receiptExpired,
+    receiptContextMatched: input.payment.receiptContextMatched,
+    receiptContextMismatchField: input.payment.contextMismatchField,
 
     paymentResponseAllowed: releaseAuthorized,
     resourceReleaseAllowed: releaseAuthorized,
