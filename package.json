@@ -44,7 +44,8 @@
     "phase3:live-zkp-model-a-binding-test": "ts-node scripts/phase3-live-zkp-model-a-binding-selftest.ts",
     "phase3:bound-eligibility-receipt-decision-test": "ts-node scripts/phase3-bound-eligibility-receipt-decision-selftest.ts",
     "phase3:gateway-guarded-runtime-release-test": "ts-node --transpile-only scripts/ci_phase3_gateway_guarded_runtime_release.ts",
-    "phase3:gateway-receipt-required-runtime-release-test": "ts-node --transpile-only scripts/ci_phase3_gateway_receipt_required_runtime_release.ts"
+    "phase3:gateway-receipt-required-runtime-release-test": "ts-node --transpile-only scripts/ci_phase3_gateway_receipt_required_runtime_release.ts",
+    "phase3:receipt-context-binding-test": "ts-node scripts/phase3-receipt-context-binding-selftest.ts"
   },
   "repository": {
     "type": "git",

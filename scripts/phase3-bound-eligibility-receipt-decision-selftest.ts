@@ -23,6 +23,7 @@ import {
 } from '../src/phase3/gatewayReleaseDecisionAdapter';
 import {
   buildX402ReceiptPaymentSatisfaction,
+  type X402ReceiptBindingContext,
   type X402ReceiptPaymentSignal,
 } from '../src/phase3/x402ReceiptPaymentSignal';
 
@@ -84,6 +85,25 @@ const contract: Phase3DemoContractBindingSnapshot = {
   payTo: input.payTo,
 };
 
+const expectedReceiptContext: X402ReceiptBindingContext = {
+  nonce: input.nonce,
+  resource: {
+    method: input.resource.method,
+    path: input.resource.path,
+  },
+  contract: {
+    contractId: input.contract.contractId,
+    contractVersion: input.contract.contractVersion,
+    merchantId: input.merchantId,
+  },
+  network: input.network,
+  asset: {
+    ...input.asset,
+  },
+  amount: input.amount,
+  payTo: input.payTo,
+};
+
 const directBuyerEnvelope = {
   type: 'xcf.concordium.authorization.direct-buyer.v1',
   challenge,
@@ -133,6 +153,7 @@ function receiptSignal(input: {
   receiptVerified?: boolean;
   settlementStatus?: X402ReceiptPaymentSignal['settlementStatus'];
   receiptExpired?: boolean;
+  context?: X402ReceiptBindingContext;
 } = {}): X402ReceiptPaymentSignal {
   return {
     ok: input.ok ?? true,
@@ -140,6 +161,7 @@ function receiptSignal(input: {
     receiptVerified: input.receiptVerified ?? true,
     settlementStatus: input.settlementStatus ?? 'finalized',
     receiptExpired: input.receiptExpired ?? false,
+    context: input.context ?? expectedReceiptContext,
     rawReceiptPrinted: false,
   };
 }
@@ -215,6 +237,7 @@ function decisionFor(input: {
 }) {
   const payment = buildX402ReceiptPaymentSatisfaction({
     receipt: input.receipt,
+    expectedContext: expectedReceiptContext,
   });
 
   return buildPhase3GatewayReleaseDecision({
@@ -246,6 +269,30 @@ async function main() {
   assert.equal(finalizedReceiptDecision.paymentResponseAllowed, true);
   assert.equal(finalizedReceiptDecision.resourceReleaseAllowed, true);
   assertNoSideEffects(finalizedReceiptDecision);
+
+  const wrongNonceReceiptDecision = decisionFor({
+    boundEligibility,
+    receipt: receiptSignal({
+      context: {
+        ...expectedReceiptContext,
+        nonce: 'wrong-receipt-nonce',
+      },
+    }),
+  });
+
+  assert.equal(wrongNonceReceiptDecision.ok, false);
+  assert.equal(wrongNonceReceiptDecision.releaseAuthorized, false);
+  assert.equal(wrongNonceReceiptDecision.reason, 'receipt_context_mismatch');
+  assert.equal(wrongNonceReceiptDecision.paymentSatisfied, false);
+  assert.equal(wrongNonceReceiptDecision.receiptSignalAccepted, false);
+  assert.equal(wrongNonceReceiptDecision.receiptVerified, true);
+  assert.equal(wrongNonceReceiptDecision.settlementStatus, 'finalized');
+  assert.equal(wrongNonceReceiptDecision.receiptExpired, false);
+  assert.equal(wrongNonceReceiptDecision.receiptContextMatched, false);
+  assert.equal(wrongNonceReceiptDecision.receiptContextMismatchField, 'nonce');
+  assert.equal(wrongNonceReceiptDecision.paymentResponseAllowed, false);
+  assert.equal(wrongNonceReceiptDecision.resourceReleaseAllowed, false);
+  assertNoSideEffects(wrongNonceReceiptDecision);
 
   const pendingReceiptDecision = decisionFor({
     boundEligibility,
@@ -332,6 +379,12 @@ async function main() {
         finalizedReceiptDecisionAuthorized: finalizedReceiptDecision.releaseAuthorized,
         finalizedReceiptPaymentResponseAllowed: finalizedReceiptDecision.paymentResponseAllowed,
         finalizedReceiptResourceReleaseAllowed: finalizedReceiptDecision.resourceReleaseAllowed,
+        finalizedReceiptContextMatched: finalizedReceiptDecision.receiptContextMatched,
+
+        wrongNonceReceiptRejected: wrongNonceReceiptDecision.reason,
+        wrongNonceMismatchField: wrongNonceReceiptDecision.receiptContextMismatchField,
+        wrongNonceReceiptPaymentResponseAllowed: wrongNonceReceiptDecision.paymentResponseAllowed,
+        wrongNonceReceiptResourceReleaseAllowed: wrongNonceReceiptDecision.resourceReleaseAllowed,
 
         pendingReceiptRejected: pendingReceiptDecision.reason,
         unverifiedReceiptRejected: unverifiedReceiptDecision.reason,
