@@ -1,3 +1,4 @@
+import type { CcdPltProofV1 } from '../proofPayload';
 import type {
   ModelAPaymentSatisfactionInput,
 } from './modelAReleaseComposition';
@@ -32,6 +33,31 @@ export type X402ReceiptPaymentSignal = {
   context?: X402ReceiptBindingContext;
   rawReceiptPrinted: false;
 };
+
+export function deriveX402ReceiptBindingContextFromCcdPltProofV1(
+  proof: CcdPltProofV1,
+): X402ReceiptBindingContext {
+  return {
+    nonce: proof.nonce,
+    resource: {
+      method: proof.contract.resource.method,
+      path: proof.contract.resource.path,
+    },
+    contract: {
+      contractId: proof.contract.contractId,
+      contractVersion: proof.contract.contractVersion,
+      merchantId: proof.contract.merchantId,
+    },
+    network: proof.contract.network,
+    asset: {
+      type: proof.contract.asset.type,
+      tokenId: proof.contract.asset.tokenId,
+      decimals: proof.contract.asset.decimals,
+    },
+    amount: proof.contract.amount,
+    payTo: proof.contract.payTo,
+  };
+}
 
 export type X402ReceiptContextMismatchField =
   | 'nonce'
