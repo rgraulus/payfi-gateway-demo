@@ -1681,11 +1681,31 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         gatewayPolicyGateEnabled: phase3GatewayPolicyGateEnabled,
         gatewayReleaseEnabled: phase3GatewayReleaseEnabled,
         gatewayTestReleaseOnly: phase3GatewayTestReleaseOnly,
+        guardedRuntimeReleaseRecognition: {
+          recognized: true,
+          releaseDecisionRecognized: true,
+          guardSatisfied:
+            phase3GatewayReleaseEnabled === true && phase3GatewayTestReleaseOnly === true,
+          guard: 'PHASE3_GATEWAY_RELEASE_ENABLED && PHASE3_GATEWAY_TEST_RELEASE_ONLY',
+          mode: 'synthetic-test-only',
+          productionRelease: false,
+          realReceiptRequiredBeforeProductionRelease: true,
+        },
       },
       policy: {
         status: readiness.status,
         challengeId: readiness.challengeId ?? null,
         releaseStatus: readiness.releaseStatus ?? null,
+      },
+      runtimeReleaseRecognition: {
+        recognized: true,
+        releaseDecisionRecognized: true,
+        guardSatisfied:
+          phase3GatewayReleaseEnabled === true && phase3GatewayTestReleaseOnly === true,
+        mode: 'synthetic-test-only',
+        productionRelease: false,
+        paymentResponseAllowed: false,
+        resourceReleaseAllowed: true,
       },
       safety: {
         paymentResponseEmitted: false,
