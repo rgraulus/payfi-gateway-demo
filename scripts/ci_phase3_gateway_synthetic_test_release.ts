@@ -2,14 +2,18 @@
 /**
  * scripts/ci_phase3_gateway_synthetic_test_release.ts
  *
- * PR #130B regression harness.
+ * PR #130B/#136 regression harness.
  *
- * Proves a controlled synthetic Phase 3 Gateway test-only release can happen
- * only when both release guards are explicitly enabled.
+ * Previously this proved a controlled synthetic Phase 3 Gateway test-only
+ * release could happen only when both release guards were explicitly enabled.
  *
- * This is intentionally synthetic and test-only. It does not submit a real
- * receipt JWS, does not emit PAYMENT-RESPONSE, does not touch replay, does not
- * call CRP fulfill, and does not persist canonical release.
+ * PR #136 intentionally tightens that behavior: with both release guards
+ * enabled, policy satisfaction alone is no longer enough. A guarded runtime
+ * release must now fail closed until an x402 receipt signal is present.
+ *
+ * This is intentionally still test-only. It does not submit a real receipt JWS,
+ * does not emit PAYMENT-RESPONSE, does not touch replay, does not call CRP
+ * fulfill, and does not persist canonical release.
  */
 
 import assert from "node:assert/strict";
@@ -22,6 +26,7 @@ import {
   issuePaidGatedChallenge,
   killProcessTree,
   redeemEligiblePolicy,
+  request,
   startGateway,
   waitForPortClosed,
   waitForReady,
@@ -86,16 +91,15 @@ async function main() {
     assert.equal(redeem.json?.policyDecision?.allowed, true);
     assert.equal(redeem.json?.policyDecision?.rawProofPrinted, false);
 
-    let release: Response | null = null;
-    let releaseText = "";
-    let releaseJson: any = null;
+    let release = null as Awaited<ReturnType<typeof request>> | null;
 
     for (let attempt = 0; attempt < 20; attempt += 1) {
-      release = await fetch(`${BASE}/paid-gated?nonce=${encodeURIComponent(pr.nonce)}`);
-      releaseText = await release.text();
-      releaseJson = releaseText ? JSON.parse(releaseText) : null;
+      release = await request(BASE, `/paid-gated?nonce=${encodeURIComponent(pr.nonce)}`);
 
-      if (release.status === 200) {
+      if (
+        release.status === 402 &&
+        release.json?.runtimeReleaseRecognition?.blockedBy === "missing_x402_receipt_signal"
+      ) {
         break;
       }
 
@@ -103,29 +107,35 @@ async function main() {
     }
 
     assert.ok(release, "release response should be present");
-    assert.equal(release.status, 200, `synthetic release should return 200: ${releaseText}`);
-    assert.equal(release.headers.get("payment-response"), null, "synthetic release must not emit PAYMENT-RESPONSE");
+    assert.equal(release.status, 402, `synthetic release should require receipt before release: ${release.text}`);
+    assert.ok(release.headers.get("payment-required"), "blocked release must still emit PAYMENT-REQUIRED");
+    assert.equal(release.headers.get("payment-response"), null, "blocked release must not emit PAYMENT-RESPONSE");
 
-    assert.equal(releaseJson?.ok, true);
-    assert.equal(releaseJson?.paid, true);
-    assert.equal(releaseJson?.nonce, pr.nonce);
-    assert.equal(releaseJson?.access, "phase3-synthetic-test-release");
-    assert.equal(releaseJson?.resource, "/paid-gated");
-    assert.equal(releaseJson?.synthetic, true);
+    assert.equal(release.json?.ok, false);
+    assert.equal(release.json?.paid, false);
+    assert.equal(release.json?.error, "Verified x402 receipt required before guarded Phase 3 runtime release");
 
-    assert.equal(releaseJson?.phase3?.gatewayPolicyGateEnabled, true);
-    assert.equal(releaseJson?.phase3?.gatewayReleaseEnabled, true);
-    assert.equal(releaseJson?.phase3?.gatewayTestReleaseOnly, true);
+    assert.equal(release.json?.phase3?.gatewayPolicyGateEnabled, true);
+    assert.equal(release.json?.phase3?.gatewayReleaseEnabled, true);
+    assert.equal(release.json?.phase3?.gatewayTestReleaseOnly, true);
+    assert.equal(release.json?.phase3?.runtimeReceiptRequired, true);
+    assert.equal(release.json?.phase3?.receiptSignalPresent, false);
 
-    assert.equal(releaseJson?.policy?.status, "POLICY_SATISFIED");
+    assert.equal(release.json?.runtimeReleaseRecognition?.recognized, true);
+    assert.equal(release.json?.runtimeReleaseRecognition?.releaseDecisionRecognized, false);
+    assert.equal(release.json?.runtimeReleaseRecognition?.guardSatisfied, true);
+    assert.equal(release.json?.runtimeReleaseRecognition?.blockedBy, "missing_x402_receipt_signal");
+    assert.equal(release.json?.runtimeReleaseRecognition?.productionRelease, false);
+    assert.equal(release.json?.runtimeReleaseRecognition?.paymentResponseAllowed, false);
+    assert.equal(release.json?.runtimeReleaseRecognition?.resourceReleaseAllowed, false);
 
-    assert.equal(releaseJson?.safety?.paymentResponseEmitted, false);
-    assert.equal(releaseJson?.safety?.crpCalled, false);
-    assert.equal(releaseJson?.safety?.crpFulfillCalled, false);
-    assert.equal(releaseJson?.safety?.replayTouched, false);
-    assert.equal(releaseJson?.safety?.canonicalReleasePersisted, false);
-    assert.equal(releaseJson?.safety?.rawProofPrinted, false);
-    assert.equal(releaseJson?.safety?.rawReceiptPrinted, false);
+    assert.equal(release.json?.safety?.paymentResponseEmitted, false);
+    assert.equal(release.json?.safety?.crpCalled, false);
+    assert.equal(release.json?.safety?.crpFulfillCalled, false);
+    assert.equal(release.json?.safety?.replayTouched, false);
+    assert.equal(release.json?.safety?.canonicalReleasePersisted, false);
+    assert.equal(release.json?.safety?.rawProofPrinted, false);
+    assert.equal(release.json?.safety?.rawReceiptPrinted, false);
 
     console.log(
       JSON.stringify(
@@ -138,14 +148,18 @@ async function main() {
           eligiblePolicyRedeemed: redeem.json?.policyStatus === "POLICY_SATISFIED",
 
           syntheticReleaseStatus: release.status,
-          syntheticReleaseAllowed: releaseJson?.access === "phase3-synthetic-test-release",
+          syntheticReleaseBlockedUntilReceipt:
+            release.json?.runtimeReleaseRecognition?.blockedBy === "missing_x402_receipt_signal",
+          runtimeReceiptRequired: release.json?.phase3?.runtimeReceiptRequired,
+          receiptSignalPresent: release.json?.phase3?.receiptSignalPresent,
           paymentResponseEmitted: release.headers.get("payment-response") !== null,
-          crpCalled: releaseJson?.safety?.crpCalled,
-          crpFulfillCalled: releaseJson?.safety?.crpFulfillCalled,
-          replayTouched: releaseJson?.safety?.replayTouched,
-          canonicalReleasePersisted: releaseJson?.safety?.canonicalReleasePersisted,
-          rawProofPrinted: releaseJson?.safety?.rawProofPrinted,
-          rawReceiptPrinted: releaseJson?.safety?.rawReceiptPrinted,
+          crpCalled: release.json?.safety?.crpCalled,
+          crpFulfillCalled: release.json?.safety?.crpFulfillCalled,
+          replayTouched: release.json?.safety?.replayTouched,
+          resourceReleased: release.json?.runtimeReleaseRecognition?.resourceReleaseAllowed === true,
+          canonicalReleasePersisted: release.json?.safety?.canonicalReleasePersisted,
+          rawProofPrinted: release.json?.safety?.rawProofPrinted,
+          rawReceiptPrinted: release.json?.safety?.rawReceiptPrinted,
         },
         null,
         2,
