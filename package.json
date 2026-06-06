@@ -39,7 +39,8 @@
     "phase3:gateway-decision-matrix-test": "ts-node --transpile-only scripts/ci_phase3_gateway_decision_matrix.ts",
     "phase3:gateway-release-disabled-seam-test": "ts-node --transpile-only scripts/ci_phase3_gateway_release_disabled_seam.ts",
     "phase3:gateway-test-release-guard-test": "ts-node --transpile-only scripts/ci_phase3_gateway_test_release_guard.ts",
-    "phase3:gateway-synthetic-test-release-test": "ts-node --transpile-only scripts/ci_phase3_gateway_synthetic_test_release.ts"
+    "phase3:gateway-synthetic-test-release-test": "ts-node --transpile-only scripts/ci_phase3_gateway_synthetic_test_release.ts",
+    "phase3:gateway-live-zkp-required-test": "ts-node --transpile-only scripts/ci_phase3_gateway_live_zkp_required.ts"
   },
   "repository": {
     "type": "git",
