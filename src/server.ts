@@ -1637,6 +1637,48 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       return false;
     }
 
+    const phase3RuntimeReceiptRequired = true;
+
+    if (phase3RuntimeReceiptRequired && !clientReceiptJws) {
+      reply402({
+        ok: false,
+        paid: false,
+        paymentRequired: paymentRequiredBody,
+        error: 'Verified x402 receipt required before guarded Phase 3 runtime release',
+        phase3: {
+          gatewayPolicyGateEnabled: phase3GatewayPolicyGateEnabled,
+          gatewayReleaseEnabled: phase3GatewayReleaseEnabled,
+          gatewayTestReleaseOnly: phase3GatewayTestReleaseOnly,
+          runtimeReceiptRequired: true,
+          receiptSignalPresent: false,
+        },
+        runtimeReleaseRecognition: {
+          recognized: true,
+          releaseDecisionRecognized: false,
+          guardSatisfied:
+            phase3GatewayReleaseEnabled === true && phase3GatewayTestReleaseOnly === true,
+          blockedBy: 'missing_x402_receipt_signal',
+          productionRelease: false,
+          paymentResponseAllowed: false,
+          resourceReleaseAllowed: false,
+        },
+        safety: {
+          paymentResponseEmitted: false,
+          crpCalled: false,
+          crpFulfillCalled: false,
+          replayTouched: false,
+          canonicalReleasePersisted: false,
+          rawProofPrinted: false,
+          rawReceiptPrinted: false,
+        },
+      });
+      return true;
+    }
+
+    if (phase3RuntimeReceiptRequired && clientReceiptJws) {
+      return false;
+    }
+
     const readiness = await getGatedAuthorizationReadiness();
 
     if (!readiness.ok && readiness.reason === 'missing_canonical_challenge') {
