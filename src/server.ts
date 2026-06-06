@@ -1628,6 +1628,83 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     return { ok: true };
   };
 
+  const maybeServePhase3SyntheticTestRelease = async (): Promise<boolean> => {
+    if (resourcePathname !== '/paid-gated') {
+      return false;
+    }
+
+    if (!phase3GatewayReleaseEnabled || !phase3GatewayTestReleaseOnly) {
+      return false;
+    }
+
+    const readiness = await getGatedAuthorizationReadiness();
+
+    if (!readiness.ok && readiness.reason === 'missing_canonical_challenge') {
+      reply402({
+        ok: false,
+        paid: false,
+        paymentRequired: paymentRequiredBody,
+        error: 'Missing canonical challenge for gated route',
+        ...(x402Debug ? { debug: { reason: readiness.reason } } : {}),
+      });
+      return true;
+    }
+
+    if (!readiness.ok) {
+      reply402({
+        ok: false,
+        paid: false,
+        paymentRequired: paymentRequiredBody,
+        error: 'Policy requirements not yet satisfied',
+        ...(x402Debug
+          ? {
+              debug: {
+                reason: readiness.reason,
+                challengeStatus: readiness.status,
+                challengeId: readiness.challengeId,
+                releaseStatus: readiness.releaseStatus,
+              },
+            }
+          : {}),
+      });
+      return true;
+    }
+
+    res.status(200).json({
+      ok: true,
+      paid: true,
+      nonce,
+      access: 'phase3-synthetic-test-release',
+      resource: '/paid-gated',
+      synthetic: true,
+      phase3: {
+        gatewayPolicyGateEnabled: phase3GatewayPolicyGateEnabled,
+        gatewayReleaseEnabled: phase3GatewayReleaseEnabled,
+        gatewayTestReleaseOnly: phase3GatewayTestReleaseOnly,
+      },
+      policy: {
+        status: readiness.status,
+        challengeId: readiness.challengeId ?? null,
+        releaseStatus: readiness.releaseStatus ?? null,
+      },
+      safety: {
+        paymentResponseEmitted: false,
+        crpCalled: false,
+        crpFulfillCalled: false,
+        replayTouched: false,
+        canonicalReleasePersisted: false,
+        rawProofPrinted: false,
+        rawReceiptPrinted: false,
+      },
+    });
+
+    return true;
+  };
+
+  if (await maybeServePhase3SyntheticTestRelease()) {
+    return;
+  }
+
   const persistSettlementOutcomeIfNeeded = (
     outcome: 'confirmed' | 'failed_retryable' | 'failed_final',
     reasonCode: string,
