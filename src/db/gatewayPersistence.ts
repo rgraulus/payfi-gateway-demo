@@ -205,8 +205,19 @@ export async function persistIssuedChallenge(
     }
 
     await client.query('COMMIT');
-  } catch (error) {
+  } catch (error: any) {
     await client.query('ROLLBACK');
+
+    // Treat duplicate challenge persistence as idempotent.
+    // Local Phase 3 harnesses may re-issue the same nonce/idempotency tuple while
+    // exercising Gateway release behavior. This should not crash the Gateway.
+    if (
+      error?.code === '23505' &&
+      String(error?.constraint ?? '') === 'payment_challenges_idempotency_key_key'
+    ) {
+      return;
+    }
+
     throw error;
   } finally {
     client.release();

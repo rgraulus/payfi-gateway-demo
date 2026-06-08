@@ -47,6 +47,28 @@ function spawnGateway(env) {
   });
 }
 
+async function stopGateway(child) {
+  if (!child || child.killed) return;
+
+  const exited = new Promise((resolve) => {
+    child.once("exit", resolve);
+  });
+
+  if (process.platform === "win32" && child.pid) {
+    spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+      stdio: ["ignore", "ignore", "ignore"],
+      shell: false,
+    });
+  } else {
+    child.kill();
+  }
+
+  await Promise.race([
+    exited,
+    sleep(2_000),
+  ]);
+}
+
 async function waitForReady(base) {
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
@@ -166,6 +188,9 @@ async function main() {
     PHASE3_GATEWAY_POLICY_GATE_ENABLED: "true",
     PHASE3_ALLOW_PARSED_ONLY_POLICY: "true",
     PHASE3_REQUIRE_LIVE_ZKP: "false",
+    DATABASE_URL:
+      process.env.DATABASE_URL ||
+      "postgres://postgres:pg@localhost:5432/transaction-outcome",
   };
 
   const child = spawnGateway(env);
@@ -203,7 +228,7 @@ async function main() {
     assert.equal(denyRedeem.json?.policyStatus, "POLICY_FAILED");
     assert.equal(denyRedeem.json?.code, "age_requirement_not_met");
 
-    child.kill();
+    await stopGateway(child);
 
     const strictEnv = {
       ...process.env,
@@ -212,6 +237,9 @@ async function main() {
       PHASE3_GATEWAY_POLICY_GATE_ENABLED: "true",
       PHASE3_ALLOW_PARSED_ONLY_POLICY: "false",
       PHASE3_REQUIRE_LIVE_ZKP: "true",
+      DATABASE_URL:
+        process.env.DATABASE_URL ||
+        "postgres://postgres:pg@localhost:5432/transaction-outcome",
     };
 
     const strictChild = spawnGateway(strictEnv);
@@ -229,7 +257,7 @@ async function main() {
       assert.equal(strictRedeem.json?.policyStatus, "POLICY_FAILED");
       assert.equal(strictRedeem.headers.get("payment-response"), null, "live-required rejection must not emit PAYMENT-RESPONSE");
     } finally {
-      strictChild.kill();
+      await stopGateway(strictChild);
     }
 
     console.log(JSON.stringify({
@@ -241,7 +269,7 @@ async function main() {
       rawProofPrinted: false,
     }, null, 2));
   } finally {
-    child.kill();
+    await stopGateway(child);
   }
 }
 
