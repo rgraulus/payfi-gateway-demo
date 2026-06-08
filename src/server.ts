@@ -1876,8 +1876,10 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     if (legacyHeaders) res.setHeader('X-PAYMENT-RESPONSE', respB64);
   };
 
-  const phase3RuntimeVerifiedReceiptDecisionDebug = (proof: any) => {
-    // Observability-only: do not use this decision to alter release behavior in this PR.
+  const phase3RuntimeVerifiedReceiptDecisionDebug = (
+    proof: any,
+    args: { enforced?: boolean } = {},
+  ) => {
     assertCcdPltProofV1(proof);
 
     const decision = buildPhase3RuntimeVerifiedReceiptDecision({
@@ -1896,8 +1898,8 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
 
     return {
       observed: true,
-      enforced: false,
-      decisionLayerOnly: true,
+      enforced: args.enforced === true,
+      decisionLayerOnly: args.enforced !== true,
       ok: decision.ok,
       readinessOk: decision.readinessOk,
       readinessStatus: decisionAny.readinessStatus ?? null,
@@ -1915,6 +1917,38 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       rawProofPrinted: decision.rawProofPrinted,
       rawReceiptPrinted: decision.rawReceiptPrinted,
     };
+  };
+
+  const enforcePhase3RuntimeDecisionBeforeReleaseIfGated = (proof: any): { ok: true } | { ok: false } => {
+    if (resourcePathname !== '/paid-gated') return { ok: true };
+
+    const phase3RuntimeDecision = phase3RuntimeVerifiedReceiptDecisionDebug(proof, {
+      enforced: true,
+    });
+
+    const authorized =
+      phase3RuntimeDecision.ok === true &&
+      phase3RuntimeDecision.paymentResponseAllowed === true &&
+      phase3RuntimeDecision.resourceReleaseAllowed === true;
+
+    if (authorized) return { ok: true };
+
+    reply402({
+      ok: false,
+      paid: false,
+      paymentRequired: paymentRequiredBody,
+      error: 'Phase 3 runtime decision rejected release',
+      ...(x402Debug
+        ? {
+            debug: {
+              blockedBy: 'phase3_runtime_decision_not_authorized',
+              phase3RuntimeVerifiedReceiptDecision: phase3RuntimeDecision,
+            },
+          }
+        : {}),
+    });
+
+    return { ok: false };
   };
 
   // ---------------------------------------------------------------------------
@@ -1970,6 +2004,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
 
       const clientPolicyGate = await requirePolicySatisfiedIfGated();
       if (!clientPolicyGate.ok) return;
+
+      const clientPhase3RuntimeGate = enforcePhase3RuntimeDecisionBeforeReleaseIfGated(proof);
+      if (!clientPhase3RuntimeGate.ok) return;
 
       // M2 pending semantics (keep exact behavior)
       if (replyPendingFromVerifiedProof({ label: 'client', verify, proof })) return;
@@ -2034,7 +2071,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
               debug: {
                 receiptSource: directReceiptJws ? 'x402-receipt' : 'payment-signature.receipt.jws',
                 phase3RuntimeVerifiedReceiptDecision:
-                  phase3RuntimeVerifiedReceiptDecisionDebug(proof),
+                  phase3RuntimeVerifiedReceiptDecisionDebug(proof, {
+                    enforced: resourcePathname === '/paid-gated',
+                  }),
               },
             }
           : {}),
@@ -2166,6 +2205,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     const devPolicyGate = await requirePolicySatisfiedIfGated();
     if (!devPolicyGate.ok) return;
 
+    const devPhase3RuntimeGate = enforcePhase3RuntimeDecisionBeforeReleaseIfGated(proof);
+    if (!devPhase3RuntimeGate.ok) return;
+
     // M2 tweak: post-verify guard (in case validation does not throw on pending)
     // KEEP EXACTLY AS-IS (NO REGRESSION).
     if (replyPendingFromVerifiedProof({ label: 'dev', verify, proof })) return;
@@ -2234,7 +2276,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         ? {
             debug: {
               phase3RuntimeVerifiedReceiptDecision:
-                phase3RuntimeVerifiedReceiptDecisionDebug(proof),
+                phase3RuntimeVerifiedReceiptDecisionDebug(proof, {
+                  enforced: resourcePathname === '/paid-gated',
+                }),
             },
           }
         : {}),
@@ -2360,6 +2404,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
 
   const realPolicyGate = await requirePolicySatisfiedIfGated();
   if (!realPolicyGate.ok) return;
+
+  const realPhase3RuntimeGate = enforcePhase3RuntimeDecisionBeforeReleaseIfGated(proof);
+  if (!realPhase3RuntimeGate.ok) return;
 
   // M2 tweak: post-verify guard (in case validation does not throw on pending)
   // KEEP EXACTLY AS-IS (NO REGRESSION).
