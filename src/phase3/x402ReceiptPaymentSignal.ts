@@ -59,6 +59,28 @@ export function deriveX402ReceiptBindingContextFromCcdPltProofV1(
   };
 }
 
+export function buildX402ReceiptPaymentSignalFromVerifiedCcdPltProofV1(input: {
+  proof: CcdPltProofV1;
+  nowSec: number;
+}): X402ReceiptPaymentSignal {
+  const { proof, nowSec } = input;
+  const expiresAt = proof.settlement.expiresAt;
+  const receiptExpired =
+    typeof expiresAt === 'number' &&
+    Number.isFinite(expiresAt) &&
+    expiresAt <= nowSec;
+
+  return {
+    ok: true,
+    source: 'x402-receipt',
+    receiptVerified: true,
+    settlementStatus: 'finalized',
+    receiptExpired,
+    context: deriveX402ReceiptBindingContextFromCcdPltProofV1(proof),
+    rawReceiptPrinted: false,
+  };
+}
+
 export type X402ReceiptContextMismatchField =
   | 'nonce'
   | 'resource.method'
