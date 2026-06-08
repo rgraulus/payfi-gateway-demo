@@ -8,6 +8,17 @@ import { setTimeout as sleep } from "node:timers/promises";
 const ROOT = process.cwd();
 const isWin = process.platform === "win32";
 
+export const DEFAULT_PHASE3_HARNESS_DATABASE_URL =
+  "postgres://postgres:pg@localhost:5432/transaction-outcome";
+
+export function phase3HarnessDatabaseUrl(): string {
+  return (
+    process.env.PHASE3_HARNESS_DATABASE_URL ||
+    process.env.DATABASE_URL ||
+    DEFAULT_PHASE3_HARNESS_DATABASE_URL
+  );
+}
+
 export type Phase3GatewayHarnessConfig = {
   port: number;
   label: string;
@@ -136,9 +147,7 @@ export function startGateway(config: Phase3GatewayHarnessConfig): ChildProcess {
     PHASE3_ALLOW_PARSED_ONLY_POLICY: "true",
     PHASE3_REQUIRE_LIVE_ZKP: "false",
 
-    DATABASE_URL:
-      process.env.DATABASE_URL ||
-      "postgres://postgres:pg@localhost:5432/transaction-outcome",
+    DATABASE_URL: phase3HarnessDatabaseUrl(),
     ORCHESTRATOR_BASE_URL: process.env.ORCHESTRATOR_BASE_URL || "http://localhost:8090",
     ORCHESTRATOR_API_KEY: process.env.ORCHESTRATOR_API_KEY || "dev-internal-key",
     CRP_BASE_URL: process.env.CRP_BASE_URL || "http://127.0.0.1:8080",
