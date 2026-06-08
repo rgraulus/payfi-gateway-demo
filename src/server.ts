@@ -122,6 +122,12 @@ import {
   validateCcdPltProofAgainstContract,
   ProofPayloadError,
 } from './proofPayload';
+import {
+  buildPhase3RuntimeVerifiedReceiptDecision,
+} from './phase3/runtimeVerifiedReceiptDecision';
+import {
+  deriveX402ReceiptBindingContextFromCcdPltProofV1,
+} from './phase3/x402ReceiptPaymentSignal';
 
 // Replay modules
 import { buildTupleKey } from './x402/tupleKey';
@@ -1870,6 +1876,47 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     if (legacyHeaders) res.setHeader('X-PAYMENT-RESPONSE', respB64);
   };
 
+  const phase3RuntimeVerifiedReceiptDecisionDebug = (proof: any) => {
+    // Observability-only: do not use this decision to alter release behavior in this PR.
+    assertCcdPltProofV1(proof);
+
+    const decision = buildPhase3RuntimeVerifiedReceiptDecision({
+      readiness: {
+        ok: true,
+        status: 'POLICY_SATISFIED',
+        challengeId: nonce,
+        releaseStatus: 'POLICY_SATISFIED',
+      },
+      proof,
+      nowSec,
+      expectedContext: deriveX402ReceiptBindingContextFromCcdPltProofV1(proof),
+    });
+
+    const decisionAny = decision as any;
+
+    return {
+      observed: true,
+      enforced: false,
+      decisionLayerOnly: true,
+      ok: decision.ok,
+      readinessOk: decision.readinessOk,
+      readinessStatus: decisionAny.readinessStatus ?? null,
+      reason: decisionAny.reason ?? decisionAny.decision?.reason ?? null,
+      paymentResponseAllowed: decision.paymentResponseAllowed,
+      resourceReleaseAllowed: decision.resourceReleaseAllowed,
+      productionRelease: decision.productionRelease,
+      paymentReleaseAttempted: decision.paymentReleaseAttempted,
+      paymentResponseEmitted: decision.paymentResponseEmitted,
+      crpCalled: decision.crpCalled,
+      crpFulfillCalled: decision.crpFulfillCalled,
+      replayTouched: decision.replayTouched,
+      resourceReleased: decision.resourceReleased,
+      canonicalReleasePersisted: decision.canonicalReleasePersisted,
+      rawProofPrinted: decision.rawProofPrinted,
+      rawReceiptPrinted: decision.rawReceiptPrinted,
+    };
+  };
+
   // ---------------------------------------------------------------------------
   // PATCH: If client provides a receipt JWS, verify it and serve directly.
   // This avoids the “new nonce every request” treadmill.
@@ -1983,7 +2030,13 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         },
         verify,
         ...(x402Debug
-          ? { debug: { receiptSource: directReceiptJws ? 'x402-receipt' : 'payment-signature.receipt.jws' } }
+          ? {
+              debug: {
+                receiptSource: directReceiptJws ? 'x402-receipt' : 'payment-signature.receipt.jws',
+                phase3RuntimeVerifiedReceiptDecision:
+                  phase3RuntimeVerifiedReceiptDecisionDebug(proof),
+              },
+            }
           : {}),
       });
     } catch (err: any) {
@@ -2177,6 +2230,14 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       verify,
       devHarness: true,
       ...(injectedReceiptJws ? { devReceiptSource: 'header' } : { devReceiptSource: 'env' }),
+      ...(x402Debug
+        ? {
+            debug: {
+              phase3RuntimeVerifiedReceiptDecision:
+                phase3RuntimeVerifiedReceiptDecisionDebug(proof),
+            },
+          }
+        : {}),
     });
   }
 
