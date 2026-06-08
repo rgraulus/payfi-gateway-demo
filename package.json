@@ -47,7 +47,8 @@
     "phase3:gateway-receipt-required-runtime-release-test": "ts-node --transpile-only scripts/ci_phase3_gateway_receipt_required_runtime_release.ts",
     "phase3:receipt-context-binding-test": "ts-node scripts/phase3-receipt-context-binding-selftest.ts",
     "phase3:receipt-context-from-proof-test": "ts-node scripts/phase3-receipt-context-from-proof-selftest.ts",
-    "phase3:verified-proof-receipt-signal-test": "ts-node scripts/phase3-verified-proof-receipt-signal-selftest.ts"
+    "phase3:verified-proof-receipt-signal-test": "ts-node scripts/phase3-verified-proof-receipt-signal-selftest.ts",
+    "phase3:runtime-verified-proof-decision-test": "ts-node scripts/phase3-runtime-verified-proof-decision-selftest.ts"
   },
   "repository": {
     "type": "git",
