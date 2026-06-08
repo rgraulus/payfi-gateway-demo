@@ -23,6 +23,7 @@ import {
   isPortOpen,
   issuePaidGatedChallenge,
   killProcessTree,
+  phase3HarnessDatabaseUrl,
   request,
   waitForPortClosed,
   waitForReady,
@@ -54,9 +55,7 @@ function startLiveRequiredGateway() {
     PHASE3_ALLOW_PARSED_ONLY_POLICY: "true",
     PHASE3_REQUIRE_LIVE_ZKP: "true",
 
-    DATABASE_URL:
-      process.env.DATABASE_URL ||
-      "postgres://postgres:pg@localhost:5432/transaction-outcome",
+    DATABASE_URL: phase3HarnessDatabaseUrl(),
     ORCHESTRATOR_BASE_URL: process.env.ORCHESTRATOR_BASE_URL || "http://localhost:8090",
     ORCHESTRATOR_API_KEY: process.env.ORCHESTRATOR_API_KEY || "dev-internal-key",
     CRP_BASE_URL: process.env.CRP_BASE_URL || "http://127.0.0.1:8080",
