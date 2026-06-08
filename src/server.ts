@@ -1250,12 +1250,27 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     return proofWorkflowPersistPromise;
   };
 
-  // Helper to issue a "payment required" response consistently
+  // Helper to issue a "payment required" response consistently.
+  //
+  // Generic x402 402 issuance remains best-effort: persistence is started
+  // asynchronously so existing unpaid/payment-retry behavior stays unchanged.
   const reply402 = (body: any) => {
     void persistIssuedChallengeIfNeeded();
     res.setHeader('PAYMENT-REQUIRED', prB64);
     if (legacyHeaders) res.setHeader('X-PAYMENT-REQUIRED', prB64);
     return res.status(402).json(body);
+  };
+
+  // Guarded Phase 3 resources depend on canonical challenge state for policy
+  // readiness and release decisions. For /paid-gated, make the normal 402
+  // issuance path explicit: persist the canonical challenge before returning
+  // PAYMENT-REQUIRED. The subsequent reply402() call reuses the same promise.
+  const reply402AfterPersistingIssuedChallengeIfGated = async (body: any) => {
+    if (resourcePathname === '/paid-gated') {
+      await persistIssuedChallengeIfNeeded();
+    }
+
+    return reply402(body);
   };
 
   // If a client sent a PAYMENT-SIGNATURE but it couldn't be parsed,
@@ -2328,7 +2343,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       `Gateway error while checking payment: ${String(err)}`,
     );
 
-    return reply402({
+    return reply402AfterPersistingIssuedChallengeIfGated({
       ok: false,
       paid: false,
       paymentRequired: paymentRequiredBody,
@@ -2340,7 +2355,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   // 1b) If CRP indicates the chain event is already consumed (409 event_claimed),
   // treat as a normal unpaid condition (NOT a gateway error).
   if (fulfill?.httpStatus === 409 && fulfill?.reason === 'event_claimed') {
-    return reply402({
+    return reply402AfterPersistingIssuedChallengeIfGated({
       ok: false,
       paid: false,
       paymentRequired: paymentRequiredBody,
@@ -2357,7 +2372,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     fulfill?.ok === true && (fulfill?.count ?? 0) >= 1 && m?.status === 'fulfilled' && !!receiptJws;
 
   if (!isPaid) {
-    return reply402({
+    return reply402AfterPersistingIssuedChallengeIfGated({
       ok: false,
       paid: false,
       paymentRequired: paymentRequiredBody,
