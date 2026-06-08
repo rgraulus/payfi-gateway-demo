@@ -217,6 +217,12 @@ const phase3AllowParsedOnlyPolicy =
 const phase3RequireLiveZkp =
   String(process.env.PHASE3_REQUIRE_LIVE_ZKP ?? '').toLowerCase() === 'true';
 
+// Test-only fault injection used by the Phase 3 negative release harness.
+// This must never be active in production and is additionally guarded by
+// PHASE3_GATEWAY_TEST_RELEASE_ONLY at the enforcement site.
+const phase3TestForceRuntimeDecisionContextMismatch =
+  String(process.env.PHASE3_TEST_FORCE_RUNTIME_DECISION_CONTEXT_MISMATCH ?? '').toLowerCase() === 'true';
+
 // PR #100 demo requirement, aligned with existing Phase 3 harness fixtures.
 // Do not treat this as production policy discovery; live policy derivation belongs in a later PR.
 const phase3DirectBuyerDemoRequirement = {
@@ -1882,6 +1888,18 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   ) => {
     assertCcdPltProofV1(proof);
 
+    const expectedContext = deriveX402ReceiptBindingContextFromCcdPltProofV1(proof);
+
+    if (
+      args.enforced === true &&
+      resourcePathname === '/paid-gated' &&
+      phase3GatewayTestReleaseOnly &&
+      phase3TestForceRuntimeDecisionContextMismatch &&
+      !isProd
+    ) {
+      expectedContext.nonce = `${expectedContext.nonce}:forced-phase3-runtime-mismatch`;
+    }
+
     const decision = buildPhase3RuntimeVerifiedReceiptDecision({
       readiness: {
         ok: true,
@@ -1891,7 +1909,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       },
       proof,
       nowSec,
-      expectedContext: deriveX402ReceiptBindingContextFromCcdPltProofV1(proof),
+      expectedContext,
     });
 
     const decisionAny = decision as any;
@@ -2963,20 +2981,78 @@ app.post('/paid-gated/redeem', async (req, res) => {
     });
   };
 
-  const persistPolicySatisfiedForRedeemIfNeeded = (
+  const persistPolicySatisfiedForRedeemIfNeeded = async (
     reasonCode: string,
     reasonMessage: string,
-  ) => {
-    void completePolicyEvaluationByNonce({
-      nonce,
-      fromState: 'ISSUED',
-      outcome: 'satisfied',
-      actor: 'gateway',
-      reasonCode,
-      reasonMessage,
-    }).catch((err) => {
+  ): Promise<{
+    ok: boolean;
+    updated: boolean;
+    reason: string;
+    challengeId?: string;
+    currentState?: string;
+  }> => {
+    try {
+      let result = await completePolicyEvaluationByNonce({
+        nonce,
+        fromState: 'ISSUED',
+        outcome: 'satisfied',
+        actor: 'gateway',
+        reasonCode,
+        reasonMessage,
+      });
+
+      if (result.reason === 'missing') {
+        const paidGatedContract = getPaidGatedContract();
+        const nowSec = Math.floor(Date.now() / 1000);
+        const issuedAtSec =
+          typeof (challenge as any)?.issuedAt === 'number' ? (challenge as any).issuedAt : nowSec;
+        const expiresAtSec =
+          typeof (challenge as any)?.expiresAt === 'number' ? (challenge as any).expiresAt : nowSec + ttlSec;
+
+        const policyRequirements = buildPolicyRequirements(paidGatedContract);
+
+        const recoveredPaymentRequiredPayload = {
+          ...buildPaymentRequiredPayload({
+            contract: paidGatedContract,
+            nonce,
+            issuedAtSec,
+            expiresAtSec,
+          }),
+          chain_id: paidGatedContract.chain_id,
+          ...(policyRequirements ? { policyRequirements } : {}),
+        };
+
+        await persistIssuedChallenge({
+          contract: paidGatedContract,
+          nonce,
+          paymentRequiredHeaderPayload: recoveredPaymentRequiredPayload,
+        });
+
+        result = await completePolicyEvaluationByNonce({
+          nonce,
+          fromState: 'ISSUED',
+          outcome: 'satisfied',
+          actor: 'gateway',
+          reasonCode,
+          reasonMessage,
+        });
+      }
+
+      return {
+        ok: result.updated || result.reason === 'already_in_target',
+        updated: result.updated,
+        reason: result.reason,
+        challengeId: result.challengeId,
+        currentState: result.currentState,
+      };
+    } catch (err) {
       console.error('Failed to persist policy evaluation outcome:', err);
-    });
+      return {
+        ok: false,
+        updated: false,
+        reason: 'persistence_error',
+      };
+    }
   };
 
   if (!nonce) {
@@ -3129,10 +3205,24 @@ app.post('/paid-gated/redeem', async (req, res) => {
     });
   }
 
-  persistPolicySatisfiedForRedeemIfNeeded(
+  const policyPersistence = await persistPolicySatisfiedForRedeemIfNeeded(
     'policy_satisfied',
     `Phase 3 policy satisfied with verifier stage ${verifierResult.stage}; age/region policy satisfied for ${gatedPolicyResult.region}.`,
   );
+
+  if (!policyPersistence.ok && policyPersistence.reason !== 'persistence_error') {
+    return res.status(409).json({
+      ok: false,
+      nonce,
+      code: 'policy_persistence_failed',
+      reason: policyPersistence.reason,
+      message: 'Policy satisfied, but canonical policy state was not persisted.',
+      policyStatus: 'POLICY_FAILED',
+      verifier: verifierAudit,
+      policyDecision,
+      ...(x402Debug ? { debug: { policyPersistence } } : {}),
+    });
+  }
 
   return res.status(200).json({
     ok: true,
@@ -3144,6 +3234,7 @@ app.post('/paid-gated/redeem', async (req, res) => {
     actualAge: gatedPolicyResult.actualAge,
     verifier: verifierAudit,
     policyDecision,
+    ...(x402Debug ? { debug: { policyPersistence } } : {}),
   });
 });
 
