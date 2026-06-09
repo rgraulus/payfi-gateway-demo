@@ -52,7 +52,8 @@
     "phase3:verified-proof-receipt-signal-test": "ts-node scripts/phase3-verified-proof-receipt-signal-selftest.ts",
     "phase3:runtime-verified-proof-decision-test": "ts-node scripts/phase3-runtime-verified-proof-decision-selftest.ts",
     "phase3:runtime-decision-negative-release-test": "ts-node --transpile-only scripts/ci_phase3_runtime_decision_negative_release_harness.ts",
-    "phase3:runtime-decision-positive-release-test": "ts-node --transpile-only scripts/ci_phase3_runtime_decision_positive_release_harness.ts"
+    "phase3:runtime-decision-positive-release-test": "ts-node --transpile-only scripts/ci_phase3_runtime_decision_positive_release_harness.ts",
+    "phase3:live-buyer-proof-fixture-model-a-binding-test": "ts-node scripts/phase3-live-buyer-proof-fixture-model-a-binding-selftest.ts"
   },
   "repository": {
     "type": "git",
