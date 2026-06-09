@@ -31,18 +31,83 @@ function accountBindingStatus(record: Record<string, unknown>, wallet: Record<st
   return 'not_provided';
 }
 
-export function normalizeWalletProofCapture(input: unknown): unknown {
+export type LiveBuyerProofCaptureAdapterInput = {
+  type: 'xcf.concordium.authorization.direct-buyer.v1';
+  challenge?: unknown;
+  challengeHash?: unknown;
+  proofType?: unknown;
+  presentation?: unknown;
+  walletChallenge?: unknown;
+  wallet?: unknown;
+  submittedAt?: unknown;
+};
+
+export type LiveBuyerProofCaptureAdapterInputContract = {
+  contract: 'phase3.liveBuyerProofCapture.adapterInput.v1';
+  source: 'browser-wallet-proof-capture';
+  target: 'phase3.liveZkpVerifierAdapter';
+  proofFamily: 'direct-buyer';
+  supportedEnvelopeType: 'xcf.concordium.authorization.direct-buyer.v1';
+  supportedProofType: 'concordium.VerifiablePresentation';
+  acceptedInputShapes: Array<
+    | 'already-normalized-direct-buyer-envelope'
+    | 'authorizationProof-wrapper'
+    | 'phase3b-browser-wallet-presentation-capture'
+    | 'raw-wallet-capture-fields'
+  >;
+  adapterInputOnly: true;
+  canonicalAuthorizationEnvelopeRequired: false;
+  canonicalChallengeHashValidationPerformed: false;
+  productionReleaseAuthorized: false;
+  gatewayRuntimeMutated: false;
+  persisted: false;
+  crpCalled: false;
+  paymentAttempted: false;
+  paymentResponseEmitted: false;
+  replayTouched: false;
+  rawProofPrinted: false;
+};
+
+export function describeLiveBuyerProofCaptureAdapterInputContract(): LiveBuyerProofCaptureAdapterInputContract {
+  return {
+    contract: 'phase3.liveBuyerProofCapture.adapterInput.v1',
+    source: 'browser-wallet-proof-capture',
+    target: 'phase3.liveZkpVerifierAdapter',
+    proofFamily: 'direct-buyer',
+    supportedEnvelopeType: 'xcf.concordium.authorization.direct-buyer.v1',
+    supportedProofType: 'concordium.VerifiablePresentation',
+    acceptedInputShapes: [
+      'already-normalized-direct-buyer-envelope',
+      'authorizationProof-wrapper',
+      'phase3b-browser-wallet-presentation-capture',
+      'raw-wallet-capture-fields',
+    ],
+    adapterInputOnly: true,
+    canonicalAuthorizationEnvelopeRequired: false,
+    canonicalChallengeHashValidationPerformed: false,
+    productionReleaseAuthorized: false,
+    gatewayRuntimeMutated: false,
+    persisted: false,
+    crpCalled: false,
+    paymentAttempted: false,
+    paymentResponseEmitted: false,
+    replayTouched: false,
+    rawProofPrinted: false,
+  };
+}
+
+export function normalizeWalletProofCapture(input: unknown): LiveBuyerProofCaptureAdapterInput {
   const record = isRecord(input) ? input : {};
 
   // Prefer an already-normalized Direct Buyer authorization envelope.
   if (record.type === 'xcf.concordium.authorization.direct-buyer.v1') {
-    return record;
+    return record as LiveBuyerProofCaptureAdapterInput;
   }
 
   // Accept a common capture wrapper shape without making it a production contract.
   const authorizationProof = isRecord(record.authorizationProof) ? record.authorizationProof : null;
   if (authorizationProof?.type === 'xcf.concordium.authorization.direct-buyer.v1') {
-    return authorizationProof;
+    return authorizationProof as LiveBuyerProofCaptureAdapterInput;
   }
 
   // Accept the existing browser wallet discovery harness output directly.
