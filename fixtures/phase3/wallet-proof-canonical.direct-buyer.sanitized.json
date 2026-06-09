@@ -1,0 +1,95 @@
+{
+  "type": "xcf.concordium.authorization.direct-buyer.v1",
+  "challenge": {
+    "type": "xcf.x402.zkp.challenge",
+    "version": "1.0.0",
+    "x402Version": "x402-v2",
+    "merchantId": "demo-merchant",
+    "resource": {
+      "method": "GET",
+      "path": "/paid-gated"
+    },
+    "contract": {
+      "contractId": "cid_demo_phase3_sanitized_live_buyer_fixture",
+      "contractVersion": "1.0.0",
+      "isFrozen": true
+    },
+    "network": "concordium:testnet",
+    "chain_id": "ccd:testnet-genesis-hash-placeholder",
+    "caip2ChainId": null,
+    "asset": {
+      "type": "PLT",
+      "tokenId": "EUDemo",
+      "decimals": 6
+    },
+    "amount": "0.050101",
+    "amountMinor": "50101",
+    "payTo": "ccd1qmerchantplaceholder",
+    "nonce": "phase3-sanitized-live-buyer-fixture-nonce-001",
+    "issuedAt": 1779289373,
+    "expiresAt": 1779291173,
+    "policy": {
+      "policyId": "age-region-v1",
+      "policyVersion": "1.0.0",
+      "requirementsHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "businessTerms": {
+      "termsId": null,
+      "termsVersion": null,
+      "termsHash": null,
+      "termsUri": null,
+      "termsSchema": null
+    },
+    "buyer": {
+      "buyerSubjectRef": "did:ccd:sanitized-live-buyer-placeholder",
+      "buyerAccountAddress": "4SanitizedCanonicalBuyerAccountAddressNotReal",
+      "buyerAccountId": "sanitized-live-buyer-account-id",
+      "buyerCaip10AccountId": "ccd:testnet-genesis-hash-placeholder:4SanitizedCanonicalBuyerAccountAddressNotReal"
+    },
+    "agent": null
+  },
+  "challengeHash": "e432b55bd1f7f3d02201ed3773755af8f4d66351f27f2118eca0f7acb502d322",
+  "proofType": "concordium.VerifiablePresentation",
+  "presentation": {
+    "kind": "sanitized-canonical-direct-buyer-wallet-presentation",
+    "sanitized": true,
+    "rawProofMaterialPresent": false,
+    "note": "This fixture is structurally representative only. It is not real wallet proof material and must not be used for live verification.",
+    "presentationContext": "e432b55bd1f7f3d02201ed3773755af8f4d66351f27f2118eca0f7acb502d322",
+    "type": [
+      "VerifiablePresentation",
+      "ConcordiumVerifiablePresentationV1"
+    ],
+    "verifiableCredential": [],
+    "credentialStatements": [
+      {
+        "statement": "age_min_by_region",
+        "region": "EU",
+        "minAge": 18
+      }
+    ],
+    "proof": {
+      "type": "SanitizedPlaceholderOnly",
+      "placeholder": "not-real-proof-material"
+    }
+  },
+  "walletChallenge": "e432b55bd1f7f3d02201ed3773755af8f4d66351f27f2118eca0f7acb502d322",
+  "wallet": {
+    "network": "testnet",
+    "selectedChain": "concordium:testnet",
+    "accountAddress": "4SanitizedCanonicalBuyerAccountAddressNotReal"
+  },
+  "submittedAt": "2026-06-09T00:00:00.000Z",
+  "fixtureSafety": {
+    "sanitized": true,
+    "rawProofMaterial": false,
+    "rawReceiptMaterial": false,
+    "productionReleaseAuthorized": false,
+    "gatewayRuntimeMutated": false,
+    "persisted": false,
+    "crpCalled": false,
+    "paymentAttempted": false,
+    "paymentResponseEmitted": false,
+    "replayTouched": false
+  }
+}
