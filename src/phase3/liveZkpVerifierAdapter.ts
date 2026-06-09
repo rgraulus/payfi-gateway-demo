@@ -42,6 +42,51 @@ export type LiveZkpSdkInvocationDeps = {
   }): unknown;
 };
 
+export type LiveZkpVerifierAdapterBoundary = {
+  adapter: 'phase3.liveZkpVerifierAdapter';
+  status: 'scaffolded';
+  proofFamily: 'direct-buyer';
+  supportedEnvelopeType: 'xcf.concordium.authorization.direct-buyer.v1';
+  supportedProofType: 'concordium.VerifiablePresentation';
+  sdkBoundary: 'dynamic-import';
+  dependencyInjectionSupported: true;
+  defaultLiveVerificationRequiresSdk: true;
+  productionReleaseAuthorized: false;
+  gatewayRuntimeMutated: false;
+  crpCalled: false;
+  paymentAttempted: false;
+  replayTouched: false;
+  rawProofPrinted: false;
+};
+
+/**
+ * Describes the Phase 3 live ZKP adapter boundary without invoking the SDK.
+ *
+ * This is intentionally metadata-only. It is used by tests and future PRs to
+ * keep the live Concordium/Web SDK proof seam explicit while preserving the
+ * current Gateway safety invariant: verification may produce a verifier result,
+ * but this adapter never releases resources, mutates Gateway state, calls CRP,
+ * touches replay, or prints raw proof material.
+ */
+export function describeLiveZkpVerifierAdapterBoundary(): LiveZkpVerifierAdapterBoundary {
+  return {
+    adapter: 'phase3.liveZkpVerifierAdapter',
+    status: 'scaffolded',
+    proofFamily: 'direct-buyer',
+    supportedEnvelopeType: 'xcf.concordium.authorization.direct-buyer.v1',
+    supportedProofType: 'concordium.VerifiablePresentation',
+    sdkBoundary: 'dynamic-import',
+    dependencyInjectionSupported: true,
+    defaultLiveVerificationRequiresSdk: true,
+    productionReleaseAuthorized: false,
+    gatewayRuntimeMutated: false,
+    crpCalled: false,
+    paymentAttempted: false,
+    replayTouched: false,
+    rawProofPrinted: false,
+  };
+}
+
 function getStringField(value: unknown, key: string): string | undefined {
   const record = asRecord(value);
   return typeof record?.[key] === 'string' ? record[key] : undefined;
