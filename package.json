@@ -29,6 +29,7 @@
     "phase3:wallet-proof-normalization-test": "ts-node scripts/phase3-wallet-proof-capture-normalization-selftest.ts",
     "phase3:wallet-proof-example-fixture-test": "ts-node scripts/phase3-wallet-proof-example-fixture-selftest.ts",
     "phase3:sanitized-live-buyer-proof-fixture-test": "ts-node scripts/phase3-sanitized-live-buyer-proof-fixture-selftest.ts",
+    "phase3:live-buyer-proof-fixture-replay-test": "ts-node scripts/phase3-live-buyer-proof-fixture-replay-harness-selftest.ts",
     "phase3:model-a-eligibility-test": "ts-node scripts/phase3-model-a-eligibility-selftest.ts",
     "phase3:model-a-binding-test": "ts-node scripts/phase3-model-a-eligibility-binding-selftest.ts",
     "phase3:model-a-release-composition-test": "ts-node scripts/phase3-model-a-release-composition-selftest.ts",
