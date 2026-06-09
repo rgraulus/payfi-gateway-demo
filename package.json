@@ -54,7 +54,8 @@
     "phase3:runtime-decision-negative-release-test": "ts-node --transpile-only scripts/ci_phase3_runtime_decision_negative_release_harness.ts",
     "phase3:runtime-decision-positive-release-test": "ts-node --transpile-only scripts/ci_phase3_runtime_decision_positive_release_harness.ts",
     "phase3:live-buyer-proof-fixture-model-a-binding-test": "ts-node scripts/phase3-live-buyer-proof-fixture-model-a-binding-selftest.ts",
-    "phase3:live-buyer-proof-fixture-model-a-release-composition-test": "ts-node scripts/phase3-live-buyer-proof-fixture-model-a-release-composition-selftest.ts"
+    "phase3:live-buyer-proof-fixture-model-a-release-composition-test": "ts-node scripts/phase3-live-buyer-proof-fixture-model-a-release-composition-selftest.ts",
+    "phase3:fixture-model-a-runtime-decision-bridge-test": "ts-node scripts/phase3-fixture-model-a-runtime-decision-bridge-selftest.ts"
   },
   "repository": {
     "type": "git",
