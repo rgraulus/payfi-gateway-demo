@@ -4,6 +4,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import net from "node:net";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
+import { Client } from "pg";
 
 const ROOT = process.cwd();
 const isWin = process.platform === "win32";
@@ -52,6 +53,90 @@ export function hashChallenge(challenge: any): string {
 
 export function b64decodeJson(value: string): any {
   return JSON.parse(Buffer.from(value, "base64").toString("utf8"));
+}
+
+export async function getPhase3HarnessCanonicalChallengeByNonce(nonce: string): Promise<{
+  found: boolean;
+  challengeId?: string;
+  nonce?: string;
+  status?: string;
+  releaseStatus?: string;
+  contractSnapshot?: any;
+}> {
+  const client = new Client({ connectionString: phase3HarnessDatabaseUrl() });
+
+  await client.connect();
+
+  try {
+    const result = await client.query(
+      `
+      SELECT
+        challenge_id,
+        nonce,
+        status,
+        release_status,
+        contract_snapshot
+      FROM payment_challenges
+      WHERE nonce = $1
+      LIMIT 1
+      `,
+      [nonce],
+    );
+
+    if (result.rowCount !== 1) {
+      return { found: false };
+    }
+
+    const row = result.rows[0];
+
+    return {
+      found: true,
+      challengeId: String(row.challenge_id),
+      nonce: String(row.nonce),
+      status: String(row.status),
+      releaseStatus: String(row.release_status),
+      contractSnapshot: row.contract_snapshot,
+    };
+  } finally {
+    await client.end();
+  }
+}
+
+export async function assertPhase3HarnessCanonicalChallengeIssued(
+  pr: any,
+  timeoutMs = 2_500,
+): Promise<void> {
+  const nonce = typeof pr?.nonce === "string" ? pr.nonce : "";
+  assert.ok(nonce, "PAYMENT-REQUIRED must include nonce before canonical challenge assertion");
+
+  const deadline = Date.now() + timeoutMs;
+  let canonical: Awaited<ReturnType<typeof getPhase3HarnessCanonicalChallengeByNonce>> = { found: false };
+
+  while (Date.now() < deadline) {
+    canonical = await getPhase3HarnessCanonicalChallengeByNonce(nonce);
+
+    if (canonical.found) {
+      break;
+    }
+
+    await sleep(100);
+  }
+
+  assert.equal(
+    canonical.found,
+    true,
+    "paid-gated challenge should become canonical before policy redeem",
+  );
+  assert.equal(canonical.nonce, nonce, "canonical challenge nonce should match PAYMENT-REQUIRED nonce");
+  assert.equal(canonical.status, "ISSUED", "paid-gated challenge should start in ISSUED state");
+
+  if (canonical.contractSnapshot?.resource?.path !== undefined) {
+    assert.equal(
+      canonical.contractSnapshot.resource.path,
+      "/paid-gated",
+      "canonical challenge should bind to /paid-gated",
+    );
+  }
 }
 
 export function isPortOpen(port: number): Promise<boolean> {
@@ -258,6 +343,8 @@ export async function issuePaidGatedChallenge(base: string): Promise<any> {
   assert.equal(pr.resource?.path, "/paid-gated");
   assert.equal(pr.policyRequirements?.required, true);
   assert.ok(pr.nonce, "PAYMENT-REQUIRED must include nonce");
+
+  await assertPhase3HarnessCanonicalChallengeIssued(pr);
 
   return pr;
 }
