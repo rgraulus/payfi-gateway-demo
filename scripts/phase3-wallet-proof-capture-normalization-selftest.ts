@@ -5,6 +5,7 @@ import {
 } from '../src/phase3/liveZkpVerifierAdapter';
 import {
   buildSafeMetadata,
+  describeLiveBuyerProofCaptureAdapterInputContract,
   normalizeWalletProofCapture,
 } from './phase3-wallet-proof-capture-harness';
 
@@ -158,6 +159,32 @@ function assertAccepted(
 }
 
 function main() {
+  const contract = describeLiveBuyerProofCaptureAdapterInputContract();
+
+  assert.equal(contract.contract, 'phase3.liveBuyerProofCapture.adapterInput.v1');
+  assert.equal(contract.source, 'browser-wallet-proof-capture');
+  assert.equal(contract.target, 'phase3.liveZkpVerifierAdapter');
+  assert.equal(contract.proofFamily, 'direct-buyer');
+  assert.equal(contract.supportedEnvelopeType, 'xcf.concordium.authorization.direct-buyer.v1');
+  assert.equal(contract.supportedProofType, 'concordium.VerifiablePresentation');
+  assert.deepEqual(contract.acceptedInputShapes, [
+    'already-normalized-direct-buyer-envelope',
+    'authorizationProof-wrapper',
+    'phase3b-browser-wallet-presentation-capture',
+    'raw-wallet-capture-fields',
+  ]);
+  assert.equal(contract.adapterInputOnly, true);
+  assert.equal(contract.canonicalAuthorizationEnvelopeRequired, false);
+  assert.equal(contract.canonicalChallengeHashValidationPerformed, false);
+  assert.equal(contract.productionReleaseAuthorized, false);
+  assert.equal(contract.gatewayRuntimeMutated, false);
+  assert.equal(contract.persisted, false);
+  assert.equal(contract.crpCalled, false);
+  assert.equal(contract.paymentAttempted, false);
+  assert.equal(contract.paymentResponseEmitted, false);
+  assert.equal(contract.replayTouched, false);
+  assert.equal(contract.rawProofPrinted, false);
+
   const normalizedMetadata = assertAccepted('already-normalized envelope', normalizedEnvelope);
   const wrapperMetadata = assertAccepted('authorizationProof wrapper', wrapperCapture);
   const rawMetadata = assertAccepted('raw wallet capture', rawWalletCapture);
@@ -202,6 +229,10 @@ function main() {
     JSON.stringify(
       {
         ok: true,
+        contract: contract.contract,
+        adapterInputOnly: contract.adapterInputOnly,
+        canonicalAuthorizationEnvelopeRequired: contract.canonicalAuthorizationEnvelopeRequired,
+        canonicalChallengeHashValidationPerformed: contract.canonicalChallengeHashValidationPerformed,
         normalizedEnvelopeAccepted: normalizedMetadata.ok,
         wrapperCaptureAccepted: wrapperMetadata.ok,
         rawWalletCaptureAccepted: rawMetadata.ok,
