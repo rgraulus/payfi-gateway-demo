@@ -9,7 +9,13 @@ import {
   resolveConcordiumWalletChallengeBinding,
   verifyConcordiumZkpAuthorizationEnvelope,
 } from '../src/phase3/concordiumZkpVerifier';
-import { liveVerifyDirectBuyerEnvelope, liveVerifyDirectBuyerEnvelopeWithDeps, validateLiveDirectBuyerProofFixtureContract, type LiveZkpSdkInvocationDeps } from '../src/phase3/liveZkpVerifierAdapter';
+import {
+  describeLiveZkpVerifierAdapterBoundary,
+  liveVerifyDirectBuyerEnvelope,
+  liveVerifyDirectBuyerEnvelopeWithDeps,
+  validateLiveDirectBuyerProofFixtureContract,
+  type LiveZkpSdkInvocationDeps,
+} from '../src/phase3/liveZkpVerifierAdapter';
 
 const baseInput: BuildX402ZkpChallengeInput = {
   merchantId: 'demo-merchant',
@@ -193,6 +199,23 @@ function assertRejectedOutputContract(result: any, stage: string): void {
 
 
 async function main() {
+  const liveAdapterBoundary = describeLiveZkpVerifierAdapterBoundary();
+
+  assert.equal(liveAdapterBoundary.adapter, 'phase3.liveZkpVerifierAdapter');
+  assert.equal(liveAdapterBoundary.status, 'scaffolded');
+  assert.equal(liveAdapterBoundary.proofFamily, 'direct-buyer');
+  assert.equal(liveAdapterBoundary.supportedEnvelopeType, 'xcf.concordium.authorization.direct-buyer.v1');
+  assert.equal(liveAdapterBoundary.supportedProofType, 'concordium.VerifiablePresentation');
+  assert.equal(liveAdapterBoundary.sdkBoundary, 'dynamic-import');
+  assert.equal(liveAdapterBoundary.dependencyInjectionSupported, true);
+  assert.equal(liveAdapterBoundary.defaultLiveVerificationRequiresSdk, true);
+  assert.equal(liveAdapterBoundary.productionReleaseAuthorized, false);
+  assert.equal(liveAdapterBoundary.gatewayRuntimeMutated, false);
+  assert.equal(liveAdapterBoundary.crpCalled, false);
+  assert.equal(liveAdapterBoundary.paymentAttempted, false);
+  assert.equal(liveAdapterBoundary.replayTouched, false);
+  assert.equal(liveAdapterBoundary.rawProofPrinted, false);
+
   const parsedOnly = await verifyConcordiumZkpAuthorizationEnvelope(directBuyerEnvelope);
 
   assert.equal(parsedOnly.ok, true);
@@ -514,6 +537,10 @@ async function main() {
     JSON.stringify(
       {
         ok: true,
+        liveAdapterBoundaryStatus: liveAdapterBoundary.status,
+        liveAdapterBoundarySdkBoundary: liveAdapterBoundary.sdkBoundary,
+        liveAdapterBoundaryRawProofPrinted: liveAdapterBoundary.rawProofPrinted,
+        liveAdapterBoundaryProductionReleaseAuthorized: liveAdapterBoundary.productionReleaseAuthorized,
         parsedOnlyStage: parsedOnly.stage,
         liveUnavailableStage: liveUnavailable.stage,
         liveUnavailableFailsClosed: !liveUnavailable.ok,
