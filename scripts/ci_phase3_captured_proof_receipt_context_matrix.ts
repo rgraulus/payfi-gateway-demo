@@ -13,30 +13,14 @@
  */
 
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
 
 import type { CcdPltProofV1 } from "../src/proofPayload";
-import {
-  parseAuthorizationEnvelope,
-} from "../src/phase3/authorizationEnvelope";
-import type {
-  Phase3DemoContractBindingSnapshot,
-} from "../src/phase3/demoChallengeBinding";
 import {
   buildPhase3GatewayReleaseDecision,
   type Phase3GatewayReleaseDecision,
 } from "../src/phase3/gatewayReleaseDecisionAdapter";
-import {
-  liveVerifyDirectBuyerEnvelopeWithDeps,
-  type LiveZkpSdkInvocationDeps,
-} from "../src/phase3/liveZkpVerifierAdapter";
-import {
-  buildModelAEligibilityResult,
-} from "../src/phase3/modelAEligibility";
-import {
-  bindModelAEligibilityToChallengeContext,
-  type ModelAEligibilityBindingResult,
+import type {
+  ModelAEligibilityBindingResult,
 } from "../src/phase3/modelAEligibilityBinding";
 import {
   buildX402ReceiptPaymentSatisfaction,
@@ -46,23 +30,14 @@ import {
   type X402ReceiptContextMismatchField,
 } from "../src/phase3/x402ReceiptPaymentSignal";
 import {
-  buildSafeMetadata,
-  describeLiveBuyerProofCaptureAdapterInputContract,
-  normalizeWalletProofCapture,
-} from "./phase3-wallet-proof-capture-harness";
+  assertPhase3DecisionSafety,
+  buildPhase3CapturedProofReceiptState,
+  buildPhase3SyntheticReceiptProofFromCapturedState,
+  PHASE3_CAPTURED_PROOF_RECEIPT_NOW_SEC,
+  type Phase3CapturedProofReceiptState,
+} from "./phase3-captured-proof-receipt-test-helpers";
 
 const LABEL = "phase3:captured-proof-receipt-context-matrix-test";
-const NOW_SEC = 1_800_000_000;
-
-type CapturedProofState = {
-  captureContract: ReturnType<typeof describeLiveBuyerProofCaptureAdapterInputContract>;
-  safeMetadata: ReturnType<typeof buildSafeMetadata>;
-  parsedOk: boolean;
-  boundEligibility: ModelAEligibilityBindingResult;
-  fixtureChallenge: Record<string, unknown>;
-  contract: Phase3DemoContractBindingSnapshot;
-  nonce: string;
-};
 
 type ContextMismatchRow = {
   label: string;
@@ -79,200 +54,14 @@ type ContextMismatchRow = {
   productionRelease: false;
 };
 
-function asRecord(value: unknown, name: string): Record<string, unknown> {
-  assert.equal(
-    value !== null && typeof value === "object" && !Array.isArray(value),
-    true,
-    name + " must be an object",
-  );
-  return value as Record<string, unknown>;
-}
-
-function getRecord(parent: Record<string, unknown>, key: string): Record<string, unknown> {
-  return asRecord(parent[key], key);
-}
-
-function getString(parent: Record<string, unknown>, key: string): string {
-  assert.equal(typeof parent[key], "string", key + " must be a string");
-  return String(parent[key]);
-}
-
-function buildContractFromChallenge(challenge: Record<string, unknown>): Phase3DemoContractBindingSnapshot {
-  const resource = getRecord(challenge, "resource");
-  const contract = getRecord(challenge, "contract");
-  const asset = getRecord(challenge, "asset");
-
-  return {
-    merchantId: getString(challenge, "merchantId"),
-    resource: {
-      method: getString(resource, "method"),
-      path: getString(resource, "path"),
-    },
-    contractId: getString(contract, "contractId"),
-    contractVersion: getString(contract, "contractVersion"),
-    isFrozen: contract.isFrozen === true,
-    network: getString(challenge, "network"),
-    chain_id: getString(challenge, "chain_id"),
-    asset: {
-      type: getString(asset, "type"),
-      tokenId: getString(asset, "tokenId"),
-      decimals: Number(asset.decimals),
-    },
-    amount: getString(challenge, "amount"),
-    payTo: getString(challenge, "payTo"),
-  };
-}
-
-function buildFakeLiveDeps(expectedPresentationContext: string): LiveZkpSdkInvocationDeps {
-  return {
-    createGrpcClient(input) {
-      assert.equal(input.grpcHost, "127.0.0.1");
-      assert.equal(input.grpcPort, 1);
-      return {
-        fake: "grpc-client",
-      };
-    },
-
-    parsePresentation(input) {
-      const presentation = asRecord(input.presentation, "presentation");
-      assert.equal(presentation.presentationContext, expectedPresentationContext);
-      assert.equal(presentation.sanitized, true);
-      assert.equal(presentation.rawProofMaterialPresent, false);
-
-      return {
-        fake: "parsed-presentation",
-        challenge: expectedPresentationContext,
-      };
-    },
-
-    async getPublicData(input) {
-      assert.deepEqual(input.grpc, {
-        fake: "grpc-client",
-      });
-      assert.equal(input.network, "testnet");
-      assert.deepEqual(input.presentation, {
-        fake: "parsed-presentation",
-        challenge: expectedPresentationContext,
-      });
-
-      return [
-        {
-          inputs: {
-            credentialStatements: [{ statement: "age-region-v1" }],
-          },
-        },
-      ];
-    },
-
-    async getCryptographicParameters(input) {
-      assert.deepEqual(input.grpc, {
-        fake: "grpc-client",
-      });
-
-      return {
-        fake: "cryptographic-parameters",
-      };
-    },
-
-    verifyPresentation(input) {
-      assert.deepEqual(input.presentation, {
-        fake: "parsed-presentation",
-        challenge: expectedPresentationContext,
-      });
-      assert.deepEqual(input.cryptographicParameters, {
-        fake: "cryptographic-parameters",
-      });
-      assert.deepEqual(input.publicData, [
-        {
-          credentialStatements: [{ statement: "age-region-v1" }],
-        },
-      ]);
-
-      return {
-        challenge: expectedPresentationContext,
-        credentialStatements: [{ statement: "age-region-v1" }],
-      };
-    },
-  };
-}
-
-function buildCapturedWalletProofInputFromSanitizedFixture(fixture: Record<string, unknown>) {
-  const challenge = getRecord(fixture, "challenge");
-  const wallet = getRecord(fixture, "wallet");
-
-  return {
-    source: "phase3-test-captured-proof-receipt-context-matrix-input",
-    captureKind: "raw-wallet-capture-fields",
-    capturedAt: "2026-06-10T00:00:00.000Z",
-
-    challenge,
-    challengeHash: getString(fixture, "challengeHash"),
-    proofType: "concordium.VerifiablePresentation",
-    presentation: fixture.presentation,
-    walletChallenge: getString(fixture, "walletChallenge"),
-    wallet: {
-      network: getString(wallet, "network"),
-      selectedChain: getString(wallet, "selectedChain"),
-      accountAddress: getString(wallet, "accountAddress"),
-    },
-    submittedAt: "2026-06-10T00:00:00.000Z",
-
-    sanitized: true,
-    rawProofMaterialPresent: false,
-  };
-}
-
-function assertDecisionSafety(decision: Phase3GatewayReleaseDecision): void {
-  assert.equal(decision.paymentReleaseAttempted, false);
-  assert.equal(decision.paymentResponseEmitted, false);
-  assert.equal(decision.crpCalled, false);
-  assert.equal(decision.replayTouched, false);
-  assert.equal(decision.rawProofPrinted, false);
-  assert.equal(decision.rawReceiptPrinted, false);
-}
-
-function buildSyntheticReceiptProofFromCapturedState(state: CapturedProofState): CcdPltProofV1 {
-  const contract = state.contract;
-
-  return {
-    proofVersion: "ccd-plt-proof@v1",
-    contract: {
-      contractId: contract.contractId,
-      contractVersion: contract.contractVersion,
-      isFrozen: contract.isFrozen,
-      merchantId: contract.merchantId,
-      resource: {
-        method: contract.resource.method.toUpperCase(),
-        path: contract.resource.path,
-      },
-      network: contract.network,
-      asset: {
-        type: "PLT",
-        tokenId: contract.asset.tokenId,
-        decimals: contract.asset.decimals,
-      },
-      amount: contract.amount,
-      payTo: contract.payTo,
-    },
-    nonce: state.nonce,
-    settlement: {
-      status: "finalized",
-      settledAt: NOW_SEC - 60,
-      expiresAt: NOW_SEC + 300,
-    },
-    chain: {
-      transactionHash: "phase3contextmatrixtxhash",
-      blockHash: "phase3contextmatrixblockhash",
-      blockHeight: 161,
-    },
-    paymentEvent: {
-      kind: "plt.transfer",
-      tokenId: contract.asset.tokenId,
-      amountRaw: "50101",
-      from: "ccd1qphase3contextmatrixbuyerplaceholder",
-      to: contract.payTo,
-    },
-  };
+function buildSyntheticReceiptProofFromCapturedState(state: Phase3CapturedProofReceiptState): CcdPltProofV1 {
+  return buildPhase3SyntheticReceiptProofFromCapturedState({
+    state,
+    transactionHash: "phase3contextmatrixtxhash",
+    blockHash: "phase3contextmatrixblockhash",
+    blockHeight: 161,
+    from: "ccd1qphase3contextmatrixbuyerplaceholder",
+  });
 }
 
 function decisionFromExpectedContext(input: {
@@ -282,7 +71,7 @@ function decisionFromExpectedContext(input: {
 }): Phase3GatewayReleaseDecision {
   const receipt = buildX402ReceiptPaymentSignalFromVerifiedCcdPltProofV1({
     proof: input.proof,
-    nowSec: NOW_SEC,
+    nowSec: PHASE3_CAPTURED_PROOF_RECEIPT_NOW_SEC,
   });
 
   const payment = buildX402ReceiptPaymentSatisfaction({
@@ -295,7 +84,7 @@ function decisionFromExpectedContext(input: {
     payment,
   });
 
-  assertDecisionSafety(decision);
+  assertPhase3DecisionSafety(decision);
   return decision;
 }
 
@@ -355,7 +144,7 @@ function mutateContext(
 
 function rowFor(input: {
   label: string;
-  state: CapturedProofState;
+  state: Phase3CapturedProofReceiptState;
   proof: CcdPltProofV1;
   expectedContext: X402ReceiptBindingContext;
   expectedMismatchField: X402ReceiptContextMismatchField | null;
@@ -393,7 +182,7 @@ function rowFor(input: {
     assert.equal(decision.receiptContextMismatchField, input.expectedMismatchField, input.label);
   }
 
-  assertDecisionSafety(decision);
+  assertPhase3DecisionSafety(decision);
 
   return {
     label: input.label,
@@ -415,142 +204,13 @@ function rowFor(input: {
   };
 }
 
-async function buildCapturedProofState(): Promise<CapturedProofState> {
-  const fixturePath = path.join(
-    process.cwd(),
-    "fixtures",
-    "phase3",
-    "wallet-proof-canonical.direct-buyer.sanitized.json",
-  );
-
-  const fixture = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
-  const fixtureRecord = asRecord(fixture, "fixture");
-
-  const capturedWalletProofInput = buildCapturedWalletProofInputFromSanitizedFixture(fixtureRecord);
-  const capturedWalletProofRecord = asRecord(capturedWalletProofInput, "capturedWalletProofInput");
-
-  assert.equal(capturedWalletProofRecord.captureKind, "raw-wallet-capture-fields");
-  assert.equal(capturedWalletProofRecord.sanitized, true);
-  assert.equal(capturedWalletProofRecord.rawProofMaterialPresent, false);
-  assert.equal(capturedWalletProofRecord.challengeHash, fixtureRecord.challengeHash);
-  assert.equal(capturedWalletProofRecord.walletChallenge, fixtureRecord.walletChallenge);
-  assert.deepEqual(capturedWalletProofRecord.challenge, fixtureRecord.challenge);
-  assert.deepEqual(capturedWalletProofRecord.presentation, fixtureRecord.presentation);
-
-  const captureContract = describeLiveBuyerProofCaptureAdapterInputContract();
-  assert.equal(captureContract.adapterInputOnly, true);
-  assert.equal(captureContract.productionReleaseAuthorized, false);
-  assert.equal(captureContract.gatewayRuntimeMutated, false);
-  assert.equal(captureContract.persisted, false);
-  assert.equal(captureContract.crpCalled, false);
-  assert.equal(captureContract.paymentAttempted, false);
-  assert.equal(captureContract.paymentResponseEmitted, false);
-  assert.equal(captureContract.replayTouched, false);
-  assert.equal(captureContract.rawProofPrinted, false);
-  assert.equal(captureContract.acceptedInputShapes.includes("raw-wallet-capture-fields"), true);
-
-  const normalizedEnvelope = normalizeWalletProofCapture(capturedWalletProofInput);
-  const normalizedRecord = asRecord(normalizedEnvelope, "normalizedEnvelope");
-
-  assert.equal(normalizedRecord.type, "xcf.concordium.authorization.direct-buyer.v1");
-  assert.equal(normalizedRecord.challengeHash, fixtureRecord.challengeHash);
-  assert.equal(normalizedRecord.walletChallenge, fixtureRecord.walletChallenge);
-  assert.deepEqual(normalizedRecord.challenge, fixtureRecord.challenge);
-  assert.deepEqual(normalizedRecord.presentation, fixtureRecord.presentation);
-  assert.deepEqual(normalizedRecord.wallet, capturedWalletProofRecord.wallet);
-
-  const safeMetadata = buildSafeMetadata(normalizedEnvelope, null);
-  assert.equal(safeMetadata.ok, true);
-  assert.equal(safeMetadata.normalized, true);
-  assert.equal(safeMetadata.accountBindingStatus, "present");
-  assert.equal(safeMetadata.rawProofPrinted, false);
-  assert.equal(safeMetadata.persisted, false);
-  assert.equal(safeMetadata.paymentReleaseAttempted, false);
-  assert.equal(safeMetadata.paymentResponseEmitted, false);
-  assert.equal(safeMetadata.crpCalled, false);
-  assert.equal(safeMetadata.replayTouched, false);
-
-  const parsed = parseAuthorizationEnvelope(normalizedEnvelope);
-  assert.equal(parsed.ok, true);
-  assert.equal(parsed.type, "xcf.concordium.authorization.direct-buyer.v1");
-  assert.equal(parsed.challengeHash, fixtureRecord.challengeHash);
-  assert.equal(parsed.expectedChallengeHash, fixtureRecord.challengeHash);
-
-  if (parsed.envelope.type !== "xcf.concordium.authorization.direct-buyer.v1") {
-    throw new Error("expected direct Buyer envelope");
-  }
-
-  const liveVerified = await liveVerifyDirectBuyerEnvelopeWithDeps(
-    parsed.envelope,
-    {
-      liveVerify: true,
-      grpcHost: "127.0.0.1",
-      grpcPort: 1,
-      network: "testnet",
-    },
-    buildFakeLiveDeps(String(fixtureRecord.walletChallenge)),
-  );
-
-  assert.equal(liveVerified.ok, true);
-  assert.equal(liveVerified.stage, "verified");
-  assert.equal(liveVerified.walletChallenge, fixtureRecord.walletChallenge);
-  assert.equal(liveVerified.verifiedChallenge, fixtureRecord.walletChallenge);
-  assert.equal(liveVerified.challengeBinding, "walletChallenge");
-  assert.equal(liveVerified.rawProofPrinted, false);
-
-  const eligibility = buildModelAEligibilityResult({
-    verifierResult: liveVerified,
-    accountBindingStatus: "present",
-  });
-
-  assert.equal(eligibility.ok, true);
-  assert.equal(eligibility.eligibilityVerified, true);
-  assert.equal(eligibility.challengeVerified, true);
-  assert.equal(eligibility.credentialStatementsVerified, true);
-  assert.equal(eligibility.releaseAuthorized, false);
-  assert.equal(eligibility.paymentReleaseAttempted, false);
-  assert.equal(eligibility.paymentResponseEmitted, false);
-  assert.equal(eligibility.crpCalled, false);
-  assert.equal(eligibility.replayTouched, false);
-  assert.equal(eligibility.rawProofPrinted, false);
-
-  const fixtureChallenge = asRecord(fixtureRecord.challenge, "fixture.challenge");
-  const contract = buildContractFromChallenge(fixtureChallenge);
-  const nonce = getString(fixtureChallenge, "nonce");
-
-  const boundEligibility = bindModelAEligibilityToChallengeContext({
-    eligibility,
-    nonce,
-    challenge: fixtureRecord.challenge,
-    contract,
-  });
-
-  assert.equal(boundEligibility.ok, true);
-  assert.equal(boundEligibility.eligibilityVerified, true);
-  assert.equal(boundEligibility.challengeBound, true);
-  assert.equal(boundEligibility.resourceBound, true);
-  assert.equal(boundEligibility.releaseAuthorized, false);
-  assert.equal(boundEligibility.paymentReleaseAttempted, false);
-  assert.equal(boundEligibility.paymentResponseEmitted, false);
-  assert.equal(boundEligibility.crpCalled, false);
-  assert.equal(boundEligibility.replayTouched, false);
-  assert.equal(boundEligibility.rawProofPrinted, false);
-
-  return {
-    captureContract,
-    safeMetadata,
-    parsedOk: parsed.ok,
-    boundEligibility,
-    fixtureChallenge,
-    contract,
-    nonce,
-  };
-}
-
 async function main() {
   console.log(`[${LABEL}] decision-space only; no Gateway receipt submission`);
 
-  const state = await buildCapturedProofState();
+  const state = await buildPhase3CapturedProofReceiptState({
+    source: "phase3-test-captured-proof-receipt-context-matrix-input",
+    badNonce: "phase3-pr161-wrong-captured-proof-nonce",
+  });
   const proof = buildSyntheticReceiptProofFromCapturedState(state);
   const matchingContext = deriveX402ReceiptBindingContextFromCcdPltProofV1(proof);
 
