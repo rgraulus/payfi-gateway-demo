@@ -59,7 +59,8 @@
     "phase3:fixture-model-a-gateway-runtime-seam-test": "ts-node --transpile-only scripts/ci_phase3_fixture_model_a_gateway_runtime_seam.ts",
     "phase3:captured-wallet-proof-gateway-seam-test": "ts-node --transpile-only scripts/ci_phase3_captured_wallet_proof_gateway_seam.ts",
     "phase3:captured-proof-guarded-test-release-test": "ts-node --transpile-only scripts/ci_phase3_captured_proof_guarded_test_release.ts",
-    "phase3:captured-proof-guarded-negative-matrix-test": "ts-node --transpile-only scripts/ci_phase3_captured_proof_guarded_negative_matrix.ts"
+    "phase3:captured-proof-guarded-negative-matrix-test": "ts-node --transpile-only scripts/ci_phase3_captured_proof_guarded_negative_matrix.ts",
+    "phase3:dual-proof-receipt-guard-test": "ts-node --transpile-only scripts/ci_phase3_dual_proof_receipt_guard.ts"
   },
   "repository": {
     "type": "git",
