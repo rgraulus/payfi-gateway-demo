@@ -208,6 +208,12 @@ const phase3GatewayReleaseEnabled =
 const phase3GatewayTestReleaseOnly =
   String(process.env.PHASE3_GATEWAY_TEST_RELEASE_ONLY ?? '').toLowerCase() === 'true';
 
+// Phase 3 production release switch seam.
+// OFF by default. PR #173 exposes the explicit production-release switch,
+// but intentionally does not authorize production release yet.
+const phase3GatewayProductionReleaseEnabled =
+  String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_ENABLED ?? '').toLowerCase() === 'true';
+
 // PR #100 demo controls.
 // Both remain conservative by default:
 // - parsed-only policy satisfaction is NOT accepted unless explicitly enabled.
@@ -1027,6 +1033,7 @@ app.get('/healthz', async (_req, res) => {
       gatewayPolicyGateEnabled: phase3GatewayPolicyGateEnabled,
       gatewayReleaseEnabled: phase3GatewayReleaseEnabled,
       gatewayTestReleaseOnly: phase3GatewayTestReleaseOnly,
+      gatewayProductionReleaseEnabled: phase3GatewayProductionReleaseEnabled,
       allowParsedOnlyPolicy: phase3AllowParsedOnlyPolicy,
       requireLiveZkp: phase3RequireLiveZkp,
     },
@@ -1676,6 +1683,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           gatewayPolicyGateEnabled: phase3GatewayPolicyGateEnabled,
           gatewayReleaseEnabled: phase3GatewayReleaseEnabled,
           gatewayTestReleaseOnly: phase3GatewayTestReleaseOnly,
+          gatewayProductionReleaseEnabled: phase3GatewayProductionReleaseEnabled,
           runtimeReceiptRequired: true,
           receiptSignalPresent: false,
         },
@@ -1685,6 +1693,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           guardSatisfied:
             phase3GatewayReleaseEnabled === true && phase3GatewayTestReleaseOnly === true,
           blockedBy: 'missing_x402_receipt_signal',
+          productionReleaseSwitchEnabled: phase3GatewayProductionReleaseEnabled,
           productionRelease: false,
           paymentResponseAllowed: false,
           resourceReleaseAllowed: false,
@@ -1750,6 +1759,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         gatewayPolicyGateEnabled: phase3GatewayPolicyGateEnabled,
         gatewayReleaseEnabled: phase3GatewayReleaseEnabled,
         gatewayTestReleaseOnly: phase3GatewayTestReleaseOnly,
+        gatewayProductionReleaseEnabled: phase3GatewayProductionReleaseEnabled,
         guardedRuntimeReleaseRecognition: {
           recognized: true,
           releaseDecisionRecognized: true,
@@ -1757,6 +1767,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
             phase3GatewayReleaseEnabled === true && phase3GatewayTestReleaseOnly === true,
           guard: 'PHASE3_GATEWAY_RELEASE_ENABLED && PHASE3_GATEWAY_TEST_RELEASE_ONLY',
           mode: 'synthetic-test-only',
+          productionReleaseSwitchEnabled: phase3GatewayProductionReleaseEnabled,
           productionRelease: false,
           realReceiptRequiredBeforeProductionRelease: true,
         },
@@ -1772,6 +1783,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         guardSatisfied:
           phase3GatewayReleaseEnabled === true && phase3GatewayTestReleaseOnly === true,
         mode: 'synthetic-test-only',
+        productionReleaseSwitchEnabled: phase3GatewayProductionReleaseEnabled,
         productionRelease: false,
         paymentResponseAllowed: false,
         resourceReleaseAllowed: true,
@@ -1939,6 +1951,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       reason: decisionAny.reason ?? decisionAny.decision?.reason ?? null,
       paymentResponseAllowed: decision.paymentResponseAllowed,
       resourceReleaseAllowed: decision.resourceReleaseAllowed,
+      productionReleaseSwitchEnabled: phase3GatewayProductionReleaseEnabled,
       productionRelease: decision.productionRelease,
       paymentReleaseAttempted: decision.paymentReleaseAttempted,
       paymentResponseEmitted: decision.paymentResponseEmitted,
