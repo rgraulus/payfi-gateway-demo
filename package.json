@@ -68,7 +68,8 @@
     "phase3:runtime-receipt-requirement-matrix-test": "ts-node --transpile-only scripts/ci_phase3_runtime_receipt_requirement_matrix.ts",
     "phase3:guarded-runtime-release-decision-recognition-test": "ts-node --transpile-only scripts/ci_phase3_guarded_runtime_release_decision_recognition.ts",
     "phase3:test-payment-response-boundary-test": "ts-node --transpile-only scripts/ci_phase3_test_payment_response_boundary.ts",
-    "phase3:payment-response-replay-boundary-test": "ts-node --transpile-only scripts/ci_phase3_payment_response_replay_boundary.ts"
+    "phase3:payment-response-replay-boundary-test": "ts-node --transpile-only scripts/ci_phase3_payment_response_replay_boundary.ts",
+    "phase3:decision-persistence-boundary-test": "ts-node --transpile-only scripts/ci_phase3_decision_persistence_boundary.ts"
   },
   "repository": {
     "type": "git",
