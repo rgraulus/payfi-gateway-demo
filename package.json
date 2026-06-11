@@ -73,7 +73,8 @@
     "phase3:production-release-disabled-boundary-test": "ts-node --transpile-only scripts/ci_phase3_production_release_disabled_boundary.ts",
     "phase3:switch-flip-prerequisites-test": "ts-node --transpile-only scripts/ci_phase3_switch_flip_prerequisites.ts",
     "phase3:production-release-switch-seam-test": "ts-node --transpile-only scripts/ci_phase3_production_release_switch_seam.ts",
-    "phase3:production-release-switch-decision-guard-test": "ts-node --transpile-only scripts/ci_phase3_production_release_switch_decision_guard.ts"
+    "phase3:production-release-switch-decision-guard-test": "ts-node --transpile-only scripts/ci_phase3_production_release_switch_decision_guard.ts",
+    "phase3:production-canonical-persistence-preflight-test": "ts-node --transpile-only scripts/ci_phase3_production_canonical_persistence_preflight.ts"
   },
   "repository": {
     "type": "git",

@@ -1950,10 +1950,17 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCandidate === true &&
       phase3GatewayProductionReleaseEnabled === true;
 
+    const canonicalReleasePersistenceRequired =
+      productionReleaseEligible === true;
+
+    const canonicalReleasePersistenceReady: boolean = false;
+
     const productionReleaseBlockedBy =
       productionReleaseCandidate === true && phase3GatewayProductionReleaseEnabled !== true
         ? 'production_release_switch_disabled'
-        : null;
+        : canonicalReleasePersistenceRequired === true && !canonicalReleasePersistenceReady
+          ? 'canonical_release_persistence_not_ready'
+          : null;
 
     return {
       observed: true,
@@ -1969,6 +1976,8 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseSwitchRequired: true,
       productionReleaseCandidate,
       productionReleaseEligible,
+      canonicalReleasePersistenceRequired,
+      canonicalReleasePersistenceReady,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
