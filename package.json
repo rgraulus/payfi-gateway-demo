@@ -63,7 +63,8 @@
     "phase3:dual-proof-receipt-guard-test": "ts-node --transpile-only scripts/ci_phase3_dual_proof_receipt_guard.ts",
     "phase3:captured-proof-synthetic-receipt-boundary-test": "ts-node --transpile-only scripts/ci_phase3_captured_proof_synthetic_receipt_boundary.ts",
     "phase3:captured-proof-receipt-context-matrix-test": "ts-node --transpile-only scripts/ci_phase3_captured_proof_receipt_context_matrix.ts",
-    "phase3:live-verifier-readiness-contract-test": "ts-node --transpile-only scripts/ci_phase3_live_verifier_readiness_contract.ts"
+    "phase3:live-verifier-readiness-contract-test": "ts-node --transpile-only scripts/ci_phase3_live_verifier_readiness_contract.ts",
+    "phase3:runtime-readiness-seam-test": "ts-node --transpile-only scripts/ci_phase3_runtime_readiness_seam.ts"
   },
   "repository": {
     "type": "git",
