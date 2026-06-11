@@ -1941,6 +1941,20 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
 
     const decisionAny = decision as any;
 
+    const productionReleaseCandidate =
+      decision.ok === true &&
+      decision.paymentResponseAllowed === true &&
+      decision.resourceReleaseAllowed === true;
+
+    const productionReleaseEligible =
+      productionReleaseCandidate === true &&
+      phase3GatewayProductionReleaseEnabled === true;
+
+    const productionReleaseBlockedBy =
+      productionReleaseCandidate === true && phase3GatewayProductionReleaseEnabled !== true
+        ? 'production_release_switch_disabled'
+        : null;
+
     return {
       observed: true,
       enforced: args.enforced === true,
@@ -1952,7 +1966,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       paymentResponseAllowed: decision.paymentResponseAllowed,
       resourceReleaseAllowed: decision.resourceReleaseAllowed,
       productionReleaseSwitchEnabled: phase3GatewayProductionReleaseEnabled,
-      productionRelease: decision.productionRelease,
+      productionReleaseSwitchRequired: true,
+      productionReleaseCandidate,
+      productionReleaseEligible,
+      productionReleaseBlockedBy,
+      productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
+      productionRelease: false,
       paymentReleaseAttempted: decision.paymentReleaseAttempted,
       paymentResponseEmitted: decision.paymentResponseEmitted,
       crpCalled: decision.crpCalled,
