@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /**
- * PR #174 — Phase 3 production-release switch decision guard.
+ * PR #175 — Phase 3 production canonical persistence preflight.
  *
- * This harness proves that the explicit production-release switch is now
- * decision-relevant while remaining side-effect free:
+ * This harness proves the production canonical release persistence gate.
  *
- * - switch OFF + valid proof/receipt => production candidate is blocked by switch
- * - switch ON  + valid proof/receipt => production eligibility is recognized
+ * - switch OFF + valid proof/receipt => blocked by production switch
+ * - switch ON  + valid proof/receipt => blocked by canonical persistence preflight
+ * - canonicalReleasePersistenceRequired is true when production is eligible
+ * - canonicalReleasePersistenceReady remains false
  * - productionRelease remains false
  * - canonical release persistence remains false
  * - CRP fulfill remains false
@@ -30,13 +31,13 @@ import {
   waitForReady,
 } from "./phase3GatewayHarnessUtils";
 
-const LABEL = "phase3:production-release-switch-decision-guard-test";
+const LABEL = "phase3:production-canonical-persistence-preflight-test";
 
-const SWITCH_OFF_GATEWAY_PORT = Number(process.env.PHASE3_PROD_SWITCH_GUARD_OFF_PORT || 3092);
-const SWITCH_OFF_JWKS_PORT = Number(process.env.PHASE3_PROD_SWITCH_GUARD_OFF_JWKS_PORT || 8102);
+const SWITCH_OFF_GATEWAY_PORT = Number(process.env.PHASE3_PROD_PERSISTENCE_PREFLIGHT_OFF_PORT || 3094);
+const SWITCH_OFF_JWKS_PORT = Number(process.env.PHASE3_PROD_PERSISTENCE_PREFLIGHT_OFF_JWKS_PORT || 8104);
 
-const SWITCH_ON_GATEWAY_PORT = Number(process.env.PHASE3_PROD_SWITCH_GUARD_ON_PORT || 3093);
-const SWITCH_ON_JWKS_PORT = Number(process.env.PHASE3_PROD_SWITCH_GUARD_ON_JWKS_PORT || 8103);
+const SWITCH_ON_GATEWAY_PORT = Number(process.env.PHASE3_PROD_PERSISTENCE_PREFLIGHT_ON_PORT || 3095);
+const SWITCH_ON_JWKS_PORT = Number(process.env.PHASE3_PROD_PERSISTENCE_PREFLIGHT_ON_JWKS_PORT || 8105);
 
 const isWin = process.platform === "win32";
 
@@ -183,6 +184,17 @@ function assertDecisionSideEffectFree(decision: any, label: string) {
   assert.equal(decision?.resourceReleaseAllowed, true, `${label}: test-only resource release remains allowed`);
   assert.equal(decision?.productionReleaseCandidate, true, `${label}: production candidate recognized`);
   assert.equal(decision?.productionReleaseSwitchRequired, true, `${label}: production switch required`);
+  assert.equal(
+    typeof decision?.canonicalReleasePersistenceRequired,
+    "boolean",
+    `${label}: canonical persistence required flag should be present`,
+  );
+  assert.equal(
+    typeof decision?.canonicalReleasePersistenceReady,
+    "boolean",
+    `${label}: canonical persistence ready flag should be present`,
+  );
+  assert.equal(decision?.canonicalReleasePersistenceReady, false, `${label}: canonical persistence ready remains false`);
   assert.equal(decision?.productionRelease, false, `${label}: production release remains false`);
   assert.equal(decision?.canonicalReleasePersisted, false, `${label}: canonical release persistence remains false`);
   assert.equal(decision?.crpCalled, false, `${label}: CRP must not be called`);
@@ -324,12 +336,13 @@ async function runScenario(input: {
       assert.equal(decision?.productionReleaseEligible, input.productionSwitchEnabled);
 
       if (input.productionSwitchEnabled) {
-        assert.equal(
-          decision?.productionReleaseBlockedBy,
-          "canonical_release_persistence_not_ready",
-        );
+        assert.equal(decision?.canonicalReleasePersistenceRequired, true);
+        assert.equal(decision?.canonicalReleasePersistenceReady, false);
+        assert.equal(decision?.productionReleaseBlockedBy, "canonical_release_persistence_not_ready");
         assert.equal(decision?.productionReleaseRecognizedButNotExecuted, true);
       } else {
+        assert.equal(decision?.canonicalReleasePersistenceRequired, false);
+        assert.equal(decision?.canonicalReleasePersistenceReady, false);
         assert.equal(decision?.productionReleaseBlockedBy, "production_release_switch_disabled");
         assert.equal(decision?.productionReleaseRecognizedButNotExecuted, false);
       }
@@ -349,6 +362,8 @@ async function runScenario(input: {
         productionReleaseSwitchRequired: decision?.productionReleaseSwitchRequired === true,
         productionReleaseSwitchEnabled: decision?.productionReleaseSwitchEnabled === true,
         productionReleaseEligible: decision?.productionReleaseEligible === true,
+        canonicalReleasePersistenceRequired: decision?.canonicalReleasePersistenceRequired === true,
+        canonicalReleasePersistenceReady: decision?.canonicalReleasePersistenceReady === true,
         productionReleaseBlockedBy: decision?.productionReleaseBlockedBy ?? null,
         productionReleaseRecognizedButNotExecuted:
           decision?.productionReleaseRecognizedButNotExecuted === true,
@@ -380,7 +395,7 @@ async function main() {
 
   const summary = {
     ok: true,
-    harness: "phase3.productionReleaseSwitchDecisionGuard.v1",
+    harness: "phase3.productionCanonicalPersistencePreflight.v1",
 
     productionSwitchDefaultsOff: switchOff.gatewayProductionReleaseEnabled === false,
 
@@ -393,9 +408,11 @@ async function main() {
     blockedByProductionSwitchDisabled:
       switchOff.productionReleaseBlockedBy === "production_release_switch_disabled",
 
-    productionSwitchOnRecognizedByDecisionLayer:
+    canonicalPersistenceGateRecognizedByDecisionLayer:
       switchOn.productionReleaseCandidate === true &&
       switchOn.productionReleaseEligible === true &&
+      switchOn.canonicalReleasePersistenceRequired === true &&
+      switchOn.canonicalReleasePersistenceReady === false &&
       switchOn.productionReleaseBlockedBy === "canonical_release_persistence_not_ready" &&
       switchOn.productionReleaseRecognizedButNotExecuted === true &&
       switchOn.productionRelease === false,
@@ -407,6 +424,14 @@ async function main() {
       switchOn.paymentResponseEmitted === true &&
       switchOff.resourceReleased === true &&
       switchOn.resourceReleased === true,
+
+    canonicalReleasePersistenceRequiredWhenSwitchOn:
+      switchOff.canonicalReleasePersistenceRequired === false &&
+      switchOn.canonicalReleasePersistenceRequired === true,
+
+    canonicalReleasePersistenceReadyStillFalse:
+      switchOff.canonicalReleasePersistenceReady === false &&
+      switchOn.canonicalReleasePersistenceReady === false,
 
     canonicalReleasePersistedStillFalse:
       switchOff.canonicalReleasePersisted === false &&
@@ -431,8 +456,10 @@ async function main() {
   assert.equal(summary.productionSwitchDefaultsOff, true);
   assert.equal(summary.validProofAndReceiptStillBlockedWhenSwitchOff, true);
   assert.equal(summary.blockedByProductionSwitchDisabled, true);
-  assert.equal(summary.productionSwitchOnRecognizedByDecisionLayer, true);
+  assert.equal(summary.canonicalPersistenceGateRecognizedByDecisionLayer, true);
   assert.equal(summary.testOnlyReleaseStillAllowed, true);
+  assert.equal(summary.canonicalReleasePersistenceRequiredWhenSwitchOn, true);
+  assert.equal(summary.canonicalReleasePersistenceReadyStillFalse, true);
   assert.equal(summary.canonicalReleasePersistedStillFalse, true);
   assert.equal(summary.crpFulfillStillFalse, true);
   assert.equal(summary.rawProofAndReceiptNotPrinted, true);
