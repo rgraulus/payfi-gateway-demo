@@ -1837,10 +1837,19 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     });
   };
 
+  type CanonicalReleasePersistenceResult = {
+    ok: boolean;
+    canonicalReleasePersisted: boolean;
+    reason: string;
+    releaseReason: string | null;
+    entryReason?: string | null;
+    outcomeReason?: string | null;
+  };
+
   const finalizeSuccessfulSettlementAndRelease = async (args: {
     receiptJws: string;
     settlementReasonMessage: string;
-  }) => {
+  }): Promise<CanonicalReleasePersistenceResult> => {
     try {
       const entry = await completeSettlementEntryByNonce({
         nonce,
@@ -1881,8 +1890,29 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       if (!release.updated && release.reason !== 'already_in_target') {
         console.warn('Release did not advance as expected:', release);
       }
+
+      const canonicalReleasePersisted =
+        release.updated === true || release.reason === 'already_in_target';
+
+      return {
+        ok: canonicalReleasePersisted,
+        canonicalReleasePersisted,
+        reason: canonicalReleasePersisted
+          ? 'canonical_release_persisted'
+          : 'canonical_release_not_persisted',
+        releaseReason: release.reason,
+        entryReason: entry.reason,
+        outcomeReason: outcome.reason,
+      };
     } catch (err) {
       console.error('Failed to finalize settlement and release:', err);
+
+      return {
+        ok: false,
+        canonicalReleasePersisted: false,
+        reason: 'canonical_release_persistence_error',
+        releaseReason: null,
+      };
     }
   };
 
@@ -1911,7 +1941,10 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
 
   const phase3RuntimeVerifiedReceiptDecisionDebug = (
     proof: any,
-    args: { enforced?: boolean } = {},
+    args: {
+      enforced?: boolean;
+      canonicalReleasePersistenceResult?: CanonicalReleasePersistenceResult | null;
+    } = {},
   ) => {
     assertCcdPltProofV1(proof);
 
@@ -1953,7 +1986,16 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     const canonicalReleasePersistenceRequired =
       productionReleaseEligible === true;
 
-    const canonicalReleasePersistenceReady: boolean = false;
+    const canonicalReleasePersistenceSucceeded =
+      args.canonicalReleasePersistenceResult?.canonicalReleasePersisted === true;
+
+    const canonicalReleasePersistenceReady =
+      canonicalReleasePersistenceRequired === true &&
+      canonicalReleasePersistenceSucceeded === true;
+
+    const canonicalReleasePersistedForProduction =
+      canonicalReleasePersistenceRequired === true &&
+      canonicalReleasePersistenceSucceeded === true;
 
     const productionReleaseBlockedBy =
       productionReleaseCandidate === true && phase3GatewayProductionReleaseEnabled !== true
@@ -1978,6 +2020,14 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseEligible,
       canonicalReleasePersistenceRequired,
       canonicalReleasePersistenceReady,
+      canonicalReleasePersistenceReason:
+        canonicalReleasePersistenceRequired === true
+          ? (args.canonicalReleasePersistenceResult?.reason ?? null)
+          : null,
+      canonicalReleasePersistenceReleaseReason:
+        canonicalReleasePersistenceRequired === true
+          ? (args.canonicalReleasePersistenceResult?.releaseReason ?? null)
+          : null,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
@@ -1987,7 +2037,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       crpFulfillCalled: decision.crpFulfillCalled,
       replayTouched: decision.replayTouched,
       resourceReleased: decision.resourceReleased,
-      canonicalReleasePersisted: decision.canonicalReleasePersisted,
+      canonicalReleasePersisted: canonicalReleasePersistedForProduction,
       rawProofPrinted: decision.rawProofPrinted,
       rawReceiptPrinted: decision.rawReceiptPrinted,
     };
@@ -2120,7 +2170,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       }
 
       // Stage 4.5: finalize canonical lifecycle on successful local release.
-      await finalizeSuccessfulSettlementAndRelease({
+      const canonicalPersistence = await finalizeSuccessfulSettlementAndRelease({
         receiptJws: clientReceiptJws,
         settlementReasonMessage:
           'Gateway accepted finalized settlement for client-provided receipt',
@@ -2147,6 +2197,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
                 phase3RuntimeVerifiedReceiptDecision:
                   phase3RuntimeVerifiedReceiptDecisionDebug(proof, {
                     enforced: resourcePathname === '/paid-gated',
+                    canonicalReleasePersistenceResult: canonicalPersistence,
                   }),
               },
             }
@@ -2324,7 +2375,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
 
     // local mode
     // Stage 4.5: finalize canonical lifecycle on successful local release.
-    await finalizeSuccessfulSettlementAndRelease({
+    const canonicalPersistence = await finalizeSuccessfulSettlementAndRelease({
       receiptJws: effectiveDevReceiptJws,
       settlementReasonMessage:
         'Gateway accepted finalized settlement for dev receipt',
@@ -2352,6 +2403,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
               phase3RuntimeVerifiedReceiptDecision:
                 phase3RuntimeVerifiedReceiptDecisionDebug(proof, {
                   enforced: resourcePathname === '/paid-gated',
+                  canonicalReleasePersistenceResult: canonicalPersistence,
                 }),
             },
           }
