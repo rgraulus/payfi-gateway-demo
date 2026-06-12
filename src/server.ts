@@ -2056,8 +2056,70 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         ? 'phase3.productionReleaseAdapter.input.v1'
         : null;
 
-    const productionReleaseAdapterInputSanitized =
+    const productionReleaseAdapterInputBuilt =
       productionReleaseAdapterRequired === true;
+
+    const productionReleaseAdapterInputReady =
+      productionReleaseAdapterInputBuilt === true;
+
+    const productionReleaseAdapterInputBlockedBy =
+      productionReleaseAdapterRequired === true && productionReleaseAdapterInputReady !== true
+        ? 'production_release_adapter_input_not_ready'
+        : null;
+
+    const productionReleaseAdapterInputSanitized =
+      productionReleaseAdapterInputBuilt === true;
+
+    const productionReleaseAdapterInputJwsIncluded = false;
+
+    const productionReleaseAdapterInputPreview =
+      productionReleaseAdapterInputBuilt === true
+        ? {
+            contract: 'phase3.productionReleaseAdapter.input.v1',
+            release: {
+              mode: 'dry_run',
+              wouldExecute: true,
+              adapterMode: productionReleaseAdapterMode,
+            },
+            challenge: {
+              nonce,
+              challengeId: nonce,
+            },
+            resource: {
+              method: proof.contract.resource.method,
+              path: proof.contract.resource.path,
+            },
+            merchant: {
+              merchantId: proof.contract.merchantId,
+              payTo: expectedContext.payTo,
+            },
+            contractBinding: {
+              contractId: proof.contract.contractId,
+              contractVersion: proof.contract.contractVersion,
+              isFrozen: proof.contract.isFrozen,
+            },
+            payment: {
+              network: expectedContext.network,
+              asset: expectedContext.asset,
+              amount: expectedContext.amount,
+              amountRaw: proof.paymentEvent.amountRaw,
+            },
+            receipt: {
+              proofVersion: proof.proofVersion,
+              settlementStatus: proof.settlement.status,
+              txHash: null,
+            },
+            safety: {
+              sanitized: true,
+              rawProofIncluded: false,
+              rawReceiptIncluded: false,
+              jwsIncluded: false,
+              productionReleaseAuthorized: false,
+              adapterInvoked: false,
+              crpFulfillCalled: false,
+            },
+          }
+        : null;
 
     const productionReleaseAdapterRawProofIncluded = false;
 
@@ -2121,7 +2183,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseAdapterInvoked,
       productionReleaseAdapterBlockedBy,
       productionReleaseAdapterInputContract,
+      productionReleaseAdapterInputBuilt,
+      productionReleaseAdapterInputReady,
+      productionReleaseAdapterInputBlockedBy,
       productionReleaseAdapterInputSanitized,
+      productionReleaseAdapterInputJwsIncluded,
+      productionReleaseAdapterInputPreview,
       productionReleaseAdapterRawProofIncluded,
       productionReleaseAdapterRawReceiptIncluded,
       productionReleaseBlockedBy,
