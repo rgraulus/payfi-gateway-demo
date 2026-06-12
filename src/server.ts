@@ -2288,6 +2288,105 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           }
         : null;
 
+    const productionReleaseCrpFulfillRequestDraftRequired =
+      productionReleaseWouldExecute === true &&
+      productionReleaseAdapterDryRunInvocationReceiptEmitted === true;
+
+    const productionReleaseCrpFulfillRequestDraftBuilt =
+      productionReleaseCrpFulfillRequestDraftRequired === true &&
+      productionReleaseAdapterInputPreview !== null &&
+      productionReleaseAdapterInputSanitized === true &&
+      productionReleaseAdapterInputJwsIncluded === false &&
+      productionReleaseAdapterRawProofIncluded === false &&
+      productionReleaseAdapterRawReceiptIncluded === false;
+
+    const productionReleaseCrpFulfillRequestDraftContract =
+      productionReleaseCrpFulfillRequestDraftBuilt === true
+        ? 'phase3.productionRelease.crpFulfillRequestDraft.v1'
+        : null;
+
+    const productionReleaseCrpFulfillRequestDraftReason =
+      productionReleaseCrpFulfillRequestDraftBuilt === true
+        ? 'production_release_crp_fulfill_request_draft_built'
+        : null;
+
+    const productionReleaseCrpFulfillRequestDraftSanitized =
+      productionReleaseCrpFulfillRequestDraftBuilt === true
+        ? productionReleaseAdapterInputSanitized === true &&
+          productionReleaseAdapterInputJwsIncluded === false &&
+          productionReleaseAdapterRawProofIncluded === false &&
+          productionReleaseAdapterRawReceiptIncluded === false
+        : true;
+
+    const productionReleaseCrpFulfillRequestDraftExternalCallAttempted = false;
+    const productionReleaseCrpFulfillRequestDraftCrpCalled = false;
+    const productionReleaseCrpFulfillRequestDraftCrpFulfillCalled = false;
+
+    const productionReleaseCrpFulfillRequestDraft =
+      productionReleaseCrpFulfillRequestDraftBuilt === true
+        ? {
+            contract: productionReleaseCrpFulfillRequestDraftContract,
+            mode: 'dry_run',
+            status: 'drafted',
+            reason: productionReleaseCrpFulfillRequestDraftReason,
+            target: {
+              service: 'crp',
+              operation: 'fulfill',
+              method: 'POST',
+              path: '/v1/crp/payments/fulfill',
+            },
+            request: {
+              challengeId: productionReleaseAdapterInputPreview.challenge.challengeId,
+              nonce: productionReleaseAdapterInputPreview.challenge.nonce,
+              resource: {
+                method: productionReleaseAdapterInputPreview.resource.method,
+                path: productionReleaseAdapterInputPreview.resource.path,
+              },
+              merchant: {
+                merchantId: productionReleaseAdapterInputPreview.merchant.merchantId,
+                payTo: productionReleaseAdapterInputPreview.merchant.payTo,
+              },
+              contractBinding: {
+                contractId: productionReleaseAdapterInputPreview.contractBinding.contractId,
+                contractVersion: productionReleaseAdapterInputPreview.contractBinding.contractVersion,
+                isFrozen: productionReleaseAdapterInputPreview.contractBinding.isFrozen,
+              },
+              payment: {
+                network: productionReleaseAdapterInputPreview.payment.network,
+                asset: productionReleaseAdapterInputPreview.payment.asset,
+                amount: productionReleaseAdapterInputPreview.payment.amount,
+                amountRaw: productionReleaseAdapterInputPreview.payment.amountRaw,
+              },
+              receipt: {
+                proofVersion: productionReleaseAdapterInputPreview.receipt.proofVersion,
+                settlementStatus: productionReleaseAdapterInputPreview.receipt.settlementStatus,
+                txHash: productionReleaseAdapterInputPreview.receipt.txHash,
+              },
+            },
+            source: {
+              adapterInputContract: productionReleaseAdapterInputContract,
+              adapterReceiptContract: productionReleaseAdapterDryRunInvocationReceiptContract,
+              adapterReceiptReason: productionReleaseAdapterDryRunInvocationReceiptReason,
+            },
+            safety: {
+              sanitized: productionReleaseCrpFulfillRequestDraftSanitized,
+              jwsIncluded: false,
+              rawProofIncluded: false,
+              rawReceiptIncluded: false,
+              adapterInvoked: false,
+              externalCallAttempted: false,
+              crpCalled: productionReleaseCrpFulfillRequestDraftCrpCalled,
+              crpFulfillCalled: productionReleaseCrpFulfillRequestDraftCrpFulfillCalled,
+              productionReleaseAuthorized: false,
+              productionRelease: false,
+              sideEffectFree:
+                productionReleaseCrpFulfillRequestDraftExternalCallAttempted === false &&
+                productionReleaseCrpFulfillRequestDraftCrpCalled === false &&
+                productionReleaseCrpFulfillRequestDraftCrpFulfillCalled === false,
+            },
+          }
+        : null;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -2380,6 +2479,15 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseAdapterDryRunInvocationReceiptContract,
       productionReleaseAdapterDryRunInvocationReceiptReason,
       productionReleaseAdapterDryRunInvocationReceiptSideEffectFree,
+      productionReleaseCrpFulfillRequestDraftRequired,
+      productionReleaseCrpFulfillRequestDraftBuilt,
+      productionReleaseCrpFulfillRequestDraftContract,
+      productionReleaseCrpFulfillRequestDraftReason,
+      productionReleaseCrpFulfillRequestDraftSanitized,
+      productionReleaseCrpFulfillRequestDraftExternalCallAttempted,
+      productionReleaseCrpFulfillRequestDraftCrpCalled,
+      productionReleaseCrpFulfillRequestDraftCrpFulfillCalled,
+      productionReleaseCrpFulfillRequestDraft,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
