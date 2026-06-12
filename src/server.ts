@@ -2162,6 +2162,29 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           }
         : null;
 
+    const productionReleaseAdapterDecisionObserved =
+      productionReleaseAdapterNoopResultObserved === true;
+
+    const productionReleaseAdapterDecisionStatus =
+      productionReleaseAdapterDecisionObserved === true ? 'blocked' : 'inactive';
+
+    const productionReleaseAdapterDecisionReason =
+      productionReleaseAdapterDecisionObserved === true
+        ? productionReleaseAdapterNoopResultReason
+        : null;
+
+    const productionReleaseAdapterDecisionBlockedBy =
+      productionReleaseAdapterDecisionObserved === true
+        ? productionReleaseAdapterNoopResultReason
+        : null;
+
+    const productionReleaseAdapterDecisionAllowsProductionRelease = false;
+
+    const productionReleaseAdapterDecisionSideEffectFree =
+      productionReleaseAdapterNoopSideEffectFree === true &&
+      productionReleaseAdapterExternalCallAttempted === false &&
+      productionReleaseAdapterInvoked === false;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -2235,6 +2258,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseAdapterNoopSideEffectFree,
       productionReleaseAdapterExternalCallAttempted,
       productionReleaseAdapterNoopResult,
+      productionReleaseAdapterDecisionObserved,
+      productionReleaseAdapterDecisionStatus,
+      productionReleaseAdapterDecisionReason,
+      productionReleaseAdapterDecisionBlockedBy,
+      productionReleaseAdapterDecisionAllowsProductionRelease,
+      productionReleaseAdapterDecisionSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
