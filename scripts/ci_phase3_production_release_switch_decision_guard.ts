@@ -176,7 +176,13 @@ async function mintReceiptJws(pr: any, jwksPort: number): Promise<string> {
   return json.jws;
 }
 
-function assertDecisionSideEffectFree(decision: any, label: string) {
+function assertDecisionSideEffectFree(
+  decision: any,
+  label: string,
+  expected: {
+    canonicalReleasePersisted: boolean;
+  },
+) {
   assert.equal(decision?.observed, true, `${label}: decision observed`);
   assert.equal(decision?.enforced, true, `${label}: decision enforced`);
   assert.equal(decision?.paymentResponseAllowed, true, `${label}: test-only payment response remains allowed`);
@@ -184,7 +190,11 @@ function assertDecisionSideEffectFree(decision: any, label: string) {
   assert.equal(decision?.productionReleaseCandidate, true, `${label}: production candidate recognized`);
   assert.equal(decision?.productionReleaseSwitchRequired, true, `${label}: production switch required`);
   assert.equal(decision?.productionRelease, false, `${label}: production release remains false`);
-  assert.equal(decision?.canonicalReleasePersisted, false, `${label}: canonical release persistence remains false`);
+  assert.equal(
+    decision?.canonicalReleasePersisted,
+    expected.canonicalReleasePersisted,
+    `${label}: canonical release persistence should match expected switch-aware value`,
+  );
   assert.equal(decision?.crpCalled, false, `${label}: CRP must not be called`);
   assert.equal(decision?.crpFulfillCalled, false, `${label}: CRP fulfill must not be called`);
   assert.equal(decision?.rawProofPrinted, false, `${label}: raw proof must not be printed`);
@@ -318,16 +328,18 @@ async function runScenario(input: {
       assert.equal(release.json?.resource, "secret-data");
 
       const decision = release.json?.debug?.phase3RuntimeVerifiedReceiptDecision;
-      assertDecisionSideEffectFree(decision, input.label);
+      assertDecisionSideEffectFree(decision, input.label, {
+        canonicalReleasePersisted: input.productionSwitchEnabled,
+      });
 
       assert.equal(decision?.productionReleaseSwitchEnabled, input.productionSwitchEnabled);
       assert.equal(decision?.productionReleaseEligible, input.productionSwitchEnabled);
 
       if (input.productionSwitchEnabled) {
-        assert.equal(
-          decision?.productionReleaseBlockedBy,
-          "canonical_release_persistence_not_ready",
-        );
+        assert.equal(decision?.canonicalReleasePersistenceRequired, true);
+        assert.equal(decision?.canonicalReleasePersistenceReady, true);
+        assert.equal(decision?.canonicalReleasePersisted, true);
+        assert.equal(decision?.productionReleaseBlockedBy, null);
         assert.equal(decision?.productionReleaseRecognizedButNotExecuted, true);
       } else {
         assert.equal(decision?.productionReleaseBlockedBy, "production_release_switch_disabled");
@@ -349,6 +361,10 @@ async function runScenario(input: {
         productionReleaseSwitchRequired: decision?.productionReleaseSwitchRequired === true,
         productionReleaseSwitchEnabled: decision?.productionReleaseSwitchEnabled === true,
         productionReleaseEligible: decision?.productionReleaseEligible === true,
+          canonicalReleasePersistenceRequired:
+            decision?.canonicalReleasePersistenceRequired === true,
+          canonicalReleasePersistenceReady:
+            decision?.canonicalReleasePersistenceReady === true,
         productionReleaseBlockedBy: decision?.productionReleaseBlockedBy ?? null,
         productionReleaseRecognizedButNotExecuted:
           decision?.productionReleaseRecognizedButNotExecuted === true,
@@ -396,7 +412,10 @@ async function main() {
     productionSwitchOnRecognizedByDecisionLayer:
       switchOn.productionReleaseCandidate === true &&
       switchOn.productionReleaseEligible === true &&
-      switchOn.productionReleaseBlockedBy === "canonical_release_persistence_not_ready" &&
+      switchOn.canonicalReleasePersistenceRequired === true &&
+      switchOn.canonicalReleasePersistenceReady === true &&
+      switchOn.canonicalReleasePersisted === true &&
+      switchOn.productionReleaseBlockedBy === null &&
       switchOn.productionReleaseRecognizedButNotExecuted === true &&
       switchOn.productionRelease === false,
 
@@ -408,9 +427,9 @@ async function main() {
       switchOff.resourceReleased === true &&
       switchOn.resourceReleased === true,
 
-    canonicalReleasePersistedStillFalse:
+    canonicalReleasePersistedOnlyWhenSwitchOn:
       switchOff.canonicalReleasePersisted === false &&
-      switchOn.canonicalReleasePersisted === false,
+      switchOn.canonicalReleasePersisted === true,
 
     crpFulfillStillFalse:
       switchOff.crpFulfillCalled === false &&
@@ -433,7 +452,7 @@ async function main() {
   assert.equal(summary.blockedByProductionSwitchDisabled, true);
   assert.equal(summary.productionSwitchOnRecognizedByDecisionLayer, true);
   assert.equal(summary.testOnlyReleaseStillAllowed, true);
-  assert.equal(summary.canonicalReleasePersistedStillFalse, true);
+  assert.equal(summary.canonicalReleasePersistedOnlyWhenSwitchOn, true);
   assert.equal(summary.crpFulfillStillFalse, true);
   assert.equal(summary.rawProofAndReceiptNotPrinted, true);
   assert.equal(summary.behaviorStillSideEffectFree, true);
