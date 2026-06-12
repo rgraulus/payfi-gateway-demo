@@ -214,6 +214,12 @@ const phase3GatewayTestReleaseOnly =
 const phase3GatewayProductionReleaseEnabled =
   String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_ENABLED ?? '').toLowerCase() === 'true';
 
+// Phase 3 production release dry-run audit seam.
+// OFF by default. PR #178 exposes a would-execute audit signal only.
+// This does not authorize production release or CRP fulfill.
+const phase3GatewayProductionReleaseDryRunEnabled =
+  String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_DRY_RUN_ENABLED ?? '').toLowerCase() === 'true';
+
 // PR #100 demo controls.
 // Both remain conservative by default:
 // - parsed-only policy satisfaction is NOT accepted unless explicitly enabled.
@@ -1034,6 +1040,7 @@ app.get('/healthz', async (_req, res) => {
       gatewayReleaseEnabled: phase3GatewayReleaseEnabled,
       gatewayTestReleaseOnly: phase3GatewayTestReleaseOnly,
       gatewayProductionReleaseEnabled: phase3GatewayProductionReleaseEnabled,
+      gatewayProductionReleaseDryRunEnabled: phase3GatewayProductionReleaseDryRunEnabled,
       allowParsedOnlyPolicy: phase3AllowParsedOnlyPolicy,
       requireLiveZkp: phase3RequireLiveZkp,
     },
@@ -2001,12 +2008,34 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       canonicalReleasePersistenceReady === true;
 
     const productionReleaseExecutionMode = ((): 'disabled' | 'dry_run' | 'enabled' => {
+      if (
+        productionReleaseExecutionPreflightRequired === true &&
+        phase3GatewayProductionReleaseDryRunEnabled === true
+      ) {
+        return 'dry_run';
+      }
+
       return 'disabled';
     })();
 
+    const productionReleaseDryRun =
+      productionReleaseExecutionPreflightRequired === true &&
+      productionReleaseExecutionMode === 'dry_run';
+
+    const productionReleaseWouldExecute =
+      productionReleaseDryRun === true;
+
+    const productionReleaseDryRunAuditEvent =
+      productionReleaseWouldExecute === true;
+
+    const productionReleaseDryRunReason =
+      productionReleaseDryRunAuditEvent === true
+        ? 'production_release_would_execute'
+        : null;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
-      productionReleaseExecutionMode === 'enabled';
+      productionReleaseExecutionMode === 'dry_run';
 
     const productionReleaseExecutionBlockedBy =
       productionReleaseCandidate === true && phase3GatewayProductionReleaseEnabled !== true
@@ -2051,6 +2080,10 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseExecutionRecognizedButNotExecuted:
         productionReleaseExecutionPreflightRequired === true &&
         productionReleaseExecutionPreflightReady !== true,
+      productionReleaseDryRun,
+      productionReleaseWouldExecute,
+      productionReleaseDryRunAuditEvent,
+      productionReleaseDryRunReason,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
