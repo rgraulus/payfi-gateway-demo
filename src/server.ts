@@ -2033,6 +2033,36 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         ? 'production_release_would_execute'
         : null;
 
+    const productionReleaseAdapterRequired =
+      productionReleaseWouldExecute === true;
+
+    const productionReleaseAdapterMode =
+      productionReleaseAdapterRequired === true ? 'contract_only' : 'inactive';
+
+    const productionReleaseAdapterReady = false;
+
+    const productionReleaseAdapterWouldInvoke =
+      productionReleaseAdapterRequired === true;
+
+    const productionReleaseAdapterInvoked = false;
+
+    const productionReleaseAdapterBlockedBy =
+      productionReleaseAdapterRequired === true
+        ? 'production_release_adapter_disabled'
+        : null;
+
+    const productionReleaseAdapterInputContract =
+      productionReleaseAdapterRequired === true
+        ? 'phase3.productionReleaseAdapter.input.v1'
+        : null;
+
+    const productionReleaseAdapterInputSanitized =
+      productionReleaseAdapterRequired === true;
+
+    const productionReleaseAdapterRawProofIncluded = false;
+
+    const productionReleaseAdapterRawReceiptIncluded = false;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -2084,6 +2114,16 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseWouldExecute,
       productionReleaseDryRunAuditEvent,
       productionReleaseDryRunReason,
+      productionReleaseAdapterRequired,
+      productionReleaseAdapterMode,
+      productionReleaseAdapterReady,
+      productionReleaseAdapterWouldInvoke,
+      productionReleaseAdapterInvoked,
+      productionReleaseAdapterBlockedBy,
+      productionReleaseAdapterInputContract,
+      productionReleaseAdapterInputSanitized,
+      productionReleaseAdapterRawProofIncluded,
+      productionReleaseAdapterRawReceiptIncluded,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
