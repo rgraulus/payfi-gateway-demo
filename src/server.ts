@@ -1997,12 +1997,28 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       canonicalReleasePersistenceRequired === true &&
       canonicalReleasePersistenceSucceeded === true;
 
-    const productionReleaseBlockedBy =
+    const productionReleaseExecutionPreflightRequired =
+      canonicalReleasePersistenceReady === true;
+
+    const productionReleaseExecutionMode = ((): 'disabled' | 'dry_run' | 'enabled' => {
+      return 'disabled';
+    })();
+
+    const productionReleaseExecutionPreflightReady =
+      productionReleaseExecutionPreflightRequired === true &&
+      productionReleaseExecutionMode === 'enabled';
+
+    const productionReleaseExecutionBlockedBy =
       productionReleaseCandidate === true && phase3GatewayProductionReleaseEnabled !== true
         ? 'production_release_switch_disabled'
         : canonicalReleasePersistenceRequired === true && !canonicalReleasePersistenceReady
           ? 'canonical_release_persistence_not_ready'
-          : null;
+          : productionReleaseExecutionPreflightRequired === true &&
+              productionReleaseExecutionPreflightReady !== true
+            ? 'production_release_execution_disabled'
+            : null;
+
+    const productionReleaseBlockedBy = productionReleaseExecutionBlockedBy;
 
     return {
       observed: true,
@@ -2028,6 +2044,13 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         canonicalReleasePersistenceRequired === true
           ? (args.canonicalReleasePersistenceResult?.releaseReason ?? null)
           : null,
+      productionReleaseExecutionPreflightRequired,
+      productionReleaseExecutionPreflightReady,
+      productionReleaseExecutionMode,
+      productionReleaseExecutionBlockedBy,
+      productionReleaseExecutionRecognizedButNotExecuted:
+        productionReleaseExecutionPreflightRequired === true &&
+        productionReleaseExecutionPreflightReady !== true,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,

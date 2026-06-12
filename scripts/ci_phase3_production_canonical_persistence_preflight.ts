@@ -357,7 +357,7 @@ async function runScenario(input: {
         assert.equal(decision?.canonicalReleasePersistenceRequired, true);
         assert.equal(decision?.canonicalReleasePersistenceReady, true);
         assert.equal(decision?.canonicalReleasePersisted, true);
-        assert.equal(decision?.productionReleaseBlockedBy, null);
+        assert.equal(decision?.productionReleaseBlockedBy, "production_release_execution_disabled");
         assert.equal(decision?.productionReleaseRecognizedButNotExecuted, true);
       } else {
         assert.equal(decision?.canonicalReleasePersistenceRequired, false);
@@ -433,7 +433,7 @@ async function main() {
       switchOn.canonicalReleasePersistenceRequired === true &&
       switchOn.canonicalReleasePersistenceReady === true &&
       switchOn.canonicalReleasePersisted === true &&
-      switchOn.productionReleaseBlockedBy === null &&
+      switchOn.productionReleaseBlockedBy === "production_release_execution_disabled" &&
       switchOn.productionReleaseRecognizedButNotExecuted === true &&
       switchOn.productionRelease === false,
 
