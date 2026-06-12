@@ -2234,6 +2234,60 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           }
         : null;
 
+    const productionReleaseAdapterDryRunInvocationReceiptEmitted =
+      productionReleaseAdapterDryRunInvocationObserved === true &&
+      productionReleaseAdapterDryRunInvocationResult !== null;
+
+    const productionReleaseAdapterDryRunInvocationReceiptContract =
+      productionReleaseAdapterDryRunInvocationReceiptEmitted === true
+        ? 'phase3.productionReleaseAdapter.dryRunInvocationReceipt.v1'
+        : null;
+
+    const productionReleaseAdapterDryRunInvocationReceiptReason =
+      productionReleaseAdapterDryRunInvocationReceiptEmitted === true
+        ? 'production_release_adapter_dry_run_invocation_recorded'
+        : null;
+
+    const productionReleaseAdapterDryRunInvocationReceiptSideEffectFree =
+      productionReleaseAdapterDryRunInvocationReceiptEmitted === true
+        ? productionReleaseAdapterDryRunInvocationSideEffectFree === true &&
+          productionReleaseAdapterDryRunInvocationExternalCallAttempted === false &&
+          productionReleaseAdapterInvoked === false &&
+          productionReleaseAdapterExternalCallAttempted === false
+        : true;
+
+    const productionReleaseAdapterDryRunInvocationReceipt =
+      productionReleaseAdapterDryRunInvocationReceiptEmitted === true
+        ? {
+            contract: productionReleaseAdapterDryRunInvocationReceiptContract,
+            mode: 'dry_run',
+            status: 'recorded',
+            reason: productionReleaseAdapterDryRunInvocationReceiptReason,
+            adapter: {
+              decisionStatus: productionReleaseAdapterDecisionStatus,
+              decisionReason: productionReleaseAdapterDecisionReason,
+              invocationStatus: productionReleaseAdapterDryRunInvocationStatus,
+              invocationReason: productionReleaseAdapterDryRunInvocationReason,
+            },
+            input: {
+              contract: productionReleaseAdapterInputContract,
+              built: productionReleaseAdapterInputBuilt,
+              ready: productionReleaseAdapterInputReady,
+              sanitized: productionReleaseAdapterInputSanitized,
+              jwsIncluded: productionReleaseAdapterInputJwsIncluded,
+              rawProofIncluded: productionReleaseAdapterRawProofIncluded,
+              rawReceiptIncluded: productionReleaseAdapterRawReceiptIncluded,
+            },
+            safety: {
+              adapterInvoked: false,
+              externalCallAttempted: false,
+              productionReleaseAuthorized: false,
+              crpFulfillCalled: false,
+              sideEffectFree: productionReleaseAdapterDryRunInvocationReceiptSideEffectFree,
+            },
+          }
+        : null;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -2321,6 +2375,11 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseAdapterDryRunInvocationExternalCallAttempted,
       productionReleaseAdapterDryRunInvocationSideEffectFree,
       productionReleaseAdapterDryRunInvocationResult,
+      productionReleaseAdapterDryRunInvocationReceiptEmitted,
+      productionReleaseAdapterDryRunInvocationReceipt,
+      productionReleaseAdapterDryRunInvocationReceiptContract,
+      productionReleaseAdapterDryRunInvocationReceiptReason,
+      productionReleaseAdapterDryRunInvocationReceiptSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
