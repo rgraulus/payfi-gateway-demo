@@ -2125,6 +2125,43 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
 
     const productionReleaseAdapterRawReceiptIncluded = false;
 
+    const productionReleaseAdapterNoopFunctionAvailable =
+      productionReleaseAdapterInputBuilt === true;
+
+    const productionReleaseAdapterNoopResultObserved =
+      productionReleaseAdapterNoopFunctionAvailable === true;
+
+    const productionReleaseAdapterNoopResultStatus =
+      productionReleaseAdapterNoopResultObserved === true ? 'disabled' : 'inactive';
+
+    const productionReleaseAdapterNoopResultReason =
+      productionReleaseAdapterNoopResultObserved === true
+        ? 'production_release_adapter_disabled'
+        : null;
+
+    const productionReleaseAdapterNoopSideEffectFree = true;
+
+    const productionReleaseAdapterExternalCallAttempted = false;
+
+    const productionReleaseAdapterNoopResult =
+      productionReleaseAdapterNoopResultObserved === true
+        ? {
+            ok: false,
+            status: 'disabled',
+            reason: 'production_release_adapter_disabled',
+            inputContract: productionReleaseAdapterInputContract,
+            inputBuilt: productionReleaseAdapterInputBuilt,
+            inputReady: productionReleaseAdapterInputReady,
+            inputSanitized: productionReleaseAdapterInputSanitized,
+            inputJwsIncluded: productionReleaseAdapterInputJwsIncluded,
+            adapterInvoked: false,
+            externalCallAttempted: false,
+            productionReleaseAuthorized: false,
+            crpFulfillCalled: false,
+            sideEffectFree: true,
+          }
+        : null;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -2191,6 +2228,13 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseAdapterInputPreview,
       productionReleaseAdapterRawProofIncluded,
       productionReleaseAdapterRawReceiptIncluded,
+      productionReleaseAdapterNoopFunctionAvailable,
+      productionReleaseAdapterNoopResultObserved,
+      productionReleaseAdapterNoopResultStatus,
+      productionReleaseAdapterNoopResultReason,
+      productionReleaseAdapterNoopSideEffectFree,
+      productionReleaseAdapterExternalCallAttempted,
+      productionReleaseAdapterNoopResult,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,

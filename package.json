@@ -78,7 +78,8 @@
     "phase3:production-release-execution-preflight-test": "ts-node --transpile-only scripts/ci_phase3_production_release_execution_preflight.ts",
     "phase3:production-release-dry-run-audit-test": "ts-node --transpile-only scripts/ci_phase3_production_release_dry_run_audit.ts",
     "phase3:production-release-adapter-contract-test": "ts-node --transpile-only scripts/ci_phase3_production_release_adapter_contract.ts",
-    "phase3:production-release-adapter-input-builder-test": "ts-node --transpile-only scripts/ci_phase3_production_release_adapter_input_builder.ts"
+    "phase3:production-release-adapter-input-builder-test": "ts-node --transpile-only scripts/ci_phase3_production_release_adapter_input_builder.ts",
+    "phase3:production-release-adapter-noop-test": "ts-node --transpile-only scripts/ci_phase3_production_release_adapter_noop.ts"
   },
   "repository": {
     "type": "git",
