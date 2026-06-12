@@ -75,7 +75,8 @@
     "phase3:production-release-switch-seam-test": "ts-node --transpile-only scripts/ci_phase3_production_release_switch_seam.ts",
     "phase3:production-release-switch-decision-guard-test": "ts-node --transpile-only scripts/ci_phase3_production_release_switch_decision_guard.ts",
     "phase3:production-canonical-persistence-preflight-test": "ts-node --transpile-only scripts/ci_phase3_production_canonical_persistence_preflight.ts",
-    "phase3:production-release-execution-preflight-test": "ts-node --transpile-only scripts/ci_phase3_production_release_execution_preflight.ts"
+    "phase3:production-release-execution-preflight-test": "ts-node --transpile-only scripts/ci_phase3_production_release_execution_preflight.ts",
+    "phase3:production-release-dry-run-audit-test": "ts-node --transpile-only scripts/ci_phase3_production_release_dry_run_audit.ts"
   },
   "repository": {
     "type": "git",
