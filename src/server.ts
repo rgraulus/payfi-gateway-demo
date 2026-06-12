@@ -2387,6 +2387,83 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           }
         : null;
 
+    const productionReleaseCrpFulfillRequestValidationRequired =
+      productionReleaseCrpFulfillRequestDraftBuilt === true &&
+      productionReleaseCrpFulfillRequestDraft !== null;
+
+    const productionReleaseCrpFulfillRequestValidationErrors: string[] = [];
+
+    if (productionReleaseCrpFulfillRequestValidationRequired === true) {
+      const draft = productionReleaseCrpFulfillRequestDraft as any;
+
+      const validationChecks: Array<[string, boolean]> = [
+        ['contract_mismatch', draft?.contract === 'phase3.productionRelease.crpFulfillRequestDraft.v1'],
+        ['mode_mismatch', draft?.mode === 'dry_run'],
+        ['status_mismatch', draft?.status === 'drafted'],
+        ['target_service_mismatch', draft?.target?.service === 'crp'],
+        ['target_operation_mismatch', draft?.target?.operation === 'fulfill'],
+        ['target_method_mismatch', draft?.target?.method === 'POST'],
+        ['target_path_mismatch', draft?.target?.path === '/v1/crp/payments/fulfill'],
+        ['missing_challenge_id', typeof draft?.request?.challengeId === 'string' && draft.request.challengeId.length > 0],
+        ['missing_nonce', typeof draft?.request?.nonce === 'string' && draft.request.nonce.length > 0],
+        ['resource_method_mismatch', draft?.request?.resource?.method === 'GET'],
+        ['resource_path_mismatch', draft?.request?.resource?.path === '/paid-gated'],
+        ['merchant_id_mismatch', draft?.request?.merchant?.merchantId === 'demo-merchant'],
+        ['missing_pay_to', typeof draft?.request?.merchant?.payTo === 'string' && draft.request.merchant.payTo.length > 0],
+        ['missing_contract_id', typeof draft?.request?.contractBinding?.contractId === 'string' && draft.request.contractBinding.contractId.length > 0],
+        ['contract_version_mismatch', draft?.request?.contractBinding?.contractVersion === '1.0.0'],
+        ['contract_not_frozen', draft?.request?.contractBinding?.isFrozen === true],
+        ['network_mismatch', draft?.request?.payment?.network === 'concordium:testnet'],
+        ['asset_type_mismatch', draft?.request?.payment?.asset?.type === 'PLT'],
+        ['asset_token_mismatch', draft?.request?.payment?.asset?.tokenId === 'EUDemo'],
+        ['asset_decimals_mismatch', draft?.request?.payment?.asset?.decimals === 6],
+        ['amount_mismatch', draft?.request?.payment?.amount === '0.050101'],
+        ['amount_raw_mismatch', draft?.request?.payment?.amountRaw === '50101'],
+        ['receipt_proof_version_mismatch', draft?.request?.receipt?.proofVersion === 'ccd-plt-proof@v1'],
+        ['receipt_settlement_status_mismatch', draft?.request?.receipt?.settlementStatus === 'finalized'],
+        ['safety_not_sanitized', draft?.safety?.sanitized === true],
+        ['jws_included', draft?.safety?.jwsIncluded === false],
+        ['raw_proof_included', draft?.safety?.rawProofIncluded === false],
+        ['raw_receipt_included', draft?.safety?.rawReceiptIncluded === false],
+        ['adapter_invoked', draft?.safety?.adapterInvoked === false],
+        ['external_call_attempted', draft?.safety?.externalCallAttempted === false],
+        ['crp_called', draft?.safety?.crpCalled === false],
+        ['crp_fulfill_called', draft?.safety?.crpFulfillCalled === false],
+        ['production_release_authorized', draft?.safety?.productionReleaseAuthorized === false],
+        ['production_release_true', draft?.safety?.productionRelease === false],
+        ['side_effect_not_free', draft?.safety?.sideEffectFree === true],
+      ];
+
+      for (const [error, ok] of validationChecks) {
+        if (!ok) {
+          productionReleaseCrpFulfillRequestValidationErrors.push(error);
+        }
+      }
+    }
+
+    const productionReleaseCrpFulfillRequestValidationStatus =
+      productionReleaseCrpFulfillRequestValidationRequired !== true
+        ? 'inactive'
+        : productionReleaseCrpFulfillRequestValidationErrors.length === 0
+          ? 'valid'
+          : 'invalid';
+
+    const productionReleaseCrpFulfillRequestValidationReason =
+      productionReleaseCrpFulfillRequestValidationStatus === 'valid'
+        ? 'production_release_crp_fulfill_request_validation_valid'
+        : productionReleaseCrpFulfillRequestValidationStatus === 'invalid'
+          ? 'production_release_crp_fulfill_request_validation_failed'
+          : null;
+
+    const productionReleaseCrpFulfillRequestValidationReady =
+      productionReleaseCrpFulfillRequestValidationRequired === true &&
+      productionReleaseCrpFulfillRequestValidationStatus === 'valid';
+
+    const productionReleaseCrpFulfillRequestValidationSideEffectFree =
+      productionReleaseCrpFulfillRequestDraftExternalCallAttempted === false &&
+      productionReleaseCrpFulfillRequestDraftCrpCalled === false &&
+      productionReleaseCrpFulfillRequestDraftCrpFulfillCalled === false;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -2488,6 +2565,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillRequestDraftCrpCalled,
       productionReleaseCrpFulfillRequestDraftCrpFulfillCalled,
       productionReleaseCrpFulfillRequestDraft,
+      productionReleaseCrpFulfillRequestValidationRequired,
+      productionReleaseCrpFulfillRequestValidationReady,
+      productionReleaseCrpFulfillRequestValidationStatus,
+      productionReleaseCrpFulfillRequestValidationReason,
+      productionReleaseCrpFulfillRequestValidationErrors,
+      productionReleaseCrpFulfillRequestValidationSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,

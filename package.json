@@ -83,7 +83,8 @@
     "phase3:production-release-adapter-decision-wiring-test": "ts-node --transpile-only scripts/ci_phase3_production_release_adapter_decision_wiring.ts",
     "phase3:production-release-adapter-dry-run-invocation-test": "ts-node --transpile-only scripts/ci_phase3_production_release_adapter_dry_run_invocation.ts",
     "phase3:production-release-adapter-dry-run-receipt-test": "ts-node --transpile-only scripts/ci_phase3_production_release_adapter_dry_run_receipt.ts",
-    "phase3:production-release-crp-fulfill-request-draft-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_request_draft.ts"
+    "phase3:production-release-crp-fulfill-request-draft-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_request_draft.ts",
+    "phase3:production-release-crp-fulfill-request-validation-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_request_validation.ts"
   },
   "repository": {
     "type": "git",
