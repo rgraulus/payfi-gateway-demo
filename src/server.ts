@@ -2785,6 +2785,61 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterInvocationGateCrpCalled === false &&
       productionReleaseCrpFulfillClientAdapterInvocationGateCrpFulfillCalled === false;
 
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationRequired =
+      productionReleaseCrpFulfillClientAdapterInvocationGateObserved === true;
+
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationObserved =
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationMode =
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationObserved === true ? 'dry_run' : 'inactive';
+
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationStatus =
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationObserved === true ? 'would_invoke' : 'inactive';
+
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationReason =
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationObserved === true
+        ? 'production_release_crp_fulfill_client_adapter_dry_run_would_invoke'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationAdapterInvoked = false;
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationExternalCallAttempted = false;
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationCrpCalled = false;
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationCrpFulfillCalled = false;
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationAllowsCrpFulfill = false;
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationAllowsProductionRelease = false;
+
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationResult =
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationObserved === true
+        ? {
+            ok: false,
+            mode: productionReleaseCrpFulfillClientAdapterDryRunInvocationMode,
+            status: productionReleaseCrpFulfillClientAdapterDryRunInvocationStatus,
+            reason: productionReleaseCrpFulfillClientAdapterDryRunInvocationReason,
+            invocationGateMode: productionReleaseCrpFulfillClientAdapterInvocationGateMode,
+            invocationGateStatus: productionReleaseCrpFulfillClientAdapterInvocationGateStatus,
+            invocationGateReason: productionReleaseCrpFulfillClientAdapterInvocationGateReason,
+            invocationGateBlockedBy: productionReleaseCrpFulfillClientAdapterInvocationGateBlockedBy,
+            inputContract: productionReleaseCrpFulfillClientAdapterInvocationGate?.inputContract ?? null,
+            inputReady: productionReleaseCrpFulfillClientAdapterInvocationGate?.inputReady === true,
+            adapterInvoked: false,
+            externalCallAttempted: false,
+            crpCalled: false,
+            crpFulfillCalled: false,
+            allowsCrpFulfill: false,
+            allowsProductionRelease: false,
+            productionReleaseAuthorized: false,
+            productionRelease: false,
+            sideEffectFree: true,
+          }
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationSideEffectFree =
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationAdapterInvoked === false &&
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationExternalCallAttempted === false &&
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationCrpCalled === false &&
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationCrpFulfillCalled === false;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -2977,6 +3032,19 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterInvocationGateAllowsProductionRelease,
       productionReleaseCrpFulfillClientAdapterInvocationGate,
       productionReleaseCrpFulfillClientAdapterInvocationGateSideEffectFree,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationRequired,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationObserved,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationMode,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationStatus,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationReason,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationAdapterInvoked,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationExternalCallAttempted,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationCrpCalled,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationCrpFulfillCalled,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationAllowsCrpFulfill,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationAllowsProductionRelease,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationResult,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
