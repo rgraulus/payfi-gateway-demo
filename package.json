@@ -91,7 +91,8 @@
     "phase3:production-release-crp-fulfill-client-adapter-input-builder-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_client_adapter_input_builder.ts",
     "phase3:production-release-crp-fulfill-client-adapter-noop-result-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_client_adapter_noop_result.ts",
     "phase3:production-release-crp-fulfill-client-adapter-decision-gate-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_client_adapter_decision_gate.ts",
-    "phase3:production-release-crp-fulfill-client-adapter-invocation-gate-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_client_adapter_invocation_gate.ts"
+    "phase3:production-release-crp-fulfill-client-adapter-invocation-gate-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_client_adapter_invocation_gate.ts",
+    "phase3:production-release-crp-fulfill-client-adapter-dry-run-invocation-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_client_adapter_dry_run_invocation.ts"
   },
   "repository": {
     "type": "git",
