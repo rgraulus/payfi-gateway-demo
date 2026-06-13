@@ -2491,6 +2491,35 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillExecutionCrpCalled === false &&
       productionReleaseCrpFulfillExecutionCrpFulfillCalled === false;
 
+    const productionReleaseCrpFulfillClientAdapterScaffoldRequired =
+      productionReleaseCrpFulfillExecutionRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterScaffoldAvailable =
+      productionReleaseCrpFulfillClientAdapterScaffoldRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterScaffoldMode = 'disabled';
+
+    const productionReleaseCrpFulfillClientAdapterScaffoldReady: boolean = false;
+
+    const productionReleaseCrpFulfillClientAdapterScaffoldBlockedBy =
+      productionReleaseCrpFulfillClientAdapterScaffoldRequired === true
+        ? 'production_release_crp_fulfill_client_adapter_scaffold_disabled'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterScaffoldWouldCall =
+      productionReleaseCrpFulfillClientAdapterScaffoldRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterScaffoldCalled = false;
+    const productionReleaseCrpFulfillClientAdapterScaffoldExternalCallAttempted = false;
+    const productionReleaseCrpFulfillClientAdapterScaffoldCrpCalled = false;
+    const productionReleaseCrpFulfillClientAdapterScaffoldCrpFulfillCalled = false;
+
+    const productionReleaseCrpFulfillClientAdapterScaffoldSideEffectFree =
+      productionReleaseCrpFulfillClientAdapterScaffoldCalled === false &&
+      productionReleaseCrpFulfillClientAdapterScaffoldExternalCallAttempted === false &&
+      productionReleaseCrpFulfillClientAdapterScaffoldCrpCalled === false &&
+      productionReleaseCrpFulfillClientAdapterScaffoldCrpFulfillCalled === false;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -2608,6 +2637,17 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillExecutionCrpCalled,
       productionReleaseCrpFulfillExecutionCrpFulfillCalled,
       productionReleaseCrpFulfillExecutionSideEffectFree,
+      productionReleaseCrpFulfillClientAdapterScaffoldRequired,
+      productionReleaseCrpFulfillClientAdapterScaffoldAvailable,
+      productionReleaseCrpFulfillClientAdapterScaffoldMode,
+      productionReleaseCrpFulfillClientAdapterScaffoldReady,
+      productionReleaseCrpFulfillClientAdapterScaffoldBlockedBy,
+      productionReleaseCrpFulfillClientAdapterScaffoldWouldCall,
+      productionReleaseCrpFulfillClientAdapterScaffoldCalled,
+      productionReleaseCrpFulfillClientAdapterScaffoldExternalCallAttempted,
+      productionReleaseCrpFulfillClientAdapterScaffoldCrpCalled,
+      productionReleaseCrpFulfillClientAdapterScaffoldCrpFulfillCalled,
+      productionReleaseCrpFulfillClientAdapterScaffoldSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
