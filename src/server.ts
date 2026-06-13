@@ -2626,6 +2626,54 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterInputCrpCalled === false &&
       productionReleaseCrpFulfillClientAdapterInputCrpFulfillCalled === false;
 
+    const productionReleaseCrpFulfillClientAdapterNoopResultRequired =
+      productionReleaseCrpFulfillClientAdapterInputReady === true;
+
+    const productionReleaseCrpFulfillClientAdapterNoopResultObserved =
+      productionReleaseCrpFulfillClientAdapterNoopResultRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterNoopResultStatus =
+      productionReleaseCrpFulfillClientAdapterNoopResultObserved === true ? 'disabled' : 'inactive';
+
+    const productionReleaseCrpFulfillClientAdapterNoopResultReason =
+      productionReleaseCrpFulfillClientAdapterNoopResultObserved === true
+        ? 'production_release_crp_fulfill_client_adapter_disabled'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterNoopResult =
+      productionReleaseCrpFulfillClientAdapterNoopResultObserved === true
+        ? {
+            ok: false,
+            status: productionReleaseCrpFulfillClientAdapterNoopResultStatus,
+            reason: productionReleaseCrpFulfillClientAdapterNoopResultReason,
+            inputContract: productionReleaseCrpFulfillClientAdapterInputContract,
+            inputBuilt: productionReleaseCrpFulfillClientAdapterInputBuilt,
+            inputReady: productionReleaseCrpFulfillClientAdapterInputReady,
+            inputSanitized: productionReleaseCrpFulfillClientAdapterInputSanitized,
+            inputJwsIncluded: productionReleaseCrpFulfillClientAdapterInputJwsIncluded,
+            inputRawProofIncluded: productionReleaseCrpFulfillClientAdapterInputRawProofIncluded,
+            inputRawReceiptIncluded: productionReleaseCrpFulfillClientAdapterInputRawReceiptIncluded,
+            adapterInvoked: false,
+            externalCallAttempted: false,
+            crpCalled: false,
+            crpFulfillCalled: false,
+            productionReleaseAuthorized: false,
+            productionRelease: false,
+            sideEffectFree: true,
+          }
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterNoopResultAdapterInvoked = false;
+    const productionReleaseCrpFulfillClientAdapterNoopResultExternalCallAttempted = false;
+    const productionReleaseCrpFulfillClientAdapterNoopResultCrpCalled = false;
+    const productionReleaseCrpFulfillClientAdapterNoopResultCrpFulfillCalled = false;
+
+    const productionReleaseCrpFulfillClientAdapterNoopResultSideEffectFree =
+      productionReleaseCrpFulfillClientAdapterNoopResultAdapterInvoked === false &&
+      productionReleaseCrpFulfillClientAdapterNoopResultExternalCallAttempted === false &&
+      productionReleaseCrpFulfillClientAdapterNoopResultCrpCalled === false &&
+      productionReleaseCrpFulfillClientAdapterNoopResultCrpFulfillCalled === false;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -2781,6 +2829,16 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterInputCrpCalled,
       productionReleaseCrpFulfillClientAdapterInputCrpFulfillCalled,
       productionReleaseCrpFulfillClientAdapterInputSideEffectFree,
+      productionReleaseCrpFulfillClientAdapterNoopResultRequired,
+      productionReleaseCrpFulfillClientAdapterNoopResultObserved,
+      productionReleaseCrpFulfillClientAdapterNoopResultStatus,
+      productionReleaseCrpFulfillClientAdapterNoopResultReason,
+      productionReleaseCrpFulfillClientAdapterNoopResult,
+      productionReleaseCrpFulfillClientAdapterNoopResultAdapterInvoked,
+      productionReleaseCrpFulfillClientAdapterNoopResultExternalCallAttempted,
+      productionReleaseCrpFulfillClientAdapterNoopResultCrpCalled,
+      productionReleaseCrpFulfillClientAdapterNoopResultCrpFulfillCalled,
+      productionReleaseCrpFulfillClientAdapterNoopResultSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
