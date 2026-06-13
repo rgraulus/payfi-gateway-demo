@@ -2840,6 +2840,55 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterDryRunInvocationCrpCalled === false &&
       productionReleaseCrpFulfillClientAdapterDryRunInvocationCrpFulfillCalled === false;
 
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptEmitted =
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationObserved === true;
+
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptContract =
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptEmitted === true
+        ? 'phase3.productionRelease.crpFulfillClientAdapter.dryRunInvocationReceipt.v1'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptReason =
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptEmitted === true
+        ? 'production_release_crp_fulfill_client_adapter_dry_run_invocation_recorded'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationReceipt =
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptEmitted === true
+        ? {
+            contract: productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptContract,
+            mode: 'dry_run',
+            status: 'recorded',
+            reason: productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptReason,
+            adapter: {
+              invocationStatus: productionReleaseCrpFulfillClientAdapterDryRunInvocationStatus,
+              invocationReason: productionReleaseCrpFulfillClientAdapterDryRunInvocationReason,
+              invocationGateStatus: productionReleaseCrpFulfillClientAdapterInvocationGateStatus,
+              invocationGateReason: productionReleaseCrpFulfillClientAdapterInvocationGateReason,
+              invocationGateBlockedBy: productionReleaseCrpFulfillClientAdapterInvocationGateBlockedBy,
+            },
+            input: {
+              contract: productionReleaseCrpFulfillClientAdapterDryRunInvocationResult?.inputContract ?? null,
+              ready: productionReleaseCrpFulfillClientAdapterDryRunInvocationResult?.inputReady === true,
+            },
+            safety: {
+              adapterInvoked: false,
+              externalCallAttempted: false,
+              crpCalled: false,
+              crpFulfillCalled: false,
+              productionReleaseAuthorized: false,
+              productionRelease: false,
+              sideEffectFree: true,
+            },
+          }
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptSideEffectFree =
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationAdapterInvoked === false &&
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationExternalCallAttempted === false &&
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationCrpCalled === false &&
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationCrpFulfillCalled === false;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -3045,6 +3094,11 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterDryRunInvocationAllowsProductionRelease,
       productionReleaseCrpFulfillClientAdapterDryRunInvocationResult,
       productionReleaseCrpFulfillClientAdapterDryRunInvocationSideEffectFree,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptEmitted,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationReceipt,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptContract,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptReason,
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
