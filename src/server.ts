@@ -2520,6 +2520,46 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterScaffoldCrpCalled === false &&
       productionReleaseCrpFulfillClientAdapterScaffoldCrpFulfillCalled === false;
 
+    const productionReleaseCrpFulfillClientAdapterContractRequired =
+      productionReleaseCrpFulfillClientAdapterScaffoldRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterContractAvailable =
+      productionReleaseCrpFulfillClientAdapterContractRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterContract =
+      productionReleaseCrpFulfillClientAdapterContractRequired === true
+        ? 'phase3.productionRelease.crpFulfillClientAdapter.contract.v1'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterContractMode =
+      productionReleaseCrpFulfillClientAdapterContractRequired === true
+        ? 'contract_only'
+        : 'inactive';
+
+    const productionReleaseCrpFulfillClientAdapterContractReady: boolean = false;
+
+    const productionReleaseCrpFulfillClientAdapterContractBlockedBy =
+      productionReleaseCrpFulfillClientAdapterContractRequired === true
+        ? 'production_release_crp_fulfill_client_adapter_contract_only'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterContractInputRequired =
+      productionReleaseCrpFulfillClientAdapterContractRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterContractResultRequired =
+      productionReleaseCrpFulfillClientAdapterContractRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterContractInvoked = false;
+    const productionReleaseCrpFulfillClientAdapterContractExternalCallAttempted = false;
+    const productionReleaseCrpFulfillClientAdapterContractCrpCalled = false;
+    const productionReleaseCrpFulfillClientAdapterContractCrpFulfillCalled = false;
+
+    const productionReleaseCrpFulfillClientAdapterContractSideEffectFree =
+      productionReleaseCrpFulfillClientAdapterContractInvoked === false &&
+      productionReleaseCrpFulfillClientAdapterContractExternalCallAttempted === false &&
+      productionReleaseCrpFulfillClientAdapterContractCrpCalled === false &&
+      productionReleaseCrpFulfillClientAdapterContractCrpFulfillCalled === false;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -2648,6 +2688,19 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterScaffoldCrpCalled,
       productionReleaseCrpFulfillClientAdapterScaffoldCrpFulfillCalled,
       productionReleaseCrpFulfillClientAdapterScaffoldSideEffectFree,
+      productionReleaseCrpFulfillClientAdapterContractRequired,
+      productionReleaseCrpFulfillClientAdapterContractAvailable,
+      productionReleaseCrpFulfillClientAdapterContract,
+      productionReleaseCrpFulfillClientAdapterContractMode,
+      productionReleaseCrpFulfillClientAdapterContractReady,
+      productionReleaseCrpFulfillClientAdapterContractBlockedBy,
+      productionReleaseCrpFulfillClientAdapterContractInputRequired,
+      productionReleaseCrpFulfillClientAdapterContractResultRequired,
+      productionReleaseCrpFulfillClientAdapterContractInvoked,
+      productionReleaseCrpFulfillClientAdapterContractExternalCallAttempted,
+      productionReleaseCrpFulfillClientAdapterContractCrpCalled,
+      productionReleaseCrpFulfillClientAdapterContractCrpFulfillCalled,
+      productionReleaseCrpFulfillClientAdapterContractSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
