@@ -2560,6 +2560,72 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterContractCrpCalled === false &&
       productionReleaseCrpFulfillClientAdapterContractCrpFulfillCalled === false;
 
+    const productionReleaseCrpFulfillClientAdapterInputRequired =
+      productionReleaseCrpFulfillClientAdapterContractRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterInputContract =
+      productionReleaseCrpFulfillClientAdapterInputRequired === true
+        ? 'phase3.productionRelease.crpFulfillClientAdapter.input.v1'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterInputBuilt =
+      productionReleaseCrpFulfillClientAdapterInputRequired === true &&
+      productionReleaseCrpFulfillRequestDraftBuilt === true &&
+      productionReleaseCrpFulfillRequestValidationReady === true;
+
+    const productionReleaseCrpFulfillClientAdapterInputReady =
+      productionReleaseCrpFulfillClientAdapterInputBuilt === true;
+
+    const productionReleaseCrpFulfillClientAdapterInputBlockedBy =
+      productionReleaseCrpFulfillClientAdapterInputRequired === true &&
+      productionReleaseCrpFulfillClientAdapterInputReady !== true
+        ? 'production_release_crp_fulfill_client_adapter_input_not_ready'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterInputSanitized =
+      productionReleaseCrpFulfillClientAdapterInputBuilt === true;
+
+    const productionReleaseCrpFulfillClientAdapterInputJwsIncluded = false;
+    const productionReleaseCrpFulfillClientAdapterInputRawProofIncluded = false;
+    const productionReleaseCrpFulfillClientAdapterInputRawReceiptIncluded = false;
+
+    const productionReleaseCrpFulfillClientAdapterInputPreview =
+      productionReleaseCrpFulfillClientAdapterInputBuilt === true
+        ? {
+            contract: productionReleaseCrpFulfillClientAdapterInputContract,
+            mode: 'dry_run',
+            adapterContract: productionReleaseCrpFulfillClientAdapterContract,
+            target: productionReleaseCrpFulfillRequestDraft?.target ?? null,
+            request: productionReleaseCrpFulfillRequestDraft?.request ?? null,
+            source: {
+              crpFulfillRequestDraftContract: productionReleaseCrpFulfillRequestDraftContract,
+              crpFulfillRequestValidationStatus: productionReleaseCrpFulfillRequestValidationStatus,
+              crpFulfillRequestValidationReason: productionReleaseCrpFulfillRequestValidationReason,
+            },
+            safety: {
+              sanitized: true,
+              jwsIncluded: false,
+              rawProofIncluded: false,
+              rawReceiptIncluded: false,
+              adapterInvoked: false,
+              externalCallAttempted: false,
+              crpCalled: false,
+              crpFulfillCalled: false,
+              productionReleaseAuthorized: false,
+              productionRelease: false,
+            },
+          }
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterInputExternalCallAttempted = false;
+    const productionReleaseCrpFulfillClientAdapterInputCrpCalled = false;
+    const productionReleaseCrpFulfillClientAdapterInputCrpFulfillCalled = false;
+
+    const productionReleaseCrpFulfillClientAdapterInputSideEffectFree =
+      productionReleaseCrpFulfillClientAdapterInputExternalCallAttempted === false &&
+      productionReleaseCrpFulfillClientAdapterInputCrpCalled === false &&
+      productionReleaseCrpFulfillClientAdapterInputCrpFulfillCalled === false;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -2701,6 +2767,20 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterContractCrpCalled,
       productionReleaseCrpFulfillClientAdapterContractCrpFulfillCalled,
       productionReleaseCrpFulfillClientAdapterContractSideEffectFree,
+      productionReleaseCrpFulfillClientAdapterInputRequired,
+      productionReleaseCrpFulfillClientAdapterInputContract,
+      productionReleaseCrpFulfillClientAdapterInputBuilt,
+      productionReleaseCrpFulfillClientAdapterInputReady,
+      productionReleaseCrpFulfillClientAdapterInputBlockedBy,
+      productionReleaseCrpFulfillClientAdapterInputSanitized,
+      productionReleaseCrpFulfillClientAdapterInputJwsIncluded,
+      productionReleaseCrpFulfillClientAdapterInputRawProofIncluded,
+      productionReleaseCrpFulfillClientAdapterInputRawReceiptIncluded,
+      productionReleaseCrpFulfillClientAdapterInputPreview,
+      productionReleaseCrpFulfillClientAdapterInputExternalCallAttempted,
+      productionReleaseCrpFulfillClientAdapterInputCrpCalled,
+      productionReleaseCrpFulfillClientAdapterInputCrpFulfillCalled,
+      productionReleaseCrpFulfillClientAdapterInputSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
