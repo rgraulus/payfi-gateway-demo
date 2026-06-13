@@ -2464,6 +2464,33 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillRequestDraftCrpCalled === false &&
       productionReleaseCrpFulfillRequestDraftCrpFulfillCalled === false;
 
+    const productionReleaseCrpFulfillExecutionRequired =
+      productionReleaseCrpFulfillRequestValidationReady === true;
+
+    const productionReleaseCrpFulfillExecutionClientAvailable =
+      productionReleaseCrpFulfillExecutionRequired === true;
+
+    const productionReleaseCrpFulfillExecutionMode = 'disabled';
+
+    const productionReleaseCrpFulfillExecutionReady: boolean = false;
+
+    const productionReleaseCrpFulfillExecutionBlockedBy =
+      productionReleaseCrpFulfillExecutionRequired === true
+        ? 'production_release_crp_fulfill_execution_disabled'
+        : null;
+
+    const productionReleaseCrpFulfillExecutionRecognizedButNotExecuted =
+      productionReleaseCrpFulfillExecutionRequired === true;
+
+    const productionReleaseCrpFulfillExecutionExternalCallAttempted = false;
+    const productionReleaseCrpFulfillExecutionCrpCalled = false;
+    const productionReleaseCrpFulfillExecutionCrpFulfillCalled = false;
+
+    const productionReleaseCrpFulfillExecutionSideEffectFree =
+      productionReleaseCrpFulfillExecutionExternalCallAttempted === false &&
+      productionReleaseCrpFulfillExecutionCrpCalled === false &&
+      productionReleaseCrpFulfillExecutionCrpFulfillCalled === false;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -2571,6 +2598,16 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillRequestValidationReason,
       productionReleaseCrpFulfillRequestValidationErrors,
       productionReleaseCrpFulfillRequestValidationSideEffectFree,
+      productionReleaseCrpFulfillExecutionRequired,
+      productionReleaseCrpFulfillExecutionClientAvailable,
+      productionReleaseCrpFulfillExecutionMode,
+      productionReleaseCrpFulfillExecutionReady,
+      productionReleaseCrpFulfillExecutionBlockedBy,
+      productionReleaseCrpFulfillExecutionRecognizedButNotExecuted,
+      productionReleaseCrpFulfillExecutionExternalCallAttempted,
+      productionReleaseCrpFulfillExecutionCrpCalled,
+      productionReleaseCrpFulfillExecutionCrpFulfillCalled,
+      productionReleaseCrpFulfillExecutionSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
