@@ -85,7 +85,8 @@
     "phase3:production-release-adapter-dry-run-receipt-test": "ts-node --transpile-only scripts/ci_phase3_production_release_adapter_dry_run_receipt.ts",
     "phase3:production-release-crp-fulfill-request-draft-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_request_draft.ts",
     "phase3:production-release-crp-fulfill-request-validation-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_request_validation.ts",
-    "phase3:production-release-crp-fulfill-execution-seam-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_execution_seam.ts"
+    "phase3:production-release-crp-fulfill-execution-seam-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_execution_seam.ts",
+    "phase3:production-release-crp-fulfill-client-adapter-scaffold-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_client_adapter_scaffold.ts"
   },
   "repository": {
     "type": "git",
