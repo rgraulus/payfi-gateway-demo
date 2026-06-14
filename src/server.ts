@@ -2889,6 +2889,74 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterDryRunInvocationCrpCalled === false &&
       productionReleaseCrpFulfillClientAdapterDryRunInvocationCrpFulfillCalled === false;
 
+    const productionReleaseCrpFulfillClientAdapterHandoffReadinessRequired =
+      productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptEmitted === true;
+
+    const productionReleaseCrpFulfillClientAdapterHandoffReadinessReady =
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterHandoffReadinessContract =
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessRequired === true
+        ? 'phase3.productionRelease.crpFulfillClientAdapter.handoffReadiness.v1'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterHandoffReadinessStatus =
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessRequired === true ? 'ready' : 'inactive';
+
+    const productionReleaseCrpFulfillClientAdapterHandoffReadinessReason =
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessRequired === true
+        ? 'production_release_crp_fulfill_client_adapter_handoff_ready'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterHandoffReadinessBlockedBy =
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessRequired === true
+        ? 'production_release_crp_fulfill_client_adapter_execution_not_enabled'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterHandoffReadiness =
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessRequired === true
+        ? {
+            contract: productionReleaseCrpFulfillClientAdapterHandoffReadinessContract,
+            status: productionReleaseCrpFulfillClientAdapterHandoffReadinessStatus,
+            reason: productionReleaseCrpFulfillClientAdapterHandoffReadinessReason,
+            blockedBy: productionReleaseCrpFulfillClientAdapterHandoffReadinessBlockedBy,
+            source: {
+              receiptContract: productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptContract,
+              receiptReason: productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptReason,
+              receiptStatus:
+                productionReleaseCrpFulfillClientAdapterDryRunInvocationReceipt?.status ?? null,
+            },
+            input: {
+              contract:
+                productionReleaseCrpFulfillClientAdapterDryRunInvocationReceipt?.input?.contract ?? null,
+              ready:
+                productionReleaseCrpFulfillClientAdapterDryRunInvocationReceipt?.input?.ready === true,
+            },
+            safety: {
+              adapterInvoked: false,
+              externalCallAttempted: false,
+              crpCalled: false,
+              crpFulfillCalled: false,
+              productionReleaseAuthorized: false,
+              productionRelease: false,
+              sideEffectFree: true,
+            },
+          }
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterHandoffReadinessAdapterInvoked = false;
+    const productionReleaseCrpFulfillClientAdapterHandoffReadinessExternalCallAttempted = false;
+    const productionReleaseCrpFulfillClientAdapterHandoffReadinessCrpCalled = false;
+    const productionReleaseCrpFulfillClientAdapterHandoffReadinessCrpFulfillCalled = false;
+    const productionReleaseCrpFulfillClientAdapterHandoffReadinessAllowsCrpFulfill = false;
+    const productionReleaseCrpFulfillClientAdapterHandoffReadinessAllowsProductionRelease = false;
+
+    const productionReleaseCrpFulfillClientAdapterHandoffReadinessSideEffectFree =
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessAdapterInvoked === false &&
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessExternalCallAttempted === false &&
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessCrpCalled === false &&
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessCrpFulfillCalled === false;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -3099,6 +3167,20 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptContract,
       productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptReason,
       productionReleaseCrpFulfillClientAdapterDryRunInvocationReceiptSideEffectFree,
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessRequired,
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessReady,
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessContract,
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessStatus,
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessReason,
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessBlockedBy,
+      productionReleaseCrpFulfillClientAdapterHandoffReadiness,
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessAdapterInvoked,
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessExternalCallAttempted,
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessCrpCalled,
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessCrpFulfillCalled,
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessAllowsCrpFulfill,
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessAllowsProductionRelease,
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
