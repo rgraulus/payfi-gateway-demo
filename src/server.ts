@@ -2957,6 +2957,65 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterHandoffReadinessCrpCalled === false &&
       productionReleaseCrpFulfillClientAdapterHandoffReadinessCrpFulfillCalled === false;
 
+    const productionReleaseCrpFulfillClientAdapterResultContractRequired =
+      productionReleaseCrpFulfillClientAdapterHandoffReadinessReady === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultContractAvailable =
+      productionReleaseCrpFulfillClientAdapterResultContractRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultContract =
+      productionReleaseCrpFulfillClientAdapterResultContractRequired === true
+        ? 'phase3.productionRelease.crpFulfillClientAdapter.resultContract.v1'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterResultContractMode =
+      productionReleaseCrpFulfillClientAdapterResultContractRequired === true ? 'contract_only' : 'inactive';
+
+    const productionReleaseCrpFulfillClientAdapterResultContractReady = false;
+
+    const productionReleaseCrpFulfillClientAdapterResultContractBlockedBy =
+      productionReleaseCrpFulfillClientAdapterResultContractRequired === true
+        ? 'production_release_crp_fulfill_client_adapter_result_contract_only'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterResultContractExpectedShape =
+      productionReleaseCrpFulfillClientAdapterResultContractRequired === true
+        ? {
+            ok: 'boolean',
+            status: 'success|disabled|would_invoke|failed',
+            reason: 'string|null',
+            mode: 'contract_only|dry_run|live',
+            httpStatus: 'number|null',
+            crpStatus: 'string|null',
+            receiptJwsPresent: 'boolean',
+            receiptPayloadPresent: 'boolean',
+            txHash: 'string|null',
+            settlementStatus: 'string|null',
+            errorCode: 'string|null',
+            errorMessage: 'string|null',
+            adapterInvoked: 'boolean',
+            externalCallAttempted: 'boolean',
+            crpCalled: 'boolean',
+            crpFulfillCalled: 'boolean',
+            productionReleaseAuthorized: 'boolean',
+            productionRelease: 'boolean',
+            sideEffectFree: 'boolean',
+          }
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterResultContractAdapterInvoked = false;
+    const productionReleaseCrpFulfillClientAdapterResultContractExternalCallAttempted = false;
+    const productionReleaseCrpFulfillClientAdapterResultContractCrpCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultContractCrpFulfillCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultContractAllowsCrpFulfill = false;
+    const productionReleaseCrpFulfillClientAdapterResultContractAllowsProductionRelease = false;
+
+    const productionReleaseCrpFulfillClientAdapterResultContractSideEffectFree =
+      productionReleaseCrpFulfillClientAdapterResultContractAdapterInvoked === false &&
+      productionReleaseCrpFulfillClientAdapterResultContractExternalCallAttempted === false &&
+      productionReleaseCrpFulfillClientAdapterResultContractCrpCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultContractCrpFulfillCalled === false;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -3181,6 +3240,20 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterHandoffReadinessAllowsCrpFulfill,
       productionReleaseCrpFulfillClientAdapterHandoffReadinessAllowsProductionRelease,
       productionReleaseCrpFulfillClientAdapterHandoffReadinessSideEffectFree,
+      productionReleaseCrpFulfillClientAdapterResultContractRequired,
+      productionReleaseCrpFulfillClientAdapterResultContractAvailable,
+      productionReleaseCrpFulfillClientAdapterResultContract,
+      productionReleaseCrpFulfillClientAdapterResultContractMode,
+      productionReleaseCrpFulfillClientAdapterResultContractReady,
+      productionReleaseCrpFulfillClientAdapterResultContractBlockedBy,
+      productionReleaseCrpFulfillClientAdapterResultContractExpectedShape,
+      productionReleaseCrpFulfillClientAdapterResultContractAdapterInvoked,
+      productionReleaseCrpFulfillClientAdapterResultContractExternalCallAttempted,
+      productionReleaseCrpFulfillClientAdapterResultContractCrpCalled,
+      productionReleaseCrpFulfillClientAdapterResultContractCrpFulfillCalled,
+      productionReleaseCrpFulfillClientAdapterResultContractAllowsCrpFulfill,
+      productionReleaseCrpFulfillClientAdapterResultContractAllowsProductionRelease,
+      productionReleaseCrpFulfillClientAdapterResultContractSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
