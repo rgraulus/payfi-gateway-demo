@@ -100,7 +100,8 @@
     "phase3:production-release-crp-fulfill-client-adapter-result-decision-gate-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_client_adapter_result_decision_gate.ts",
     "phase3:production-release-crp-fulfill-client-adapter-result-handling-gate-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_client_adapter_result_handling_gate.ts",
     "phase3:production-release-crp-fulfill-client-adapter-result-consumption-contract-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_client_adapter_result_consumption_contract.ts",
-    "phase3:production-release-crp-fulfill-client-adapter-result-consumption-decision-gate-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_client_adapter_result_consumption_decision_gate.ts"
+    "phase3:production-release-crp-fulfill-client-adapter-result-consumption-decision-gate-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_client_adapter_result_consumption_decision_gate.ts",
+    "phase3:production-release-crp-fulfill-client-adapter-result-consumption-noop-result-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_client_adapter_result_consumption_noop_result.ts"
   },
   "repository": {
     "type": "git",

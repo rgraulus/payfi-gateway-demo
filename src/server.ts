@@ -3438,6 +3438,115 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           }
         : null;
 
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultRequired =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGateRequired === true &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGateObserved === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultObserved =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultStatus =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultRequired === true
+        ? 'disabled'
+        : 'inactive';
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultReason =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultRequired === true
+        ? 'production_release_crp_fulfill_client_adapter_result_consumption_noop_disabled'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultAllowsResultConsumption = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultAllowsCrpFulfill = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultAllowsProductionRelease = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultAdapterInvoked = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultExternalCallAttempted = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultCrpCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultCrpFulfillCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultResultConsumed = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultReceiptConsumed = false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultSideEffectFree =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultAllowsResultConsumption === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultAllowsCrpFulfill === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultAllowsProductionRelease === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultAdapterInvoked === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultExternalCallAttempted === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultCrpCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultCrpFulfillCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultResultConsumed === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultReceiptConsumed === false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResult =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultRequired === true
+        ? {
+            ok: false,
+            status: productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultStatus,
+            reason: productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultReason,
+            mode: 'contract_only',
+            decisionGateStatus:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGateStatus,
+            decisionGateReason:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGateReason,
+            decisionGateBlockedBy:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGateBlockedBy,
+            consumptionContractMode:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGate
+                ?.consumptionContractMode ?? null,
+            consumptionContractReady:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGate
+                ?.consumptionContractReady === true,
+            consumptionContractBlockedBy:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGate
+                ?.consumptionContractBlockedBy ?? null,
+            handlingGateStatus:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGate
+                ?.handlingGateStatus ?? null,
+            handlingGateReason:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGate
+                ?.handlingGateReason ?? null,
+            handlingGateBlockedBy:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGate
+                ?.handlingGateBlockedBy ?? null,
+            resultStatus:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGate?.resultStatus ??
+              null,
+            resultReason:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGate?.resultReason ??
+              null,
+            resultMode:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGate?.resultMode ??
+              null,
+            receiptJwsPresent:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGate
+                ?.receiptJwsPresent === true,
+            receiptPayloadPresent:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGate
+                ?.receiptPayloadPresent === true,
+            resultConsumed:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultResultConsumed,
+            receiptConsumed:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultReceiptConsumed,
+            allowsResultConsumption:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultAllowsResultConsumption,
+            allowsCrpFulfill:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultAllowsCrpFulfill,
+            allowsProductionRelease:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultAllowsProductionRelease,
+            adapterInvoked:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultAdapterInvoked,
+            externalCallAttempted:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultExternalCallAttempted,
+            crpCalled:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultCrpCalled,
+            crpFulfillCalled:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultCrpFulfillCalled,
+            productionReleaseAuthorized: false,
+            productionRelease: false,
+            sideEffectFree:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultSideEffectFree,
+          }
+        : null;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -3744,6 +3853,21 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGateCrpCalled,
       productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGateCrpFulfillCalled,
       productionReleaseCrpFulfillClientAdapterResultConsumptionDecisionGateSideEffectFree,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultRequired,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultObserved,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultStatus,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultReason,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResult,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultAllowsResultConsumption,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultAllowsCrpFulfill,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultAllowsProductionRelease,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultAdapterInvoked,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultExternalCallAttempted,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultCrpCalled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultCrpFulfillCalled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultResultConsumed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultReceiptConsumed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopResultSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
