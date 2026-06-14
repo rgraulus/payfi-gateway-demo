@@ -3016,6 +3016,65 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterResultContractCrpCalled === false &&
       productionReleaseCrpFulfillClientAdapterResultContractCrpFulfillCalled === false;
 
+    const productionReleaseCrpFulfillClientAdapterResultContractNoopResultRequired =
+      productionReleaseCrpFulfillClientAdapterResultContractAvailable === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultContractNoopResultObserved =
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultContractNoopResultStatus =
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultRequired === true ? 'disabled' : 'inactive';
+
+    const productionReleaseCrpFulfillClientAdapterResultContractNoopResultReason =
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultRequired === true
+        ? 'production_release_crp_fulfill_client_adapter_result_contract_noop_disabled'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterResultContractNoopResultAdapterInvoked = false;
+    const productionReleaseCrpFulfillClientAdapterResultContractNoopResultExternalCallAttempted = false;
+    const productionReleaseCrpFulfillClientAdapterResultContractNoopResultCrpCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultContractNoopResultCrpFulfillCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultContractNoopResultAllowsCrpFulfill = false;
+    const productionReleaseCrpFulfillClientAdapterResultContractNoopResultAllowsProductionRelease = false;
+
+    const productionReleaseCrpFulfillClientAdapterResultContractNoopResultSideEffectFree =
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultAdapterInvoked === false &&
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultExternalCallAttempted === false &&
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultCrpCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultCrpFulfillCalled === false;
+
+    const productionReleaseCrpFulfillClientAdapterResultContractNoopResult =
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultRequired === true
+        ? {
+            ok: false,
+            status: productionReleaseCrpFulfillClientAdapterResultContractNoopResultStatus,
+            reason: productionReleaseCrpFulfillClientAdapterResultContractNoopResultReason,
+            mode: productionReleaseCrpFulfillClientAdapterResultContractMode,
+            httpStatus: null,
+            crpStatus: null,
+            receiptJwsPresent: false,
+            receiptPayloadPresent: false,
+            txHash: null,
+            settlementStatus: null,
+            errorCode: null,
+            errorMessage: null,
+            adapterInvoked: productionReleaseCrpFulfillClientAdapterResultContractNoopResultAdapterInvoked,
+            externalCallAttempted:
+              productionReleaseCrpFulfillClientAdapterResultContractNoopResultExternalCallAttempted,
+            crpCalled: productionReleaseCrpFulfillClientAdapterResultContractNoopResultCrpCalled,
+            crpFulfillCalled:
+              productionReleaseCrpFulfillClientAdapterResultContractNoopResultCrpFulfillCalled,
+            allowsCrpFulfill:
+              productionReleaseCrpFulfillClientAdapterResultContractNoopResultAllowsCrpFulfill,
+            allowsProductionRelease:
+              productionReleaseCrpFulfillClientAdapterResultContractNoopResultAllowsProductionRelease,
+            productionReleaseAuthorized: false,
+            productionRelease: false,
+            sideEffectFree:
+              productionReleaseCrpFulfillClientAdapterResultContractNoopResultSideEffectFree,
+          }
+        : null;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -3254,6 +3313,18 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterResultContractAllowsCrpFulfill,
       productionReleaseCrpFulfillClientAdapterResultContractAllowsProductionRelease,
       productionReleaseCrpFulfillClientAdapterResultContractSideEffectFree,
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultRequired,
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultObserved,
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultStatus,
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultReason,
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResult,
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultAdapterInvoked,
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultExternalCallAttempted,
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultCrpCalled,
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultCrpFulfillCalled,
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultAllowsCrpFulfill,
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultAllowsProductionRelease,
+      productionReleaseCrpFulfillClientAdapterResultContractNoopResultSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
