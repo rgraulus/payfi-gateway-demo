@@ -3659,6 +3659,166 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           }
         : null;
 
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditRequired =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGateRequired === true &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGateObserved === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditObserved =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditStatus =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditRequired === true
+        ? 'recorded'
+        : 'inactive';
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditReason =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditRequired === true
+        ? 'production_release_crp_fulfill_client_adapter_result_consumption_dry_run_audit_recorded'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditBlockedBy =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGateBlockedBy;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditAllowsResultConsumption = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditAllowsCrpFulfill = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditAllowsProductionRelease = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditAdapterInvoked = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditExternalCallAttempted = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditCrpCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditCrpFulfillCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditResultConsumed = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditReceiptConsumed = false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldAuditResultConsumption =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditRequired === true;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldRequireReceiptJws =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditRequired === true;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldRequireReceiptPayload =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditRequired === true;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldRequireFinalizedSettlement =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditRequired === true;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldRequireTupleBinding =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditRequired === true;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldRequireNoReplay =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditSideEffectFree =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditAllowsResultConsumption === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditAllowsCrpFulfill === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditAllowsProductionRelease === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditAdapterInvoked === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditExternalCallAttempted === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditCrpCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditCrpFulfillCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditResultConsumed === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditReceiptConsumed === false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditArtifact =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditRequired === true
+        ? {
+            contract:
+              'phase3.productionRelease.crpFulfillClientAdapter.resultConsumptionDryRunAudit.v1',
+            mode: 'dry_run',
+            status: productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditStatus,
+            reason: productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditReason,
+            blockedBy: productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditBlockedBy,
+            source: {
+              handlingGateStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGateStatus,
+              handlingGateReason:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGateReason,
+              handlingGateBlockedBy:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGateBlockedBy,
+              noopResultStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGate
+                  ?.noopResultStatus ?? null,
+              noopResultReason:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGate
+                  ?.noopResultReason ?? null,
+              noopResultMode:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGate
+                  ?.noopResultMode ?? null,
+              decisionGateStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGate
+                  ?.decisionGateStatus ?? null,
+              decisionGateReason:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGate
+                  ?.decisionGateReason ?? null,
+              decisionGateBlockedBy:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGate
+                  ?.decisionGateBlockedBy ?? null,
+              consumptionContractMode:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGate
+                  ?.consumptionContractMode ?? null,
+              consumptionContractReady:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGate
+                  ?.consumptionContractReady === true,
+              consumptionContractBlockedBy:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGate
+                  ?.consumptionContractBlockedBy ?? null,
+              resultStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGate
+                  ?.resultStatus ?? null,
+              resultReason:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGate
+                  ?.resultReason ?? null,
+              resultMode:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGate
+                  ?.resultMode ?? null,
+            },
+            result: {
+              receiptJwsPresent:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGate
+                  ?.receiptJwsPresent === true,
+              receiptPayloadPresent:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGate
+                  ?.receiptPayloadPresent === true,
+              resultConsumed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditResultConsumed,
+              receiptConsumed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditReceiptConsumed,
+            },
+            audit: {
+              wouldAuditResultConsumption:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldAuditResultConsumption,
+              wouldRequireReceiptJws:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldRequireReceiptJws,
+              wouldRequireReceiptPayload:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldRequireReceiptPayload,
+              wouldRequireFinalizedSettlement:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldRequireFinalizedSettlement,
+              wouldRequireTupleBinding:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldRequireTupleBinding,
+              wouldRequireNoReplay:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldRequireNoReplay,
+            },
+            safety: {
+              sanitized: true,
+              rawProofIncluded: false,
+              rawReceiptIncluded: false,
+              jwsIncluded: false,
+              allowsResultConsumption:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditAllowsResultConsumption,
+              allowsCrpFulfill:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditAllowsCrpFulfill,
+              allowsProductionRelease:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditAllowsProductionRelease,
+              adapterInvoked:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditAdapterInvoked,
+              externalCallAttempted:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditExternalCallAttempted,
+              crpCalled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditCrpCalled,
+              crpFulfillCalled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditCrpFulfillCalled,
+              productionReleaseAuthorized: false,
+              productionRelease: false,
+              sideEffectFree:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditSideEffectFree,
+            },
+          }
+        : null;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -3996,6 +4156,28 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGateResultConsumed,
       productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGateReceiptConsumed,
       productionReleaseCrpFulfillClientAdapterResultConsumptionHandlingGateSideEffectFree,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditRequired,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditObserved,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditStatus,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditReason,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditBlockedBy,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditArtifact,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldAuditResultConsumption,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldRequireReceiptJws,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldRequireReceiptPayload,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldRequireFinalizedSettlement,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldRequireTupleBinding,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditWouldRequireNoReplay,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditAllowsResultConsumption,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditAllowsCrpFulfill,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditAllowsProductionRelease,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditAdapterInvoked,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditExternalCallAttempted,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditCrpCalled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditCrpFulfillCalled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditResultConsumed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditReceiptConsumed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionDryRunAuditSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
