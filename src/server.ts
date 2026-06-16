@@ -4295,6 +4295,175 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           }
         : null;
 
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerRequired =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionActivationPreflightRequired === true &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionActivationPreflightObserved === true &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionActivationPreflightStatus ===
+        'preflight_ready';
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerObserved =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerStatus =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerRequired === true
+        ? 'disabled'
+        : 'inactive';
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReason =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerRequired === true
+        ? 'production_release_crp_fulfill_client_adapter_result_consumption_noop_consumer_disabled'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerBlockedBy =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReason;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsResultConsumption = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsReceiptConsumption = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsReceiptDecode = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsFinalizedSettlementVerification = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsTupleBinding = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsReplayCheck = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsCrpFulfill = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsProductionRelease = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAdapterInvoked = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerExternalCallAttempted = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerCrpCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerCrpFulfillCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerResultConsumed = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReceiptConsumed = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReceiptDecoded = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerFinalizedSettlementVerified = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerTupleBindingVerified = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReplayTouched = false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerSideEffectFree =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsResultConsumption === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsReceiptConsumption === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsReceiptDecode === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsFinalizedSettlementVerification === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsTupleBinding === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsReplayCheck === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsCrpFulfill === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsProductionRelease === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAdapterInvoked === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerExternalCallAttempted === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerCrpCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerCrpFulfillCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerResultConsumed === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReceiptConsumed === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReceiptDecoded === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerFinalizedSettlementVerified === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerTupleBindingVerified === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReplayTouched === false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumer =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerRequired === true
+        ? {
+            contract:
+              'phase3.productionRelease.crpFulfillClientAdapter.resultConsumptionNoopConsumer.v1',
+            mode: 'contract_only',
+            status: productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerStatus,
+            reason: productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReason,
+            blockedBy:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerBlockedBy,
+            source: {
+              activationPreflightStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionActivationPreflightStatus,
+              activationPreflightReason:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionActivationPreflightReason,
+              activationPreflightContract:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionActivationPreflight
+                  ?.contract ?? null,
+              enablementGateStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateStatus,
+              enablementGateEnabled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateEnabled,
+              readinessGateStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateStatus,
+              dryRunAuditObserved:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateDryRunAuditObserved,
+              dryRunAuditSanitized:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateDryRunAuditSanitized,
+            },
+            requiredChecks: {
+              receiptJwsRequired: true,
+              receiptPayloadRequired: true,
+              finalizedSettlementRequired: true,
+              tupleBindingRequired: true,
+              replayProtectionRequired: true,
+            },
+            consumer: {
+              allowsResultConsumption:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsResultConsumption,
+              allowsReceiptConsumption:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsReceiptConsumption,
+              allowsReceiptDecode:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsReceiptDecode,
+              allowsFinalizedSettlementVerification:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsFinalizedSettlementVerification,
+              allowsTupleBinding:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsTupleBinding,
+              allowsReplayCheck:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsReplayCheck,
+              allowsCrpFulfill:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsCrpFulfill,
+              allowsProductionRelease:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsProductionRelease,
+            },
+            result: {
+              receiptJwsPresent:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionActivationPreflight
+                  ?.preflight?.receiptJwsPresent === true,
+              receiptPayloadPresent:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionActivationPreflight
+                  ?.preflight?.receiptPayloadPresent === true,
+              resultConsumed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerResultConsumed,
+              receiptConsumed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReceiptConsumed,
+              receiptDecoded:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReceiptDecoded,
+              finalizedSettlementVerified:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerFinalizedSettlementVerified,
+              tupleBindingVerified:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerTupleBindingVerified,
+              replayTouched:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReplayTouched,
+            },
+            safety: {
+              sanitized: true,
+              rawProofIncluded: false,
+              rawReceiptIncluded: false,
+              jwsIncluded: false,
+              adapterInvoked:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAdapterInvoked,
+              externalCallAttempted:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerExternalCallAttempted,
+              crpCalled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerCrpCalled,
+              crpFulfillCalled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerCrpFulfillCalled,
+              resultConsumed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerResultConsumed,
+              receiptConsumed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReceiptConsumed,
+              receiptDecoded:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReceiptDecoded,
+              finalizedSettlementVerified:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerFinalizedSettlementVerified,
+              tupleBindingVerified:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerTupleBindingVerified,
+              replayTouched:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReplayTouched,
+              productionReleaseAuthorized: false,
+              productionRelease: false,
+              sideEffectFree:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerSideEffectFree,
+            },
+          }
+        : null;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -4718,6 +4887,31 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterResultConsumptionActivationPreflightReceiptConsumed,
       productionReleaseCrpFulfillClientAdapterResultConsumptionActivationPreflightReplayTouched,
       productionReleaseCrpFulfillClientAdapterResultConsumptionActivationPreflightSideEffectFree,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerRequired,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerObserved,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerStatus,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReason,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerBlockedBy,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumer,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsResultConsumption,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsReceiptConsumption,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsReceiptDecode,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsFinalizedSettlementVerification,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsTupleBinding,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsReplayCheck,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsCrpFulfill,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAllowsProductionRelease,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerAdapterInvoked,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerExternalCallAttempted,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerCrpCalled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerCrpFulfillCalled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerResultConsumed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReceiptConsumed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReceiptDecoded,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerFinalizedSettlementVerified,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerTupleBindingVerified,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerReplayTouched,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionNoopConsumerSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
