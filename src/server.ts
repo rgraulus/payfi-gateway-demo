@@ -220,6 +220,10 @@ const phase3GatewayProductionReleaseEnabled =
 const phase3GatewayProductionReleaseDryRunEnabled =
   String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_DRY_RUN_ENABLED ?? '').toLowerCase() === 'true';
 
+const phase3GatewayProductionReleaseResultConsumptionEnabled =
+  String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_RESULT_CONSUMPTION_ENABLED ?? '').toLowerCase() ===
+  'true';
+
 // PR #100 demo controls.
 // Both remain conservative by default:
 // - parsed-only policy satisfaction is NOT accepted unless explicitly enabled.
@@ -4009,6 +4013,148 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           }
         : null;
 
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateRequired =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateRequired === true &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateObserved === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateObserved =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateEnabled =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateRequired === true &&
+      phase3GatewayProductionReleaseResultConsumptionEnabled === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateStatus =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateRequired !== true
+        ? 'inactive'
+        : productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateEnabled === true
+          ? 'enabled'
+          : 'blocked';
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateReason =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateRequired !== true
+        ? null
+        : productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateEnabled === true
+          ? 'production_release_crp_fulfill_client_adapter_result_consumption_enablement_enabled'
+          : 'production_release_crp_fulfill_client_adapter_result_consumption_enablement_disabled';
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateBlockedBy =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateEnabled === true
+        ? null
+        : productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateReason;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAllowsResultConsumption = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAllowsReceiptConsumption = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAllowsCrpFulfill = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAllowsProductionRelease = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAdapterInvoked = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateExternalCallAttempted = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateCrpCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateCrpFulfillCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateResultConsumed = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateReceiptConsumed = false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateSideEffectFree =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAllowsResultConsumption === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAllowsReceiptConsumption === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAllowsCrpFulfill === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAllowsProductionRelease === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAdapterInvoked === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateExternalCallAttempted === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateCrpCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateCrpFulfillCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateResultConsumed === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateReceiptConsumed === false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGate =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateRequired === true
+        ? {
+            contract:
+              'phase3.productionRelease.crpFulfillClientAdapter.resultConsumptionEnablementGate.v1',
+            mode: 'contract_only',
+            status: productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateStatus,
+            reason: productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateReason,
+            blockedBy:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateBlockedBy,
+            enabled:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateEnabled,
+            source: {
+              readinessGateStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateStatus,
+              readinessGateReason:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateReason,
+              readinessGateBlockedBy:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateBlockedBy,
+              readinessGateContract:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGate
+                  ?.contract ?? null,
+              dryRunAuditObserved:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateDryRunAuditObserved,
+              dryRunAuditSanitized:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateDryRunAuditSanitized,
+              wouldAuditResultConsumption:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateWouldAuditResultConsumption,
+              wouldRequireReceiptJws:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateWouldRequireReceiptJws,
+              wouldRequireReceiptPayload:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateWouldRequireReceiptPayload,
+              wouldRequireFinalizedSettlement:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateWouldRequireFinalizedSettlement,
+              wouldRequireTupleBinding:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateWouldRequireTupleBinding,
+              wouldRequireNoReplay:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateWouldRequireNoReplay,
+            },
+            enablement: {
+              flag: 'PHASE3_GATEWAY_PRODUCTION_RELEASE_RESULT_CONSUMPTION_ENABLED',
+              enabled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateEnabled,
+              allowsResultConsumption:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAllowsResultConsumption,
+              allowsReceiptConsumption:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAllowsReceiptConsumption,
+              allowsCrpFulfill:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAllowsCrpFulfill,
+              allowsProductionRelease:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAllowsProductionRelease,
+            },
+            result: {
+              receiptJwsPresent:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGate
+                  ?.result?.receiptJwsPresent === true,
+              receiptPayloadPresent:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGate
+                  ?.result?.receiptPayloadPresent === true,
+              resultConsumed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateResultConsumed,
+              receiptConsumed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateReceiptConsumed,
+            },
+            safety: {
+              sanitized: true,
+              rawProofIncluded: false,
+              rawReceiptIncluded: false,
+              jwsIncluded: false,
+              adapterInvoked:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAdapterInvoked,
+              externalCallAttempted:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateExternalCallAttempted,
+              crpCalled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateCrpCalled,
+              crpFulfillCalled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateCrpFulfillCalled,
+              resultConsumed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateResultConsumed,
+              receiptConsumed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateReceiptConsumed,
+              productionReleaseAuthorized: false,
+              productionRelease: false,
+              sideEffectFree:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateSideEffectFree,
+            },
+          }
+        : null;
+
     const productionReleaseExecutionPreflightReady =
       productionReleaseExecutionPreflightRequired === true &&
       productionReleaseExecutionMode === 'dry_run';
@@ -4396,6 +4542,24 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateReceiptConsumptionEnabled,
       productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateProductionReleaseAuthorizationEnabled,
       productionReleaseCrpFulfillClientAdapterResultConsumptionReadinessGateSideEffectFree,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateRequired,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateObserved,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateEnabled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateStatus,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateReason,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateBlockedBy,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGate,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAllowsResultConsumption,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAllowsReceiptConsumption,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAllowsCrpFulfill,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAllowsProductionRelease,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateAdapterInvoked,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateExternalCallAttempted,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateCrpCalled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateCrpFulfillCalled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateResultConsumed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateReceiptConsumed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
