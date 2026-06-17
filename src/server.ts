@@ -5013,6 +5013,207 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           }
         : null;
 
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightRequired =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptMaterialHandlingGateRequired === true &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptMaterialHandlingGateObserved === true &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptMaterialHandlingGateStatus === 'blocked';
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightObserved =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightStatus =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightRequired === true
+        ? 'preflight_ready'
+        : 'inactive';
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReason =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightRequired === true
+        ? 'production_release_crp_fulfill_client_adapter_result_consumption_receipt_decode_preflight_ready'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightBlockedBy = null;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptJwsRequired =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptMaterialHandlingGateReceiptJwsRequired;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptPayloadRequired =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptMaterialHandlingGateReceiptPayloadRequired;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptDecodeRequired = true;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptJwsPresent = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptPayloadPresent = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptMaterialHandled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptMaterialConsumed = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptDecoded = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptPayloadParsed = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsResultConsumption = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReceiptConsumption = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReceiptHandling = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReceiptDecode = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReceiptPayloadParse = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsFinalizedSettlementVerification = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsTupleBinding = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReplayCheck = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsCrpFulfill = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsProductionRelease = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAdapterInvoked = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightExternalCallAttempted = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightCrpCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightCrpFulfillCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightResultConsumed = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptConsumed = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightFinalizedSettlementVerified = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightTupleBindingVerified = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReplayTouched = false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightSideEffectFree =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptJwsPresent === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptPayloadPresent === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptMaterialHandled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptMaterialConsumed === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptDecoded === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptPayloadParsed === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsResultConsumption === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReceiptConsumption === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReceiptHandling === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReceiptDecode === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReceiptPayloadParse === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsFinalizedSettlementVerification === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsTupleBinding === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReplayCheck === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsCrpFulfill === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsProductionRelease === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAdapterInvoked === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightExternalCallAttempted === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightCrpCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightCrpFulfillCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightResultConsumed === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptConsumed === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightFinalizedSettlementVerified === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightTupleBindingVerified === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReplayTouched === false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflight =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightRequired === true
+        ? {
+            contract:
+              'phase3.productionRelease.crpFulfillClientAdapter.resultConsumptionReceiptDecodePreflight.v1',
+            mode: 'contract_only',
+            status:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightStatus,
+            reason:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReason,
+            blockedBy:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightBlockedBy,
+            source: {
+              receiptMaterialHandlingGateStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptMaterialHandlingGateStatus,
+              receiptMaterialHandlingGateReason:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptMaterialHandlingGateReason,
+              receiptMaterialHandlingGateBlockedBy:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptMaterialHandlingGateBlockedBy,
+              receiptMaterialHandlingGateContract:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptMaterialHandlingGate
+                  ?.contract ?? null,
+              receiptMaterialPreflightStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptMaterialPreflightStatus,
+              receiptMaterialPreflightReason:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptMaterialPreflightReason,
+              enablementGateEnabled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionEnablementGateEnabled,
+            },
+            receiptDecode: {
+              receiptJwsRequired:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptJwsRequired,
+              receiptPayloadRequired:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptPayloadRequired,
+              receiptDecodeRequired:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptDecodeRequired,
+              receiptJwsPresent:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptJwsPresent,
+              receiptPayloadPresent:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptPayloadPresent,
+              receiptMaterialHandled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptMaterialHandled,
+              receiptMaterialConsumed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptMaterialConsumed,
+              receiptDecoded:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptDecoded,
+              receiptPayloadParsed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptPayloadParsed,
+            },
+            preflight: {
+              wouldRequireReceiptJws:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptJwsRequired,
+              wouldRequireReceiptPayload:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptPayloadRequired,
+              wouldRequireReceiptDecode:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptDecodeRequired,
+              wouldRequirePayloadParse: true,
+              wouldRequireFinalizedSettlement: true,
+              wouldRequireTupleBinding: true,
+              wouldRequireReplayProtection: true,
+            },
+            gate: {
+              allowsResultConsumption:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsResultConsumption,
+              allowsReceiptConsumption:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReceiptConsumption,
+              allowsReceiptHandling:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReceiptHandling,
+              allowsReceiptDecode:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReceiptDecode,
+              allowsReceiptPayloadParse:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReceiptPayloadParse,
+              allowsFinalizedSettlementVerification:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsFinalizedSettlementVerification,
+              allowsTupleBinding:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsTupleBinding,
+              allowsReplayCheck:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReplayCheck,
+              allowsCrpFulfill:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsCrpFulfill,
+              allowsProductionRelease:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsProductionRelease,
+            },
+            safety: {
+              sanitized: true,
+              rawProofIncluded: false,
+              rawReceiptIncluded: false,
+              jwsIncluded: false,
+              adapterInvoked:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAdapterInvoked,
+              externalCallAttempted:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightExternalCallAttempted,
+              crpCalled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightCrpCalled,
+              crpFulfillCalled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightCrpFulfillCalled,
+              resultConsumed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightResultConsumed,
+              receiptConsumed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptConsumed,
+              receiptMaterialHandled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptMaterialHandled,
+              receiptMaterialConsumed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptMaterialConsumed,
+              receiptDecoded:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptDecoded,
+              receiptPayloadParsed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptPayloadParsed,
+              finalizedSettlementVerified:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightFinalizedSettlementVerified,
+              tupleBindingVerified:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightTupleBindingVerified,
+              replayTouched:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReplayTouched,
+              productionReleaseAuthorized: false,
+              productionRelease: false,
+              sideEffectFree:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightSideEffectFree,
+            },
+          }
+        : null;
+
     const productionReleaseBlockedBy = productionReleaseExecutionBlockedBy;
 
     return {
@@ -5538,6 +5739,41 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptMaterialHandlingGateTupleBindingVerified,
       productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptMaterialHandlingGateReplayTouched,
       productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptMaterialHandlingGateSideEffectFree,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightRequired,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightObserved,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightStatus,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReason,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightBlockedBy,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflight,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptJwsRequired,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptPayloadRequired,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptDecodeRequired,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptJwsPresent,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptPayloadPresent,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptMaterialHandled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptMaterialConsumed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptDecoded,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptPayloadParsed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsResultConsumption,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReceiptConsumption,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReceiptHandling,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReceiptDecode,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReceiptPayloadParse,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsFinalizedSettlementVerification,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsTupleBinding,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsReplayCheck,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsCrpFulfill,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAllowsProductionRelease,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightAdapterInvoked,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightExternalCallAttempted,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightCrpCalled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightCrpFulfillCalled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightResultConsumed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReceiptConsumed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightFinalizedSettlementVerified,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightTupleBindingVerified,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReplayTouched,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
