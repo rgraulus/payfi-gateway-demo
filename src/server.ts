@@ -5409,6 +5409,221 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           }
         : null;
 
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRequired =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeHandlingGateRequired === true &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeHandlingGateObserved === true &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeHandlingGateStatus === 'blocked' &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeHandlingGateBlockedBy ===
+        'production_release_crp_fulfill_client_adapter_result_consumption_receipt_decode_handling_disabled';
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditObserved =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditStatus =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRequired === true
+        ? 'recorded'
+        : 'inactive';
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReason =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRequired === true
+        ? 'production_release_crp_fulfill_client_adapter_result_consumption_receipt_decode_dry_run_audit_recorded'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditBlockedBy =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRequired === true
+        ? 'production_release_crp_fulfill_client_adapter_result_consumption_receipt_decode_handling_disabled'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldAuditReceiptDecode =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRequired === true;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireReceiptJws =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRequired === true;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireReceiptPayload =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRequired === true;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireReceiptDecode =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRequired === true;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireReceiptPayloadParse =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRequired === true;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireFinalizedSettlement =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRequired === true;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireTupleBinding =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRequired === true;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireNoReplay =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptJwsRequired =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeHandlingGateReceiptJwsRequired;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptPayloadRequired =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeHandlingGateReceiptPayloadRequired;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptDecodeRequired =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeHandlingGateReceiptDecodeRequired;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsResultConsumption = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsReceiptConsumption = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsReceiptHandling = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditResultConsumed = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptConsumed = false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptJwsPresent = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptPayloadPresent = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptMaterialObserved = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptMaterialHandled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptMaterialConsumed = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptDecoded = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptPayloadParsed = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditFinalizedSettlementVerified = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditTupleBindingVerified = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReplayTouched = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsReceiptDecode = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsReceiptPayloadParse = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsFinalizedSettlementVerification = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsTupleBinding = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsReplayCheck = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsCrpFulfill = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsProductionRelease = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditCrpCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditCrpFulfillCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAdapterInvoked = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditExternalCallAttempted = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRawProofPrinted = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRawReceiptPrinted = false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditSideEffectFree =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptJwsPresent === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptPayloadPresent === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptMaterialObserved === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptMaterialHandled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptMaterialConsumed === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptDecoded === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptPayloadParsed === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsResultConsumption === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsReceiptConsumption === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsReceiptHandling === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditResultConsumed === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptConsumed === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditFinalizedSettlementVerified === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditTupleBindingVerified === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReplayTouched === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsReceiptDecode === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsReceiptPayloadParse === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsFinalizedSettlementVerification === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsTupleBinding === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsReplayCheck === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsCrpFulfill === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsProductionRelease === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditCrpCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditCrpFulfillCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAdapterInvoked === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditExternalCallAttempted === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRawProofPrinted === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRawReceiptPrinted === false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAudit =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRequired === true
+        ? {
+            contract:
+              'phase3.productionRelease.crpFulfillClientAdapter.resultConsumptionReceiptDecodeDryRunAudit.v1',
+            mode: 'contract_only',
+            status:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditStatus,
+            reason:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReason,
+            blockedBy:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditBlockedBy,
+            source: {
+              receiptDecodeHandlingGateStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeHandlingGateStatus,
+              receiptDecodeHandlingGateReason:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeHandlingGateReason,
+              receiptDecodeHandlingGateBlockedBy:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeHandlingGateBlockedBy,
+              receiptDecodeHandlingGateContract:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeHandlingGate
+                  ?.contract ?? null,
+              receiptDecodePreflightStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightStatus,
+              receiptDecodePreflightReason:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightReason,
+              receiptDecodePreflightBlockedBy:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflightBlockedBy,
+              receiptDecodePreflightContract:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodePreflight
+                  ?.contract ?? null,
+              receiptMaterialHandlingGateStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptMaterialHandlingGateStatus,
+              receiptMaterialHandlingGateReason:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptMaterialHandlingGateReason,
+              receiptMaterialHandlingGateBlockedBy:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptMaterialHandlingGateBlockedBy,
+            },
+            audit: {
+              wouldAuditReceiptDecode:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldAuditReceiptDecode,
+              wouldRequireReceiptJws:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireReceiptJws,
+              wouldRequireReceiptPayload:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireReceiptPayload,
+              wouldRequireReceiptDecode:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireReceiptDecode,
+              wouldRequireReceiptPayloadParse:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireReceiptPayloadParse,
+              wouldRequireFinalizedSettlement:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireFinalizedSettlement,
+              wouldRequireTupleBinding:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireTupleBinding,
+              wouldRequireNoReplay:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireNoReplay,
+            },
+            receiptDecode: {
+              receiptJwsRequired:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeHandlingGateReceiptJwsRequired,
+              receiptPayloadRequired:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeHandlingGateReceiptPayloadRequired,
+              receiptDecodeRequired:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeHandlingGateReceiptDecodeRequired,
+              receiptJwsPresent:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptJwsPresent,
+              receiptPayloadPresent:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptPayloadPresent,
+              receiptMaterialObserved:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptMaterialObserved,
+              receiptMaterialHandled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptMaterialHandled,
+              receiptMaterialConsumed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptMaterialConsumed,
+              receiptDecoded:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptDecoded,
+              receiptPayloadParsed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptPayloadParsed,
+            },
+            safety: {
+              sanitized: true,
+              rawProofPrinted:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRawProofPrinted,
+              rawReceiptPrinted:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRawReceiptPrinted,
+              adapterInvoked:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAdapterInvoked,
+              externalCallAttempted:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditExternalCallAttempted,
+              crpCalled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditCrpCalled,
+              crpFulfillCalled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditCrpFulfillCalled,
+              finalizedSettlementVerified:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditFinalizedSettlementVerified,
+              tupleBindingVerified:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditTupleBindingVerified,
+              replayTouched:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReplayTouched,
+              productionReleaseAuthorized: false,
+              productionRelease: false,
+              sideEffectFree:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditSideEffectFree,
+            },
+          }
+        : null;
+
     const productionReleaseBlockedBy = productionReleaseExecutionBlockedBy;
 
     return {
@@ -6004,6 +6219,52 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeHandlingGateTupleBindingVerified,
       productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeHandlingGateReplayTouched,
       productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeHandlingGateSideEffectFree,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRequired,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditObserved,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditStatus,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReason,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditBlockedBy,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAudit,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptJwsRequired,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptPayloadRequired,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptDecodeRequired,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldAuditReceiptDecode,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireReceiptJws,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireReceiptPayload,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireReceiptDecode,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireReceiptPayloadParse,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireFinalizedSettlement,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireTupleBinding,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditWouldRequireNoReplay,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptJwsPresent,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptPayloadPresent,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptMaterialObserved,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptMaterialHandled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptMaterialConsumed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptDecoded,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptPayloadParsed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsResultConsumption,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsReceiptConsumption,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsReceiptHandling,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditResultConsumed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReceiptConsumed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditFinalizedSettlementVerified,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditTupleBindingVerified,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditReplayTouched,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsReceiptDecode,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsReceiptPayloadParse,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsFinalizedSettlementVerification,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsTupleBinding,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsReplayCheck,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsCrpFulfill,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAllowsProductionRelease,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditCrpCalled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditCrpFulfillCalled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditAdapterInvoked,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditExternalCallAttempted,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRawProofPrinted,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditRawReceiptPrinted,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeDryRunAuditSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
