@@ -128,6 +128,11 @@ import {
 import {
   deriveX402ReceiptBindingContextFromCcdPltProofV1,
 } from './phase3/x402ReceiptPaymentSignal';
+import {
+  RECEIPT_DECODE_METADATA_BOUNDARY_ALLOWED_METADATA_CATEGORIES,
+  RECEIPT_DECODE_METADATA_BOUNDARY_CONTRACT,
+  RECEIPT_DECODE_METADATA_BOUNDARY_PROHIBITED_RECEIPT_MATERIAL_CATEGORIES,
+} from './phase3/receiptDecodeMetadataBoundary';
 
 // Replay modules
 import { buildTupleKey } from './x402/tupleKey';
@@ -6365,7 +6370,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryRequired === true
         ? {
             contract:
-              'phase3.productionRelease.crpFulfillClientAdapter.resultConsumptionReceiptDecodeMetadataBoundary.v1',
+              RECEIPT_DECODE_METADATA_BOUNDARY_CONTRACT,
             mode: 'contract_only',
             status:
               productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryStatus,
@@ -6397,27 +6402,10 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
               decoderInvocationAllowed: false,
               decoderInvocationObserved: false,
               allowedMetadataCategories: [
-                'contractBinding',
-                'resourceBinding',
-                'merchantBinding',
-                'networkBinding',
-                'assetBinding',
-                'amountBinding',
-                'destinationBinding',
-                'nonceBinding',
-                'upstreamGateContext',
-                'decoderContractVersion',
+                ...RECEIPT_DECODE_METADATA_BOUNDARY_ALLOWED_METADATA_CATEGORIES,
               ],
               prohibitedReceiptMaterialCategories: [
-                'receiptJws',
-                'receiptJwsHeader',
-                'receiptJwsPayload',
-                'receiptPayload',
-                'receiptBytes',
-                'receiptObject',
-                'transactionHash',
-                'settlementFields',
-                'replayKey',
+                ...RECEIPT_DECODE_METADATA_BOUNDARY_PROHIBITED_RECEIPT_MATERIAL_CATEGORIES,
               ],
               receiptJwsAccepted: false,
               receiptPayloadAccepted: false,
