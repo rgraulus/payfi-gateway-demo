@@ -224,6 +224,10 @@ const phase3GatewayProductionReleaseResultConsumptionEnabled =
   String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_RESULT_CONSUMPTION_ENABLED ?? '').toLowerCase() ===
   'true';
 
+const phase3GatewayProductionReleaseReceiptDecodeEnabled =
+  String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_RECEIPT_DECODE_ENABLED ?? '').toLowerCase() ===
+  'true';
+
 // PR #100 demo controls.
 // Both remain conservative by default:
 // - parsed-only policy satisfaction is NOT accepted unless explicitly enabled.
@@ -5823,6 +5827,168 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           }
         : null;
 
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateRequired =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeReadinessGateRequired === true &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeReadinessGateObserved === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateObserved =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateEnabled =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateRequired === true &&
+      phase3GatewayProductionReleaseReceiptDecodeEnabled === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReady = false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateStatus =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateRequired !== true
+        ? 'inactive'
+        : productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateEnabled === true
+          ? 'enabled'
+          : 'blocked';
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReason =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateRequired !== true
+        ? null
+        : productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateEnabled === true
+          ? 'production_release_crp_fulfill_client_adapter_result_consumption_receipt_decode_enablement_enabled'
+          : 'production_release_crp_fulfill_client_adapter_result_consumption_receipt_decode_enablement_disabled';
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateBlockedBy =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateEnabled === true
+        ? null
+        : productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReason;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsReceiptDecode = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsReceiptPayloadParse = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsFinalizedSettlementVerification = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsTupleBinding = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsReplayCheck = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsCrpFulfill = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsProductionRelease = false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptMaterialObserved = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptMaterialHandled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptMaterialConsumed = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptDecoded = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptPayloadParsed = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateFinalizedSettlementVerified = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateTupleBindingVerified = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReplayTouched = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAdapterInvoked = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateExternalCallAttempted = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateCrpCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateCrpFulfillCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateRawProofPrinted = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateRawReceiptPrinted = false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateSideEffectFree =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsReceiptDecode === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsReceiptPayloadParse === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsFinalizedSettlementVerification === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsTupleBinding === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsReplayCheck === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsCrpFulfill === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsProductionRelease === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptMaterialObserved === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptMaterialHandled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptMaterialConsumed === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptDecoded === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptPayloadParsed === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateFinalizedSettlementVerified === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateTupleBindingVerified === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReplayTouched === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAdapterInvoked === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateExternalCallAttempted === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateCrpCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateCrpFulfillCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateRawProofPrinted === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateRawReceiptPrinted === false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGate =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateRequired === true
+        ? {
+            contract:
+              'phase3.productionRelease.crpFulfillClientAdapter.resultConsumptionReceiptDecodeEnablementGate.v1',
+            mode: 'contract_only',
+            status:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateStatus,
+            reason:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReason,
+            blockedBy:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateBlockedBy,
+            enabled:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateEnabled,
+            ready:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReady,
+            source: {
+              readinessGateStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeReadinessGateStatus,
+              readinessGateReason:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeReadinessGateReason,
+              readinessGateBlockedBy:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeReadinessGateBlockedBy,
+              readinessGateContract:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeReadinessGate
+                  ?.contract ?? null,
+            },
+            enablement: {
+              flag: 'PHASE3_GATEWAY_PRODUCTION_RELEASE_RECEIPT_DECODE_ENABLED',
+              enabled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateEnabled,
+              allowsReceiptDecode:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsReceiptDecode,
+              allowsReceiptPayloadParse:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsReceiptPayloadParse,
+              allowsFinalizedSettlementVerification:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsFinalizedSettlementVerification,
+              allowsTupleBinding:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsTupleBinding,
+              allowsReplayCheck:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsReplayCheck,
+              allowsCrpFulfill:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsCrpFulfill,
+              allowsProductionRelease:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsProductionRelease,
+            },
+            safety: {
+              sanitized: true,
+              receiptMaterialObserved:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptMaterialObserved,
+              receiptMaterialHandled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptMaterialHandled,
+              receiptMaterialConsumed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptMaterialConsumed,
+              receiptDecoded:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptDecoded,
+              receiptPayloadParsed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptPayloadParsed,
+              finalizedSettlementVerified:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateFinalizedSettlementVerified,
+              tupleBindingVerified:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateTupleBindingVerified,
+              replayTouched:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReplayTouched,
+              adapterInvoked:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAdapterInvoked,
+              externalCallAttempted:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateExternalCallAttempted,
+              crpCalled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateCrpCalled,
+              crpFulfillCalled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateCrpFulfillCalled,
+              rawProofPrinted:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateRawProofPrinted,
+              rawReceiptPrinted:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateRawReceiptPrinted,
+              productionReleaseAuthorized: false,
+              productionRelease: false,
+              sideEffectFree:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateSideEffectFree,
+            },
+          }
+        : null;
+
     const productionReleaseBlockedBy = productionReleaseExecutionBlockedBy;
 
     return {
@@ -6509,6 +6675,36 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeReadinessGateAllowsCrpFulfill,
       productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeReadinessGateAllowsProductionRelease,
       productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeReadinessGateSideEffectFree,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateRequired,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateObserved,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateEnabled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReady,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateStatus,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReason,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateBlockedBy,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGate,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsReceiptDecode,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsReceiptPayloadParse,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsFinalizedSettlementVerification,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsTupleBinding,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsReplayCheck,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsCrpFulfill,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAllowsProductionRelease,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptMaterialObserved,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptMaterialHandled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptMaterialConsumed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptDecoded,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReceiptPayloadParsed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateFinalizedSettlementVerified,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateTupleBindingVerified,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateReplayTouched,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateAdapterInvoked,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateExternalCallAttempted,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateCrpCalled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateCrpFulfillCalled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateRawProofPrinted,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateRawReceiptPrinted,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateSideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
