@@ -6286,6 +6286,183 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           }
         : null;
 
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryRequired =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeNoopDecoderRequired === true &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeNoopDecoderObserved === true &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeNoopDecoderStatus === 'unavailable';
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryObserved =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryRequired === true;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReady = false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryStatus =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryRequired === true
+        ? 'preflight_ready'
+        : 'inactive';
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReason =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryRequired === true
+        ? 'production_release_crp_fulfill_client_adapter_result_consumption_receipt_decode_metadata_boundary_preflight_ready'
+        : null;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryBlockedBy = null;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReceiptMaterialObservation = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReceiptMaterialHandling = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReceiptMaterialConsumption = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReceiptDecode = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReceiptPayloadParse = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsFinalizedSettlementVerification = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsTupleBinding = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReplayCheck = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsCrpFulfill = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsProductionRelease = false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptMaterialObserved = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptMaterialHandled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptMaterialConsumed = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptDecoded = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptPayloadParsed = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryFinalizedSettlementVerified = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryTupleBindingVerified = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReplayTouched = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAdapterInvoked = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryExternalCallAttempted = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryCrpCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryCrpFulfillCalled = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryRawProofPrinted = false;
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryRawReceiptPrinted = false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundarySideEffectFree =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReceiptMaterialObservation === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReceiptMaterialHandling === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReceiptMaterialConsumption === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReceiptDecode === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReceiptPayloadParse === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsFinalizedSettlementVerification === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsTupleBinding === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReplayCheck === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsCrpFulfill === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsProductionRelease === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptMaterialObserved === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptMaterialHandled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptMaterialConsumed === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptDecoded === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptPayloadParsed === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryFinalizedSettlementVerified === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryTupleBindingVerified === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReplayTouched === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAdapterInvoked === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryExternalCallAttempted === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryCrpCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryCrpFulfillCalled === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryRawProofPrinted === false &&
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryRawReceiptPrinted === false;
+
+    const productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundary =
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryRequired === true
+        ? {
+            contract:
+              'phase3.productionRelease.crpFulfillClientAdapter.resultConsumptionReceiptDecodeMetadataBoundary.v1',
+            mode: 'contract_only',
+            status:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryStatus,
+            reason:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReason,
+            blockedBy:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryBlockedBy,
+            ready:
+              productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReady,
+            source: {
+              noopDecoderStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeNoopDecoderStatus,
+              noopDecoderReason:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeNoopDecoderReason,
+              noopDecoderContract:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeNoopDecoder
+                  ?.contract ?? null,
+              activationPreflightStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeActivationPreflightStatus,
+              enablementGateStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeEnablementGateStatus,
+              readinessGateStatus:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeReadinessGateStatus,
+            },
+            decoderInput: {
+              futureDecoderInputRequired: true,
+              metadataOnly: true,
+              inputObjectBuilt: false,
+              decoderInvocationAllowed: false,
+              decoderInvocationObserved: false,
+              allowedMetadataCategories: [
+                'contractBinding',
+                'resourceBinding',
+                'merchantBinding',
+                'networkBinding',
+                'assetBinding',
+                'amountBinding',
+                'destinationBinding',
+                'nonceBinding',
+                'upstreamGateContext',
+                'decoderContractVersion',
+              ],
+              prohibitedReceiptMaterialCategories: [
+                'receiptJws',
+                'receiptJwsHeader',
+                'receiptJwsPayload',
+                'receiptPayload',
+                'receiptBytes',
+                'receiptObject',
+                'transactionHash',
+                'settlementFields',
+                'replayKey',
+              ],
+              receiptJwsAccepted: false,
+              receiptPayloadAccepted: false,
+              receiptBytesAccepted: false,
+              receiptObjectAccepted: false,
+              transactionHashAccepted: false,
+            },
+            safety: {
+              sanitized: true,
+              receiptMaterialObserved:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptMaterialObserved,
+              receiptMaterialHandled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptMaterialHandled,
+              receiptMaterialConsumed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptMaterialConsumed,
+              receiptDecoded:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptDecoded,
+              receiptPayloadParsed:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptPayloadParsed,
+              finalizedSettlementVerified:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryFinalizedSettlementVerified,
+              tupleBindingVerified:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryTupleBindingVerified,
+              replayTouched:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReplayTouched,
+              adapterInvoked:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAdapterInvoked,
+              externalCallAttempted:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryExternalCallAttempted,
+              crpCalled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryCrpCalled,
+              crpFulfillCalled:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryCrpFulfillCalled,
+              rawProofPrinted:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryRawProofPrinted,
+              rawReceiptPrinted:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryRawReceiptPrinted,
+              productionReleaseAuthorized: false,
+              productionRelease: false,
+              sideEffectFree:
+                productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundarySideEffectFree,
+            },
+          }
+        : null;
+
     const productionReleaseBlockedBy = productionReleaseExecutionBlockedBy;
 
     return {
@@ -7060,6 +7237,38 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeNoopDecoderRawProofPrinted,
       productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeNoopDecoderRawReceiptPrinted,
       productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeNoopDecoderSideEffectFree,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryRequired,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryObserved,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReady,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryStatus,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReason,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryBlockedBy,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundary,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReceiptMaterialObservation,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReceiptMaterialHandling,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReceiptMaterialConsumption,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReceiptDecode,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReceiptPayloadParse,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsFinalizedSettlementVerification,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsTupleBinding,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsReplayCheck,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsCrpFulfill,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAllowsProductionRelease,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptMaterialObserved,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptMaterialHandled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptMaterialConsumed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptDecoded,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReceiptPayloadParsed,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryFinalizedSettlementVerified,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryTupleBindingVerified,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryReplayTouched,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryAdapterInvoked,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryExternalCallAttempted,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryCrpCalled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryCrpFulfillCalled,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryRawProofPrinted,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundaryRawReceiptPrinted,
+      productionReleaseCrpFulfillClientAdapterResultConsumptionReceiptDecodeMetadataBoundarySideEffectFree,
       productionReleaseBlockedBy,
       productionReleaseRecognizedButNotExecuted: productionReleaseEligible === true,
       productionRelease: false,
