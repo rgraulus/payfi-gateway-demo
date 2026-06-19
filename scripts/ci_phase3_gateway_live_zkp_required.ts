@@ -4,8 +4,8 @@
  *
  * PR #132 regression harness.
  *
- * Proves /paid-gated rejects parsed-only policy proof when live Direct Buyer
- * ZKP verification is required.
+ * Proves /paid-gated activates live Direct Buyer verification when required
+ * and fails closed when a parsed-only proof cannot be live verified.
  *
  * This is intentionally a guard/regression harness. It does not release the
  * protected resource, does not emit PAYMENT-RESPONSE, does not touch replay,
@@ -116,18 +116,18 @@ async function main() {
       }),
     });
 
-    assert.equal(redeem.status, 403, `parsed-only redeem must fail when live ZKP is required: ${redeem.text}`);
+    assert.equal(redeem.status, 403, `non-live-verifiable redeem must fail when live ZKP is required: ${redeem.text}`);
     assert.equal(redeem.headers.get("payment-response"), null, "live-required rejection must not emit PAYMENT-RESPONSE");
     assert.equal(redeem.json?.ok, false);
     assert.equal(redeem.json?.nonce, pr.nonce);
-    assert.equal(redeem.json?.code, "verified_proof_required");
-    assert.equal(redeem.json?.reason, "verified_proof_required");
+    assert.equal(redeem.json?.code, "verifier_failed");
+    assert.equal(redeem.json?.reason, "verifier_failed");
     assert.equal(redeem.json?.policyStatus, "POLICY_FAILED");
-    assert.equal(redeem.json?.verifier?.ok, true);
-    assert.equal(redeem.json?.verifier?.stage, "parsed");
+    assert.equal(redeem.json?.verifier?.ok, false);
+    assert.equal(redeem.json?.verifier?.stage, "verification_failed");
     assert.equal(redeem.json?.verifier?.rawProofPrinted, false);
     assert.equal(redeem.json?.policyDecision?.allowed, false);
-    assert.equal(redeem.json?.policyDecision?.code, "verified_proof_required");
+    assert.equal(redeem.json?.policyDecision?.code, "verifier_failed");
     assert.equal(redeem.json?.policyDecision?.rawProofPrinted, false);
 
     const stillNoRelease = await request(BASE, `/paid-gated?nonce=${encodeURIComponent(pr.nonce)}`);
@@ -146,8 +146,8 @@ async function main() {
           allowParsedOnlyPolicy: health.phase3.allowParsedOnlyPolicy,
           requireLiveZkp: health.phase3.requireLiveZkp,
 
-          parsedOnlyVerifierStage: redeem.json?.verifier?.stage,
-          liveRequiredParsedOnlyRejected: redeem.json?.code,
+          verifierStage: redeem.json?.verifier?.stage,
+          liveVerificationFailureRejected: redeem.json?.code,
           policyStatus: redeem.json?.policyStatus,
 
           resourceReleased: false,
