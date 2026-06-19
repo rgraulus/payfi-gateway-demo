@@ -13,3 +13,7 @@ scripts/.dev_jwks_ed25519_private.pem
 # Local wallet exports (autorun payer - NEVER commit)
 keys/
 *.export
+
+# Local Phase 3 wallet proof captures (NEVER commit)
+.local/phase3/live-direct-buyer/
+

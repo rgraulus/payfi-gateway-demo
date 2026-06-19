@@ -110,3 +110,44 @@ final Gateway release decision
 ```
 
 No Gateway route should release protected content until both eligibility and payment settlement checks pass.
+
+## Current PR #223 diagnostic harness command
+
+The historical verifier-only run above remains valid evidence that a real Concordium Browser Wallet presentation could be live-verified locally.
+
+After PR #223, the current canonical verifier-only command is the live Direct Buyer verifier diagnostic harness:
+
+    PRIVATE_PROOF=".local/phase3/live-direct-buyer/captured-wallet-proof.direct-buyer.local.json"
+
+    PHASE3_LIVE_DIRECT_BUYER_VERIFIER_DIAGNOSTIC=true \
+      PHASE3_GRPC_HOST=127.0.0.1 \
+      PHASE3_GRPC_PORT=20001 \
+      PHASE3_CONCORDIUM_NETWORK=testnet \
+      npm run phase3:live-direct-buyer-verifier-diagnostic-test -- "$PRIVATE_PROOF"
+
+For public Concordium testnet gRPC, use:
+
+    PRIVATE_PROOF=".local/phase3/live-direct-buyer/captured-wallet-proof.direct-buyer.local.json"
+
+    PHASE3_LIVE_DIRECT_BUYER_VERIFIER_DIAGNOSTIC=true \
+      PHASE3_GRPC_HOST=grpc.testnet.concordium.com \
+      PHASE3_GRPC_PORT=20000 \
+      PHASE3_CONCORDIUM_NETWORK=testnet \
+      npm run phase3:live-direct-buyer-verifier-diagnostic-test -- "$PRIVATE_PROOF"
+
+Expected success metadata from the current harness includes:
+
+    ok: true
+    code: verified
+    liveVerifyAttempted: true
+    verifierOk: true
+    verifierStage: verified
+    credentialCount: 1
+    challengeBinding: walletChallenge
+    challengeBound: true
+    rawProofPrinted: false
+    rawReceiptPrinted: false
+
+This remains verifier-only. It does not release content, emit PAYMENT-RESPONSE, call CRP, call CRP fulfill, submit or decode receipts, touch replay, wire Gateway routes, or authorize production release.
+
+Milestone 3B should re-establish the real wallet proof verification result using this current diagnostic harness and a local-only real wallet capture file.
