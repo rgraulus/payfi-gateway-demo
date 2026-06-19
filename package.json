@@ -125,7 +125,8 @@
     "phase3:live-direct-buyer-runtime-decision-composition-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_runtime_decision_composition.ts",
     "phase3:live-direct-buyer-receipt-positive-decision-preflight-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_receipt_positive_decision_preflight.ts",
     "phase3:live-direct-buyer-receipt-jws-handoff-preflight-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_receipt_jws_handoff_preflight.ts",
-    "phase3:live-direct-buyer-receipt-decode-readiness-preflight-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_receipt_decode_readiness_preflight.ts"
+    "phase3:live-direct-buyer-receipt-decode-readiness-preflight-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_receipt_decode_readiness_preflight.ts",
+    "phase3:live-direct-buyer-receipt-decoder-input-contract-preflight-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_receipt_decoder_input_contract_preflight.ts"
   },
   "repository": {
     "type": "git",
