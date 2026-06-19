@@ -120,7 +120,8 @@
     "phase3:receipt-decode-metadata-boundary-selftest": "ts-node scripts/phase3-receipt-decode-metadata-boundary-selftest.ts",
     "phase3:production-release-crp-fulfill-client-adapter-result-consumption-receipt-decode-preflight-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_client_adapter_result_consumption_receipt_decode_preflight.ts",
     "phase3:production-release-crp-fulfill-client-adapter-result-consumption-receipt-material-handling-gate-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_client_adapter_result_consumption_receipt_material_handling_gate.ts",
-    "phase3:production-release-crp-fulfill-client-adapter-result-consumption-receipt-material-preflight-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_client_adapter_result_consumption_receipt_material_preflight.ts"
+    "phase3:production-release-crp-fulfill-client-adapter-result-consumption-receipt-material-preflight-test": "ts-node --transpile-only scripts/ci_phase3_production_release_crp_fulfill_client_adapter_result_consumption_receipt_material_preflight.ts",
+    "phase3:live-direct-buyer-redeem-positive-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_redeem_positive.ts"
   },
   "repository": {
     "type": "git",
