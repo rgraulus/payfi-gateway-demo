@@ -8270,11 +8270,10 @@ app.post('/paid-gated/redeem', async (req, res) => {
 
   const verifierResult = authorizationProof
     ? await verifyConcordiumZkpAuthorizationEnvelope(authorizationProof, {
-        // Live ZKP verification is intentionally not invoked from this route yet.
-        // The route first parses the envelope, then verifyPhase3Policy() enforces
-        // PHASE3_REQUIRE_LIVE_ZKP by rejecting parsed-only proofs with
-        // verified_proof_required.
-        liveVerify: false,
+        // When explicitly required, activate the existing live Direct Buyer
+        // verifier. Any SDK, network, presentation, or binding failure remains
+        // fail-closed; no parsed-only fallback is permitted by the policy layer.
+        liveVerify: phase3RequireLiveZkp,
         grpcHost: process.env.PHASE3_GRPC_HOST,
         grpcPort: process.env.PHASE3_GRPC_PORT ? Number(process.env.PHASE3_GRPC_PORT) : undefined,
         network: process.env.PHASE3_CONCORDIUM_NETWORK ?? 'testnet',

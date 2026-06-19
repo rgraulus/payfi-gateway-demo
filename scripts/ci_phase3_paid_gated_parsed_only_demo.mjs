@@ -252,9 +252,11 @@ async function main() {
       const strictEnvelope = buildEnvelope(strictPr, { region: "EU", ageOver: 21 });
       const strictRedeem = await redeem(strictBase, strictPr, strictEnvelope);
 
-      assert.equal(strictRedeem.status, 403, `live-required parsed-only should fail: ${strictRedeem.text}`);
-      assert.equal(strictRedeem.json?.code, "verified_proof_required");
+      assert.equal(strictRedeem.status, 403, `live-required non-live-verifiable proof should fail: ${strictRedeem.text}`);
+      assert.equal(strictRedeem.json?.code, "verifier_failed");
       assert.equal(strictRedeem.json?.policyStatus, "POLICY_FAILED");
+      assert.equal(strictRedeem.json?.verifier?.ok, false);
+      assert.equal(strictRedeem.json?.verifier?.stage, "verification_failed");
       assert.equal(strictRedeem.headers.get("payment-response"), null, "live-required rejection must not emit PAYMENT-RESPONSE");
     } finally {
       await stopGateway(strictChild);
@@ -264,7 +266,7 @@ async function main() {
       ok: true,
       parsedOnlyAllowedEu21: "POLICY_SATISFIED",
       parsedOnlyAllowedUs18: "age_requirement_not_met",
-      liveRequiredParsedOnlyRejected: "verified_proof_required",
+      liveVerificationFailureRejected: "verifier_failed",
       policyAloneDoesNotReleaseResource: true,
       rawProofPrinted: false,
     }, null, 2));
