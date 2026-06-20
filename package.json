@@ -130,7 +130,8 @@
     "phase3:live-direct-buyer-receipt-decoder-noop-disabled-invocation-guard-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_receipt_decoder_noop_disabled_invocation_guard.ts",
     "phase3:live-direct-buyer-receipt-decoder-noop-result-contract-preflight-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_receipt_decoder_noop_result_contract_preflight.ts",
     "phase3:live-direct-buyer-receipt-decoder-noop-to-real-readiness-preflight-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_receipt_decoder_noop_to_real_readiness_preflight.ts",
-    "phase3:live-direct-buyer-receipt-decoder-adapter-test-only-gate-preflight-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_receipt_decoder_adapter_test_only_gate_preflight.ts"
+    "phase3:live-direct-buyer-receipt-decoder-adapter-test-only-gate-preflight-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_receipt_decoder_adapter_test_only_gate_preflight.ts",
+    "phase3:live-direct-buyer-receipt-decoder-adapter-test-only-gate-open-preflight-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_receipt_decoder_adapter_test_only_gate_open_preflight.ts"
   },
   "repository": {
     "type": "git",
