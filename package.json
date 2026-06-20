@@ -133,7 +133,8 @@
     "phase3:live-direct-buyer-receipt-decoder-adapter-test-only-gate-preflight-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_receipt_decoder_adapter_test_only_gate_preflight.ts",
     "phase3:live-direct-buyer-receipt-decoder-adapter-test-only-gate-open-preflight-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_receipt_decoder_adapter_test_only_gate_open_preflight.ts",
     "phase3:live-direct-buyer-receipt-decoder-adapter-test-only-dry-run-invocation-preflight-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_receipt_decoder_adapter_test_only_dry_run_invocation_preflight.ts",
-    "phase3:live-direct-buyer-receipt-decoder-adapter-test-only-call-contract-preflight-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_receipt_decoder_adapter_test_only_call_contract_preflight.ts"
+    "phase3:live-direct-buyer-receipt-decoder-adapter-test-only-call-contract-preflight-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_receipt_decoder_adapter_test_only_call_contract_preflight.ts",
+    "phase3:live-direct-buyer-receipt-decoder-adapter-test-only-invocation-seam-preflight-test": "ts-node --transpile-only scripts/ci_phase3_live_direct_buyer_receipt_decoder_adapter_test_only_invocation_seam_preflight.ts"
   },
   "repository": {
     "type": "git",
