@@ -10,6 +10,9 @@ export const LIVE_DIRECT_BUYER_RECEIPT_DECODER_ADAPTER_ENVELOPE_TO_RUNTIME_INPUT
 export const LIVE_DIRECT_BUYER_RECEIPT_DECODER_ADAPTER_RUNTIME_INPUT_CONSTRUCTION_GUARD_CONTRACT =
   "phase3.liveDirectBuyer.receiptDecoderAdapter.runtimeInputConstructionGuard.v1" as const;
 
+export const LIVE_DIRECT_BUYER_RUNTIME_INPUT_CONSTRUCTION_TEST_ONLY_GATE_CONTRACT =
+  "phase3.liveDirectBuyer.receiptDecoderAdapter.runtimeInputConstructionTestOnlyGate.v1" as const;
+
 export type LiveDirectBuyerReceiptDecoderAdapterMode = "disabled_scaffold";
 
 export type LiveDirectBuyerReceiptDecoderAdapterInput = {
@@ -756,4 +759,229 @@ export function validateLiveDirectBuyerReceiptDecoderAdapterRuntimeInputConstruc
   }
 
   return guard;
+}
+
+export type LiveDirectBuyerRuntimeInputConstructionTestOnlyGate = {
+  readonly contract: typeof LIVE_DIRECT_BUYER_RUNTIME_INPUT_CONSTRUCTION_TEST_ONLY_GATE_CONTRACT;
+  readonly mode: "runtime_input_construction_test_only_gate";
+  readonly status: "open_test_only";
+  readonly sourceConstructionGuardContract: typeof LIVE_DIRECT_BUYER_RECEIPT_DECODER_ADAPTER_RUNTIME_INPUT_CONSTRUCTION_GUARD_CONTRACT;
+  readonly constructionGuardValidated: true;
+  readonly testOnlyGateRequired: true;
+  readonly testOnlyGatePresent: true;
+  readonly testOnlyGateSatisfied: true;
+  readonly productionEnablementPresent: false;
+  readonly productionEnablementAccepted: false;
+  readonly productionConstructionAllowed: false;
+  readonly testOnlyAuthorityOpened: true;
+  readonly constructionStillDeferred: true;
+  readonly constructionAllowed: false;
+  readonly constructionAttempted: false;
+  readonly constructionBlocked: true;
+  readonly constructionBlockReason: "construction_deferred_after_test_only_gate";
+  readonly runtimeInputDescriptorPresent: true;
+  readonly runtimeInputDescriptorOnly: true;
+  readonly runtimeDecoderInputObjectBuilt: false;
+  readonly actualDecoderInputObjectBuilt: false;
+  readonly actualDecoderInputReady: false;
+  readonly decoderInvocationAllowed: false;
+  readonly decoderInvocationAttempted: false;
+  readonly decoderInvoked: false;
+  readonly receiptMaterialAccepted: false;
+  readonly receiptMaterialIncluded: false;
+  readonly receiptJwsIncluded: false;
+  readonly receiptPayloadIncluded: false;
+  readonly receiptBytesIncluded: false;
+  readonly receiptObjectIncluded: false;
+  readonly rawReceiptIncluded: false;
+  readonly rawProofIncluded: false;
+  readonly settlementFieldsIncluded: false;
+  readonly replayKeyIncluded: false;
+  readonly paymentRequiredContextBound: true;
+  readonly nonceBound: true;
+  readonly resourceBound: true;
+  readonly contractBound: true;
+  readonly merchantBound: true;
+  readonly paymentTupleBound: true;
+  readonly decodedReceiptProduced: false;
+  readonly decodedReceiptVerified: false;
+  readonly decoderResultProduced: false;
+  readonly decoderResultReleaseConsumable: false;
+  readonly decoderResultConsumedByReleaseDecision: false;
+  readonly releaseDecisionMutatedByDecoderResult: false;
+  readonly paymentResponseEmissionAllowed: false;
+  readonly crpFulfillAllowed: false;
+  readonly replayMutationAllowed: false;
+  readonly canonicalReleasePersistenceAllowed: false;
+  readonly productionReleaseAllowed: false;
+  readonly sideEffectFree: true;
+};
+
+export function openLiveDirectBuyerRuntimeInputConstructionTestOnlyGate(
+  guard: LiveDirectBuyerReceiptDecoderAdapterRuntimeInputConstructionGuard,
+): LiveDirectBuyerRuntimeInputConstructionTestOnlyGate {
+  const validatedGuard = validateLiveDirectBuyerReceiptDecoderAdapterRuntimeInputConstructionGuard(guard);
+
+  if (validatedGuard.constructionBlocked !== true || validatedGuard.constructionEnabled !== false) {
+    throw new Error("live_direct_buyer_runtime_input_construction_test_only_gate_requires_disabled_blocked_guard");
+  }
+  if (validatedGuard.runtimeDecoderInputObjectBuilt || validatedGuard.actualDecoderInputObjectBuilt) {
+    throw new Error("live_direct_buyer_runtime_input_construction_test_only_gate_rejects_prebuilt_runtime_input");
+  }
+
+  return {
+    contract: LIVE_DIRECT_BUYER_RUNTIME_INPUT_CONSTRUCTION_TEST_ONLY_GATE_CONTRACT,
+    mode: "runtime_input_construction_test_only_gate",
+    status: "open_test_only",
+    sourceConstructionGuardContract: LIVE_DIRECT_BUYER_RECEIPT_DECODER_ADAPTER_RUNTIME_INPUT_CONSTRUCTION_GUARD_CONTRACT,
+    constructionGuardValidated: true,
+    testOnlyGateRequired: true,
+    testOnlyGatePresent: true,
+    testOnlyGateSatisfied: true,
+    productionEnablementPresent: false,
+    productionEnablementAccepted: false,
+    productionConstructionAllowed: false,
+    testOnlyAuthorityOpened: true,
+    constructionStillDeferred: true,
+    constructionAllowed: false,
+    constructionAttempted: false,
+    constructionBlocked: true,
+    constructionBlockReason: "construction_deferred_after_test_only_gate",
+    runtimeInputDescriptorPresent: true,
+    runtimeInputDescriptorOnly: true,
+    runtimeDecoderInputObjectBuilt: false,
+    actualDecoderInputObjectBuilt: false,
+    actualDecoderInputReady: false,
+    decoderInvocationAllowed: false,
+    decoderInvocationAttempted: false,
+    decoderInvoked: false,
+    receiptMaterialAccepted: false,
+    receiptMaterialIncluded: false,
+    receiptJwsIncluded: false,
+    receiptPayloadIncluded: false,
+    receiptBytesIncluded: false,
+    receiptObjectIncluded: false,
+    rawReceiptIncluded: false,
+    rawProofIncluded: false,
+    settlementFieldsIncluded: false,
+    replayKeyIncluded: false,
+    paymentRequiredContextBound: true,
+    nonceBound: true,
+    resourceBound: true,
+    contractBound: true,
+    merchantBound: true,
+    paymentTupleBound: true,
+    decodedReceiptProduced: false,
+    decodedReceiptVerified: false,
+    decoderResultProduced: false,
+    decoderResultReleaseConsumable: false,
+    decoderResultConsumedByReleaseDecision: false,
+    releaseDecisionMutatedByDecoderResult: false,
+    paymentResponseEmissionAllowed: false,
+    crpFulfillAllowed: false,
+    replayMutationAllowed: false,
+    canonicalReleasePersistenceAllowed: false,
+    productionReleaseAllowed: false,
+    sideEffectFree: true,
+  };
+}
+
+export function validateLiveDirectBuyerRuntimeInputConstructionTestOnlyGate(
+  gate: LiveDirectBuyerRuntimeInputConstructionTestOnlyGate,
+): LiveDirectBuyerRuntimeInputConstructionTestOnlyGate {
+  if (gate.contract !== LIVE_DIRECT_BUYER_RUNTIME_INPUT_CONSTRUCTION_TEST_ONLY_GATE_CONTRACT) {
+    throw new Error("live_direct_buyer_runtime_input_construction_test_only_gate_unexpected_contract");
+  }
+  if (gate.mode !== "runtime_input_construction_test_only_gate") {
+    throw new Error("live_direct_buyer_runtime_input_construction_test_only_gate_unexpected_mode");
+  }
+  if (gate.status !== "open_test_only") {
+    throw new Error("live_direct_buyer_runtime_input_construction_test_only_gate_unexpected_status");
+  }
+  if (gate.sourceConstructionGuardContract !== LIVE_DIRECT_BUYER_RECEIPT_DECODER_ADAPTER_RUNTIME_INPUT_CONSTRUCTION_GUARD_CONTRACT) {
+    throw new Error("live_direct_buyer_runtime_input_construction_test_only_gate_unexpected_source_guard_contract");
+  }
+  if (
+    gate.constructionGuardValidated !== true ||
+    gate.testOnlyGateRequired !== true ||
+    gate.testOnlyGatePresent !== true ||
+    gate.testOnlyGateSatisfied !== true ||
+    gate.testOnlyAuthorityOpened !== true
+  ) {
+    throw new Error("live_direct_buyer_runtime_input_construction_test_only_gate_requires_test_only_authority");
+  }
+  if (
+    gate.productionEnablementPresent ||
+    gate.productionEnablementAccepted ||
+    gate.productionConstructionAllowed ||
+    gate.productionReleaseAllowed
+  ) {
+    throw new Error("live_direct_buyer_runtime_input_construction_test_only_gate_rejects_production_enablement");
+  }
+  if (
+    gate.constructionStillDeferred !== true ||
+    gate.constructionAllowed ||
+    gate.constructionAttempted ||
+    gate.constructionBlocked !== true ||
+    gate.constructionBlockReason !== "construction_deferred_after_test_only_gate"
+  ) {
+    throw new Error("live_direct_buyer_runtime_input_construction_test_only_gate_requires_deferred_blocked_construction");
+  }
+  if (gate.runtimeInputDescriptorPresent !== true || gate.runtimeInputDescriptorOnly !== true) {
+    throw new Error("live_direct_buyer_runtime_input_construction_test_only_gate_requires_descriptor_only_context");
+  }
+  if (
+    gate.runtimeDecoderInputObjectBuilt ||
+    gate.actualDecoderInputObjectBuilt ||
+    gate.actualDecoderInputReady ||
+    gate.decoderInvocationAllowed ||
+    gate.decoderInvocationAttempted ||
+    gate.decoderInvoked
+  ) {
+    throw new Error("live_direct_buyer_runtime_input_construction_test_only_gate_rejects_runtime_input_or_decoder_invocation");
+  }
+
+  const prohibitedReceiptMaterial =
+    gate.receiptMaterialAccepted ||
+    gate.receiptMaterialIncluded ||
+    gate.receiptJwsIncluded ||
+    gate.receiptPayloadIncluded ||
+    gate.receiptBytesIncluded ||
+    gate.receiptObjectIncluded ||
+    gate.rawReceiptIncluded ||
+    gate.rawProofIncluded ||
+    gate.settlementFieldsIncluded ||
+    gate.replayKeyIncluded;
+
+  if (prohibitedReceiptMaterial) {
+    throw new Error("live_direct_buyer_runtime_input_construction_test_only_gate_rejects_receipt_material");
+  }
+
+  if (
+    !gate.paymentRequiredContextBound ||
+    !gate.nonceBound ||
+    !gate.resourceBound ||
+    !gate.contractBound ||
+    !gate.merchantBound ||
+    !gate.paymentTupleBound
+  ) {
+    throw new Error("live_direct_buyer_runtime_input_construction_test_only_gate_requires_payment_required_binding");
+  }
+
+  if (
+    gate.decodedReceiptProduced ||
+    gate.decodedReceiptVerified ||
+    gate.decoderResultProduced ||
+    gate.decoderResultReleaseConsumable ||
+    gate.decoderResultConsumedByReleaseDecision ||
+    gate.releaseDecisionMutatedByDecoderResult ||
+    gate.paymentResponseEmissionAllowed ||
+    gate.crpFulfillAllowed ||
+    gate.replayMutationAllowed ||
+    gate.canonicalReleasePersistenceAllowed
+  ) {
+    throw new Error("live_direct_buyer_runtime_input_construction_test_only_gate_rejects_release_side_effects");
+  }
+
+  return gate;
 }
