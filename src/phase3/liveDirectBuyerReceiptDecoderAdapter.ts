@@ -16,6 +16,9 @@ export const LIVE_DIRECT_BUYER_RUNTIME_INPUT_CONSTRUCTION_TEST_ONLY_GATE_CONTRAC
 export const LIVE_DIRECT_BUYER_RUNTIME_INPUT_CONSTRUCTION_DRY_RUN_CONTRACT =
   "phase3.liveDirectBuyer.receiptDecoderAdapter.runtimeInputConstructionDryRun.v1" as const;
 
+export const LIVE_DIRECT_BUYER_SANITIZED_RUNTIME_INPUT_SHAPE_CONTRACT =
+  "phase3.liveDirectBuyer.receiptDecoderAdapter.sanitizedRuntimeInputShape.v1" as const;
+
 export type LiveDirectBuyerReceiptDecoderAdapterMode = "disabled_scaffold";
 
 export type LiveDirectBuyerReceiptDecoderAdapterInput = {
@@ -1239,4 +1242,239 @@ export function validateLiveDirectBuyerRuntimeInputConstructionDryRun(
   }
 
   return dryRun;
+}
+
+export type LiveDirectBuyerSanitizedRuntimeInputShape = {
+  readonly contract: typeof LIVE_DIRECT_BUYER_SANITIZED_RUNTIME_INPUT_SHAPE_CONTRACT;
+  readonly mode: "sanitized_runtime_input_shape_contract";
+  readonly status: "shape_contract_ready";
+  readonly sourceDryRunContract: typeof LIVE_DIRECT_BUYER_RUNTIME_INPUT_CONSTRUCTION_DRY_RUN_CONTRACT;
+  readonly dryRunValidated: true;
+  readonly dryRunObserved: true;
+  readonly dryRunAttemptObserved: true;
+  readonly testOnlyAuthorityOpened: true;
+  readonly productionEnablementPresent: false;
+  readonly productionEnablementAccepted: false;
+  readonly productionConstructionAllowed: false;
+  readonly productionReleaseAllowed: false;
+  readonly runtimeInputShapeProjected: true;
+  readonly runtimeInputShapeValidated: true;
+  readonly runtimeInputShapeMetadataOnly: true;
+  readonly runtimeInputShapeSanitized: true;
+  readonly runtimeInputShapeBoundToPaymentRequired: true;
+  readonly runtimeInputShapeNonceBound: true;
+  readonly runtimeInputShapeResourceBound: true;
+  readonly runtimeInputShapeContractBound: true;
+  readonly runtimeInputShapeMerchantBound: true;
+  readonly runtimeInputShapePaymentTupleBound: true;
+  readonly runtimeInputShapeReceiptMaterialFree: true;
+  readonly runtimeInputShapeReplayFree: true;
+  readonly runtimeInputShapeSettlementFree: true;
+  readonly runtimeInputDescriptorPresent: true;
+  readonly runtimeInputDescriptorOnly: true;
+  readonly runtimeDecoderInputObjectBuilt: false;
+  readonly actualDecoderInputObjectBuilt: false;
+  readonly actualDecoderInputReady: false;
+  readonly decoderInvocationAllowed: false;
+  readonly decoderInvocationAttempted: false;
+  readonly decoderInvoked: false;
+  readonly receiptMaterialAccepted: false;
+  readonly receiptMaterialIncluded: false;
+  readonly receiptJwsIncluded: false;
+  readonly receiptPayloadIncluded: false;
+  readonly receiptBytesIncluded: false;
+  readonly receiptObjectIncluded: false;
+  readonly rawReceiptIncluded: false;
+  readonly rawProofIncluded: false;
+  readonly settlementFieldsIncluded: false;
+  readonly replayKeyIncluded: false;
+  readonly decodedReceiptProduced: false;
+  readonly decodedReceiptVerified: false;
+  readonly decoderResultProduced: false;
+  readonly decoderResultReleaseConsumable: false;
+  readonly decoderResultConsumedByReleaseDecision: false;
+  readonly releaseDecisionMutatedByDecoderResult: false;
+  readonly paymentResponseEmissionAllowed: false;
+  readonly crpFulfillAllowed: false;
+  readonly replayMutationAllowed: false;
+  readonly canonicalReleasePersistenceAllowed: false;
+  readonly sideEffectFree: true;
+};
+
+export function projectLiveDirectBuyerSanitizedRuntimeInputShape(
+  dryRun: LiveDirectBuyerRuntimeInputConstructionDryRun,
+): LiveDirectBuyerSanitizedRuntimeInputShape {
+  const validatedDryRun = validateLiveDirectBuyerRuntimeInputConstructionDryRun(dryRun);
+
+  if (validatedDryRun.dryRunAttemptObserved !== true || validatedDryRun.testOnlyAuthorityOpened !== true) {
+    throw new Error("live_direct_buyer_sanitized_runtime_input_shape_requires_observed_dry_run");
+  }
+  if (
+    validatedDryRun.productionEnablementPresent ||
+    validatedDryRun.productionEnablementAccepted ||
+    validatedDryRun.productionConstructionAllowed ||
+    validatedDryRun.productionReleaseAllowed
+  ) {
+    throw new Error("live_direct_buyer_sanitized_runtime_input_shape_rejects_production_enablement");
+  }
+  if (validatedDryRun.runtimeDecoderInputObjectBuilt || validatedDryRun.actualDecoderInputObjectBuilt) {
+    throw new Error("live_direct_buyer_sanitized_runtime_input_shape_rejects_prebuilt_runtime_input");
+  }
+
+  return {
+    contract: LIVE_DIRECT_BUYER_SANITIZED_RUNTIME_INPUT_SHAPE_CONTRACT,
+    mode: "sanitized_runtime_input_shape_contract",
+    status: "shape_contract_ready",
+    sourceDryRunContract: LIVE_DIRECT_BUYER_RUNTIME_INPUT_CONSTRUCTION_DRY_RUN_CONTRACT,
+    dryRunValidated: true,
+    dryRunObserved: true,
+    dryRunAttemptObserved: true,
+    testOnlyAuthorityOpened: true,
+    productionEnablementPresent: false,
+    productionEnablementAccepted: false,
+    productionConstructionAllowed: false,
+    productionReleaseAllowed: false,
+    runtimeInputShapeProjected: true,
+    runtimeInputShapeValidated: true,
+    runtimeInputShapeMetadataOnly: true,
+    runtimeInputShapeSanitized: true,
+    runtimeInputShapeBoundToPaymentRequired: true,
+    runtimeInputShapeNonceBound: true,
+    runtimeInputShapeResourceBound: true,
+    runtimeInputShapeContractBound: true,
+    runtimeInputShapeMerchantBound: true,
+    runtimeInputShapePaymentTupleBound: true,
+    runtimeInputShapeReceiptMaterialFree: true,
+    runtimeInputShapeReplayFree: true,
+    runtimeInputShapeSettlementFree: true,
+    runtimeInputDescriptorPresent: true,
+    runtimeInputDescriptorOnly: true,
+    runtimeDecoderInputObjectBuilt: false,
+    actualDecoderInputObjectBuilt: false,
+    actualDecoderInputReady: false,
+    decoderInvocationAllowed: false,
+    decoderInvocationAttempted: false,
+    decoderInvoked: false,
+    receiptMaterialAccepted: false,
+    receiptMaterialIncluded: false,
+    receiptJwsIncluded: false,
+    receiptPayloadIncluded: false,
+    receiptBytesIncluded: false,
+    receiptObjectIncluded: false,
+    rawReceiptIncluded: false,
+    rawProofIncluded: false,
+    settlementFieldsIncluded: false,
+    replayKeyIncluded: false,
+    decodedReceiptProduced: false,
+    decodedReceiptVerified: false,
+    decoderResultProduced: false,
+    decoderResultReleaseConsumable: false,
+    decoderResultConsumedByReleaseDecision: false,
+    releaseDecisionMutatedByDecoderResult: false,
+    paymentResponseEmissionAllowed: false,
+    crpFulfillAllowed: false,
+    replayMutationAllowed: false,
+    canonicalReleasePersistenceAllowed: false,
+    sideEffectFree: true,
+  };
+}
+
+export function validateLiveDirectBuyerSanitizedRuntimeInputShape(
+  shape: LiveDirectBuyerSanitizedRuntimeInputShape,
+): LiveDirectBuyerSanitizedRuntimeInputShape {
+  if (shape.contract !== LIVE_DIRECT_BUYER_SANITIZED_RUNTIME_INPUT_SHAPE_CONTRACT) {
+    throw new Error("live_direct_buyer_sanitized_runtime_input_shape_unexpected_contract");
+  }
+  if (shape.mode !== "sanitized_runtime_input_shape_contract") {
+    throw new Error("live_direct_buyer_sanitized_runtime_input_shape_unexpected_mode");
+  }
+  if (shape.status !== "shape_contract_ready") {
+    throw new Error("live_direct_buyer_sanitized_runtime_input_shape_unexpected_status");
+  }
+  if (shape.sourceDryRunContract !== LIVE_DIRECT_BUYER_RUNTIME_INPUT_CONSTRUCTION_DRY_RUN_CONTRACT) {
+    throw new Error("live_direct_buyer_sanitized_runtime_input_shape_unexpected_source_dry_run_contract");
+  }
+  if (
+    shape.dryRunValidated !== true ||
+    shape.dryRunObserved !== true ||
+    shape.dryRunAttemptObserved !== true ||
+    shape.testOnlyAuthorityOpened !== true
+  ) {
+    throw new Error("live_direct_buyer_sanitized_runtime_input_shape_requires_validated_observed_dry_run");
+  }
+  if (
+    shape.productionEnablementPresent ||
+    shape.productionEnablementAccepted ||
+    shape.productionConstructionAllowed ||
+    shape.productionReleaseAllowed
+  ) {
+    throw new Error("live_direct_buyer_sanitized_runtime_input_shape_rejects_production_enablement");
+  }
+  if (
+    shape.runtimeInputShapeProjected !== true ||
+    shape.runtimeInputShapeValidated !== true ||
+    shape.runtimeInputShapeMetadataOnly !== true ||
+    shape.runtimeInputShapeSanitized !== true ||
+    shape.runtimeInputShapeBoundToPaymentRequired !== true ||
+    shape.runtimeInputShapeNonceBound !== true ||
+    shape.runtimeInputShapeResourceBound !== true ||
+    shape.runtimeInputShapeContractBound !== true ||
+    shape.runtimeInputShapeMerchantBound !== true ||
+    shape.runtimeInputShapePaymentTupleBound !== true
+  ) {
+    throw new Error("live_direct_buyer_sanitized_runtime_input_shape_requires_sanitized_payment_required_bound_shape");
+  }
+  if (
+    shape.runtimeInputShapeReceiptMaterialFree !== true ||
+    shape.runtimeInputShapeReplayFree !== true ||
+    shape.runtimeInputShapeSettlementFree !== true
+  ) {
+    throw new Error("live_direct_buyer_sanitized_runtime_input_shape_requires_material_replay_settlement_free_shape");
+  }
+  if (shape.runtimeInputDescriptorPresent !== true || shape.runtimeInputDescriptorOnly !== true) {
+    throw new Error("live_direct_buyer_sanitized_runtime_input_shape_requires_descriptor_only_context");
+  }
+  if (
+    shape.runtimeDecoderInputObjectBuilt ||
+    shape.actualDecoderInputObjectBuilt ||
+    shape.actualDecoderInputReady ||
+    shape.decoderInvocationAllowed ||
+    shape.decoderInvocationAttempted ||
+    shape.decoderInvoked
+  ) {
+    throw new Error("live_direct_buyer_sanitized_runtime_input_shape_rejects_runtime_input_or_decoder_invocation");
+  }
+
+  const prohibitedReceiptMaterial =
+    shape.receiptMaterialAccepted ||
+    shape.receiptMaterialIncluded ||
+    shape.receiptJwsIncluded ||
+    shape.receiptPayloadIncluded ||
+    shape.receiptBytesIncluded ||
+    shape.receiptObjectIncluded ||
+    shape.rawReceiptIncluded ||
+    shape.rawProofIncluded ||
+    shape.settlementFieldsIncluded ||
+    shape.replayKeyIncluded;
+
+  if (prohibitedReceiptMaterial) {
+    throw new Error("live_direct_buyer_sanitized_runtime_input_shape_rejects_receipt_material");
+  }
+
+  if (
+    shape.decodedReceiptProduced ||
+    shape.decodedReceiptVerified ||
+    shape.decoderResultProduced ||
+    shape.decoderResultReleaseConsumable ||
+    shape.decoderResultConsumedByReleaseDecision ||
+    shape.releaseDecisionMutatedByDecoderResult ||
+    shape.paymentResponseEmissionAllowed ||
+    shape.crpFulfillAllowed ||
+    shape.replayMutationAllowed ||
+    shape.canonicalReleasePersistenceAllowed
+  ) {
+    throw new Error("live_direct_buyer_sanitized_runtime_input_shape_rejects_release_side_effects");
+  }
+
+  return shape;
 }

@@ -141,7 +141,8 @@
     "phase3:live-direct-buyer-receipt-decoder-adapter-envelope-to-runtime-input-preflight-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-receipt-decoder-adapter-envelope-to-runtime-input-preflight-selftest.ts",
     "phase3:live-direct-buyer-receipt-decoder-adapter-runtime-input-construction-guard-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-receipt-decoder-adapter-runtime-input-construction-guard-selftest.ts",
     "phase3:live-direct-buyer-runtime-input-construction-test-only-gate-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-runtime-input-construction-test-only-gate-selftest.ts",
-    "phase3:live-direct-buyer-runtime-input-construction-dry-run-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-runtime-input-construction-dry-run-selftest.ts"
+    "phase3:live-direct-buyer-runtime-input-construction-dry-run-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-runtime-input-construction-dry-run-selftest.ts",
+    "phase3:live-direct-buyer-sanitized-runtime-input-shape-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-sanitized-runtime-input-shape-selftest.ts"
   },
   "repository": {
     "type": "git",
