@@ -143,7 +143,8 @@
     "phase3:live-direct-buyer-runtime-input-construction-test-only-gate-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-runtime-input-construction-test-only-gate-selftest.ts",
     "phase3:live-direct-buyer-runtime-input-construction-dry-run-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-runtime-input-construction-dry-run-selftest.ts",
     "phase3:live-direct-buyer-sanitized-runtime-input-shape-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-sanitized-runtime-input-shape-selftest.ts",
-    "phase3:live-direct-buyer-test-only-runtime-input-object-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-test-only-runtime-input-object-selftest.ts"
+    "phase3:live-direct-buyer-test-only-runtime-input-object-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-test-only-runtime-input-object-selftest.ts",
+    "phase3:live-direct-buyer-actual-decoder-input-guard-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-actual-decoder-input-guard-selftest.ts"
   },
   "repository": {
     "type": "git",
