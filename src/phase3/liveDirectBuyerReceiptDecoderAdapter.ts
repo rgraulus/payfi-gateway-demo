@@ -34,6 +34,9 @@ export const LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_DRY_RUN_CONTRACT =
 export const LIVE_DIRECT_BUYER_SANITIZED_ACTUAL_DECODER_INPUT_SHAPE_CONTRACT =
   "phase3.liveDirectBuyer.receiptDecoderAdapter.sanitizedActualDecoderInputShape.v1" as const;
 
+export const LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_OBJECT_CONTRACT =
+  "phase3.liveDirectBuyer.receiptDecoderAdapter.actualDecoderInputObject.v1" as const;
+
 export type LiveDirectBuyerReceiptDecoderAdapterMode = "disabled_scaffold";
 
 export type LiveDirectBuyerReceiptDecoderAdapterInput = {
@@ -2808,4 +2811,293 @@ export function validateLiveDirectBuyerSanitizedActualDecoderInputShape(
   }
 
   return shape;
+}
+
+export type LiveDirectBuyerActualDecoderInputObject = {
+  readonly contract: typeof LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_OBJECT_CONTRACT;
+  readonly mode: "actual_decoder_input_object_construction";
+  readonly status: "actual_decoder_input_object_constructed_test_only";
+  readonly sourceShapeContract: typeof LIVE_DIRECT_BUYER_SANITIZED_ACTUAL_DECODER_INPUT_SHAPE_CONTRACT;
+  readonly shapeValidated: true;
+  readonly shapeProjected: true;
+  readonly shapeMetadataOnly: true;
+  readonly shapeSanitized: true;
+  readonly shapeBoundToPaymentRequired: true;
+  readonly shapeNonceBound: true;
+  readonly shapeResourceBound: true;
+  readonly shapeContractBound: true;
+  readonly shapeMerchantBound: true;
+  readonly shapePaymentTupleBound: true;
+  readonly testOnlyConstructionRequired: true;
+  readonly testOnlyConstructionPresent: true;
+  readonly testOnlyConstructionSatisfied: true;
+  readonly productionEnablementPresent: false;
+  readonly productionEnablementAccepted: false;
+  readonly productionConstructionAllowed: false;
+  readonly productionReleaseAllowed: false;
+  readonly actualDecoderInputObjectKind: "test_only_sanitized_actual_decoder_input_object";
+  readonly actualDecoderInputObjectBuilt: true;
+  readonly actualDecoderInputObjectReady: true;
+  readonly actualDecoderInputObjectMetadataOnly: true;
+  readonly actualDecoderInputObjectSanitized: true;
+  readonly actualDecoderInputObjectBoundToPaymentRequired: true;
+  readonly actualDecoderInputObjectNonceBound: true;
+  readonly actualDecoderInputObjectResourceBound: true;
+  readonly actualDecoderInputObjectContractBound: true;
+  readonly actualDecoderInputObjectMerchantBound: true;
+  readonly actualDecoderInputObjectPaymentTupleBound: true;
+  readonly actualDecoderInputObjectReceiptMaterialFree: true;
+  readonly actualDecoderInputObjectReplayFree: true;
+  readonly actualDecoderInputObjectSettlementFree: true;
+  readonly actualDecoderInputObjectNonDecodable: true;
+  readonly actualDecoderInputObjectPassedToDecoder: false;
+  readonly decoderInvocationAllowed: false;
+  readonly decoderInvocationAttempted: false;
+  readonly decoderInvoked: false;
+  readonly realDecoderAdapterInvoked: false;
+  readonly realDecoderInvoked: false;
+  readonly receiptMaterialAccepted: false;
+  readonly receiptMaterialIncluded: false;
+  readonly receiptJwsIncluded: false;
+  readonly receiptPayloadIncluded: false;
+  readonly receiptBytesIncluded: false;
+  readonly receiptObjectIncluded: false;
+  readonly rawReceiptIncluded: false;
+  readonly rawProofIncluded: false;
+  readonly settlementFieldsIncluded: false;
+  readonly replayKeyIncluded: false;
+  readonly decodedReceiptProduced: false;
+  readonly decodedReceiptVerified: false;
+  readonly decoderResultProduced: false;
+  readonly decoderResultReleaseConsumable: false;
+  readonly decoderResultConsumedByReleaseDecision: false;
+  readonly releaseDecisionMutatedByDecoderResult: false;
+  readonly paymentResponseEmissionAllowed: false;
+  readonly crpFulfillAllowed: false;
+  readonly replayMutationAllowed: false;
+  readonly canonicalReleasePersistenceAllowed: false;
+  readonly sideEffectFree: true;
+};
+
+export function constructLiveDirectBuyerActualDecoderInputObject(
+  shape: LiveDirectBuyerSanitizedActualDecoderInputShape,
+): LiveDirectBuyerActualDecoderInputObject {
+  const validatedShape = validateLiveDirectBuyerSanitizedActualDecoderInputShape(shape);
+
+  if (
+    validatedShape.actualDecoderInputShapeProjected !== true ||
+    validatedShape.actualDecoderInputShapeValidated !== true ||
+    validatedShape.actualDecoderInputShapeMetadataOnly !== true ||
+    validatedShape.actualDecoderInputShapeSanitized !== true ||
+    validatedShape.actualDecoderInputShapeBoundToPaymentRequired !== true
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_object_requires_validated_sanitized_shape");
+  }
+  if (
+    validatedShape.productionEnablementPresent ||
+    validatedShape.productionEnablementAccepted ||
+    validatedShape.productionConstructionAllowed ||
+    validatedShape.productionReleaseAllowed
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_object_rejects_production_enablement");
+  }
+  if (
+    validatedShape.receiptMaterialAccepted ||
+    validatedShape.receiptMaterialIncluded ||
+    validatedShape.receiptJwsIncluded ||
+    validatedShape.receiptPayloadIncluded ||
+    validatedShape.rawReceiptIncluded ||
+    validatedShape.rawProofIncluded ||
+    validatedShape.settlementFieldsIncluded ||
+    validatedShape.replayKeyIncluded
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_object_rejects_receipt_material");
+  }
+  if (
+    validatedShape.decoderInvocationAllowed ||
+    validatedShape.decoderInvocationAttempted ||
+    validatedShape.decoderInvoked ||
+    validatedShape.realDecoderAdapterInvoked ||
+    validatedShape.realDecoderInvoked
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_object_rejects_decoder_invocation");
+  }
+
+  return {
+    contract: LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_OBJECT_CONTRACT,
+    mode: "actual_decoder_input_object_construction",
+    status: "actual_decoder_input_object_constructed_test_only",
+    sourceShapeContract: LIVE_DIRECT_BUYER_SANITIZED_ACTUAL_DECODER_INPUT_SHAPE_CONTRACT,
+    shapeValidated: true,
+    shapeProjected: true,
+    shapeMetadataOnly: true,
+    shapeSanitized: true,
+    shapeBoundToPaymentRequired: true,
+    shapeNonceBound: true,
+    shapeResourceBound: true,
+    shapeContractBound: true,
+    shapeMerchantBound: true,
+    shapePaymentTupleBound: true,
+    testOnlyConstructionRequired: true,
+    testOnlyConstructionPresent: true,
+    testOnlyConstructionSatisfied: true,
+    productionEnablementPresent: false,
+    productionEnablementAccepted: false,
+    productionConstructionAllowed: false,
+    productionReleaseAllowed: false,
+    actualDecoderInputObjectKind: "test_only_sanitized_actual_decoder_input_object",
+    actualDecoderInputObjectBuilt: true,
+    actualDecoderInputObjectReady: true,
+    actualDecoderInputObjectMetadataOnly: true,
+    actualDecoderInputObjectSanitized: true,
+    actualDecoderInputObjectBoundToPaymentRequired: true,
+    actualDecoderInputObjectNonceBound: true,
+    actualDecoderInputObjectResourceBound: true,
+    actualDecoderInputObjectContractBound: true,
+    actualDecoderInputObjectMerchantBound: true,
+    actualDecoderInputObjectPaymentTupleBound: true,
+    actualDecoderInputObjectReceiptMaterialFree: true,
+    actualDecoderInputObjectReplayFree: true,
+    actualDecoderInputObjectSettlementFree: true,
+    actualDecoderInputObjectNonDecodable: true,
+    actualDecoderInputObjectPassedToDecoder: false,
+    decoderInvocationAllowed: false,
+    decoderInvocationAttempted: false,
+    decoderInvoked: false,
+    realDecoderAdapterInvoked: false,
+    realDecoderInvoked: false,
+    receiptMaterialAccepted: false,
+    receiptMaterialIncluded: false,
+    receiptJwsIncluded: false,
+    receiptPayloadIncluded: false,
+    receiptBytesIncluded: false,
+    receiptObjectIncluded: false,
+    rawReceiptIncluded: false,
+    rawProofIncluded: false,
+    settlementFieldsIncluded: false,
+    replayKeyIncluded: false,
+    decodedReceiptProduced: false,
+    decodedReceiptVerified: false,
+    decoderResultProduced: false,
+    decoderResultReleaseConsumable: false,
+    decoderResultConsumedByReleaseDecision: false,
+    releaseDecisionMutatedByDecoderResult: false,
+    paymentResponseEmissionAllowed: false,
+    crpFulfillAllowed: false,
+    replayMutationAllowed: false,
+    canonicalReleasePersistenceAllowed: false,
+    sideEffectFree: true,
+  };
+}
+
+export function validateLiveDirectBuyerActualDecoderInputObject(
+  input: LiveDirectBuyerActualDecoderInputObject,
+): LiveDirectBuyerActualDecoderInputObject {
+  if (input.contract !== LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_OBJECT_CONTRACT) {
+    throw new Error("live_direct_buyer_actual_decoder_input_object_unexpected_contract");
+  }
+  if (input.mode !== "actual_decoder_input_object_construction") {
+    throw new Error("live_direct_buyer_actual_decoder_input_object_unexpected_mode");
+  }
+  if (input.status !== "actual_decoder_input_object_constructed_test_only") {
+    throw new Error("live_direct_buyer_actual_decoder_input_object_unexpected_status");
+  }
+  if (input.sourceShapeContract !== LIVE_DIRECT_BUYER_SANITIZED_ACTUAL_DECODER_INPUT_SHAPE_CONTRACT) {
+    throw new Error("live_direct_buyer_actual_decoder_input_object_unexpected_source_shape_contract");
+  }
+  if (
+    input.shapeValidated !== true ||
+    input.shapeProjected !== true ||
+    input.shapeMetadataOnly !== true ||
+    input.shapeSanitized !== true ||
+    input.shapeBoundToPaymentRequired !== true ||
+    input.shapeNonceBound !== true ||
+    input.shapeResourceBound !== true ||
+    input.shapeContractBound !== true ||
+    input.shapeMerchantBound !== true ||
+    input.shapePaymentTupleBound !== true
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_object_requires_validated_payment_required_bound_shape");
+  }
+  if (
+    input.testOnlyConstructionRequired !== true ||
+    input.testOnlyConstructionPresent !== true ||
+    input.testOnlyConstructionSatisfied !== true
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_object_requires_test_only_construction");
+  }
+  if (
+    input.productionEnablementPresent ||
+    input.productionEnablementAccepted ||
+    input.productionConstructionAllowed ||
+    input.productionReleaseAllowed
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_object_rejects_production_enablement");
+  }
+  if (
+    input.actualDecoderInputObjectKind !== "test_only_sanitized_actual_decoder_input_object" ||
+    input.actualDecoderInputObjectBuilt !== true ||
+    input.actualDecoderInputObjectReady !== true ||
+    input.actualDecoderInputObjectMetadataOnly !== true ||
+    input.actualDecoderInputObjectSanitized !== true ||
+    input.actualDecoderInputObjectBoundToPaymentRequired !== true ||
+    input.actualDecoderInputObjectNonceBound !== true ||
+    input.actualDecoderInputObjectResourceBound !== true ||
+    input.actualDecoderInputObjectContractBound !== true ||
+    input.actualDecoderInputObjectMerchantBound !== true ||
+    input.actualDecoderInputObjectPaymentTupleBound !== true
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_object_requires_sanitized_payment_required_bound_object");
+  }
+  if (
+    input.actualDecoderInputObjectReceiptMaterialFree !== true ||
+    input.actualDecoderInputObjectReplayFree !== true ||
+    input.actualDecoderInputObjectSettlementFree !== true ||
+    input.actualDecoderInputObjectNonDecodable !== true
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_object_requires_material_replay_settlement_free_non_decodable_object");
+  }
+  if (
+    input.actualDecoderInputObjectPassedToDecoder ||
+    input.decoderInvocationAllowed ||
+    input.decoderInvocationAttempted ||
+    input.decoderInvoked ||
+    input.realDecoderAdapterInvoked ||
+    input.realDecoderInvoked
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_object_rejects_decoder_invocation");
+  }
+
+  const prohibitedReceiptMaterial =
+    input.receiptMaterialAccepted ||
+    input.receiptMaterialIncluded ||
+    input.receiptJwsIncluded ||
+    input.receiptPayloadIncluded ||
+    input.receiptBytesIncluded ||
+    input.receiptObjectIncluded ||
+    input.rawReceiptIncluded ||
+    input.rawProofIncluded ||
+    input.settlementFieldsIncluded ||
+    input.replayKeyIncluded;
+
+  if (prohibitedReceiptMaterial) {
+    throw new Error("live_direct_buyer_actual_decoder_input_object_rejects_receipt_material");
+  }
+
+  if (
+    input.decodedReceiptProduced ||
+    input.decodedReceiptVerified ||
+    input.decoderResultProduced ||
+    input.decoderResultReleaseConsumable ||
+    input.decoderResultConsumedByReleaseDecision ||
+    input.releaseDecisionMutatedByDecoderResult ||
+    input.paymentResponseEmissionAllowed ||
+    input.crpFulfillAllowed ||
+    input.replayMutationAllowed ||
+    input.canonicalReleasePersistenceAllowed
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_object_rejects_release_side_effects");
+  }
+
+  return input;
 }
