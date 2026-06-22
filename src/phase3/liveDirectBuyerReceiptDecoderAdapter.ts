@@ -37,6 +37,9 @@ export const LIVE_DIRECT_BUYER_SANITIZED_ACTUAL_DECODER_INPUT_SHAPE_CONTRACT =
 export const LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_OBJECT_CONTRACT =
   "phase3.liveDirectBuyer.receiptDecoderAdapter.actualDecoderInputObject.v1" as const;
 
+export const LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_PASS_TO_DECODER_GUARD_CONTRACT =
+  "phase3.liveDirectBuyer.receiptDecoderAdapter.actualDecoderInputPassToDecoderGuard.v1" as const;
+
 export type LiveDirectBuyerReceiptDecoderAdapterMode = "disabled_scaffold";
 
 export type LiveDirectBuyerReceiptDecoderAdapterInput = {
@@ -3100,4 +3103,267 @@ export function validateLiveDirectBuyerActualDecoderInputObject(
   }
 
   return input;
+}
+
+export type LiveDirectBuyerActualDecoderInputPassToDecoderGuard = {
+  readonly contract: typeof LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_PASS_TO_DECODER_GUARD_CONTRACT;
+  readonly mode: "actual_decoder_input_pass_to_decoder_guard";
+  readonly status: "decoder_pass_through_blocked";
+  readonly sourceActualDecoderInputObjectContract: typeof LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_OBJECT_CONTRACT;
+  readonly actualDecoderInputObjectValidated: true;
+  readonly actualDecoderInputObjectBuilt: true;
+  readonly actualDecoderInputObjectReady: true;
+  readonly actualDecoderInputObjectMetadataOnly: true;
+  readonly actualDecoderInputObjectSanitized: true;
+  readonly actualDecoderInputObjectBoundToPaymentRequired: true;
+  readonly actualDecoderInputObjectNonceBound: true;
+  readonly actualDecoderInputObjectResourceBound: true;
+  readonly actualDecoderInputObjectContractBound: true;
+  readonly actualDecoderInputObjectMerchantBound: true;
+  readonly actualDecoderInputObjectPaymentTupleBound: true;
+  readonly actualDecoderInputObjectReceiptMaterialFree: true;
+  readonly actualDecoderInputObjectReplayFree: true;
+  readonly actualDecoderInputObjectSettlementFree: true;
+  readonly actualDecoderInputObjectNonDecodable: true;
+  readonly decoderPassThroughRecognizedAsFutureStep: true;
+  readonly actualDecoderInputObjectPassedToDecoder: false;
+  readonly decoderPassThroughAllowed: false;
+  readonly decoderPassThroughAttempted: true;
+  readonly decoderPassThroughBlocked: true;
+  readonly decoderPassThroughBlockReason: "actual_decoder_input_pass_to_decoder_disabled";
+  readonly decoderInvocationAllowed: false;
+  readonly decoderInvocationAttempted: false;
+  readonly decoderInvoked: false;
+  readonly realDecoderAdapterInvoked: false;
+  readonly realDecoderInvoked: false;
+  readonly productionEnablementPresent: false;
+  readonly productionEnablementAccepted: false;
+  readonly productionDecoderPassThroughAllowed: false;
+  readonly productionReleaseAllowed: false;
+  readonly receiptMaterialAccepted: false;
+  readonly receiptMaterialIncluded: false;
+  readonly receiptJwsIncluded: false;
+  readonly receiptPayloadIncluded: false;
+  readonly receiptBytesIncluded: false;
+  readonly receiptObjectIncluded: false;
+  readonly rawReceiptIncluded: false;
+  readonly rawProofIncluded: false;
+  readonly settlementFieldsIncluded: false;
+  readonly replayKeyIncluded: false;
+  readonly decodedReceiptProduced: false;
+  readonly decodedReceiptVerified: false;
+  readonly decoderResultProduced: false;
+  readonly decoderResultReleaseConsumable: false;
+  readonly decoderResultConsumedByReleaseDecision: false;
+  readonly releaseDecisionMutatedByDecoderResult: false;
+  readonly paymentResponseEmissionAllowed: false;
+  readonly crpFulfillAllowed: false;
+  readonly replayMutationAllowed: false;
+  readonly canonicalReleasePersistenceAllowed: false;
+  readonly sideEffectFree: true;
+};
+
+export function guardLiveDirectBuyerActualDecoderInputPassToDecoder(
+  input: LiveDirectBuyerActualDecoderInputObject,
+): LiveDirectBuyerActualDecoderInputPassToDecoderGuard {
+  const validatedInput = validateLiveDirectBuyerActualDecoderInputObject(input);
+
+  if (
+    validatedInput.actualDecoderInputObjectBuilt !== true ||
+    validatedInput.actualDecoderInputObjectReady !== true ||
+    validatedInput.actualDecoderInputObjectMetadataOnly !== true ||
+    validatedInput.actualDecoderInputObjectSanitized !== true ||
+    validatedInput.actualDecoderInputObjectBoundToPaymentRequired !== true ||
+    validatedInput.actualDecoderInputObjectNonDecodable !== true
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_to_decoder_guard_requires_validated_actual_decoder_input_object");
+  }
+  if (
+    validatedInput.productionEnablementPresent ||
+    validatedInput.productionEnablementAccepted ||
+    validatedInput.productionConstructionAllowed ||
+    validatedInput.productionReleaseAllowed
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_to_decoder_guard_rejects_production_enablement");
+  }
+  if (
+    validatedInput.actualDecoderInputObjectPassedToDecoder ||
+    validatedInput.decoderInvocationAllowed ||
+    validatedInput.decoderInvocationAttempted ||
+    validatedInput.decoderInvoked ||
+    validatedInput.realDecoderAdapterInvoked ||
+    validatedInput.realDecoderInvoked
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_to_decoder_guard_rejects_preexisting_decoder_invocation");
+  }
+  if (
+    validatedInput.receiptMaterialAccepted ||
+    validatedInput.receiptMaterialIncluded ||
+    validatedInput.receiptJwsIncluded ||
+    validatedInput.receiptPayloadIncluded ||
+    validatedInput.rawReceiptIncluded ||
+    validatedInput.rawProofIncluded ||
+    validatedInput.settlementFieldsIncluded ||
+    validatedInput.replayKeyIncluded
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_to_decoder_guard_rejects_receipt_material");
+  }
+
+  return {
+    contract: LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_PASS_TO_DECODER_GUARD_CONTRACT,
+    mode: "actual_decoder_input_pass_to_decoder_guard",
+    status: "decoder_pass_through_blocked",
+    sourceActualDecoderInputObjectContract: LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_OBJECT_CONTRACT,
+    actualDecoderInputObjectValidated: true,
+    actualDecoderInputObjectBuilt: true,
+    actualDecoderInputObjectReady: true,
+    actualDecoderInputObjectMetadataOnly: true,
+    actualDecoderInputObjectSanitized: true,
+    actualDecoderInputObjectBoundToPaymentRequired: true,
+    actualDecoderInputObjectNonceBound: true,
+    actualDecoderInputObjectResourceBound: true,
+    actualDecoderInputObjectContractBound: true,
+    actualDecoderInputObjectMerchantBound: true,
+    actualDecoderInputObjectPaymentTupleBound: true,
+    actualDecoderInputObjectReceiptMaterialFree: true,
+    actualDecoderInputObjectReplayFree: true,
+    actualDecoderInputObjectSettlementFree: true,
+    actualDecoderInputObjectNonDecodable: true,
+    decoderPassThroughRecognizedAsFutureStep: true,
+    actualDecoderInputObjectPassedToDecoder: false,
+    decoderPassThroughAllowed: false,
+    decoderPassThroughAttempted: true,
+    decoderPassThroughBlocked: true,
+    decoderPassThroughBlockReason: "actual_decoder_input_pass_to_decoder_disabled",
+    decoderInvocationAllowed: false,
+    decoderInvocationAttempted: false,
+    decoderInvoked: false,
+    realDecoderAdapterInvoked: false,
+    realDecoderInvoked: false,
+    productionEnablementPresent: false,
+    productionEnablementAccepted: false,
+    productionDecoderPassThroughAllowed: false,
+    productionReleaseAllowed: false,
+    receiptMaterialAccepted: false,
+    receiptMaterialIncluded: false,
+    receiptJwsIncluded: false,
+    receiptPayloadIncluded: false,
+    receiptBytesIncluded: false,
+    receiptObjectIncluded: false,
+    rawReceiptIncluded: false,
+    rawProofIncluded: false,
+    settlementFieldsIncluded: false,
+    replayKeyIncluded: false,
+    decodedReceiptProduced: false,
+    decodedReceiptVerified: false,
+    decoderResultProduced: false,
+    decoderResultReleaseConsumable: false,
+    decoderResultConsumedByReleaseDecision: false,
+    releaseDecisionMutatedByDecoderResult: false,
+    paymentResponseEmissionAllowed: false,
+    crpFulfillAllowed: false,
+    replayMutationAllowed: false,
+    canonicalReleasePersistenceAllowed: false,
+    sideEffectFree: true,
+  };
+}
+
+export function validateLiveDirectBuyerActualDecoderInputPassToDecoderGuard(
+  guard: LiveDirectBuyerActualDecoderInputPassToDecoderGuard,
+): LiveDirectBuyerActualDecoderInputPassToDecoderGuard {
+  if (guard.contract !== LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_PASS_TO_DECODER_GUARD_CONTRACT) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_to_decoder_guard_unexpected_contract");
+  }
+  if (guard.mode !== "actual_decoder_input_pass_to_decoder_guard") {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_to_decoder_guard_unexpected_mode");
+  }
+  if (guard.status !== "decoder_pass_through_blocked") {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_to_decoder_guard_unexpected_status");
+  }
+  if (guard.sourceActualDecoderInputObjectContract !== LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_OBJECT_CONTRACT) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_to_decoder_guard_unexpected_source_object_contract");
+  }
+  if (
+    guard.actualDecoderInputObjectValidated !== true ||
+    guard.actualDecoderInputObjectBuilt !== true ||
+    guard.actualDecoderInputObjectReady !== true ||
+    guard.actualDecoderInputObjectMetadataOnly !== true ||
+    guard.actualDecoderInputObjectSanitized !== true ||
+    guard.actualDecoderInputObjectBoundToPaymentRequired !== true ||
+    guard.actualDecoderInputObjectNonceBound !== true ||
+    guard.actualDecoderInputObjectResourceBound !== true ||
+    guard.actualDecoderInputObjectContractBound !== true ||
+    guard.actualDecoderInputObjectMerchantBound !== true ||
+    guard.actualDecoderInputObjectPaymentTupleBound !== true
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_to_decoder_guard_requires_validated_payment_required_bound_object");
+  }
+  if (
+    guard.actualDecoderInputObjectReceiptMaterialFree !== true ||
+    guard.actualDecoderInputObjectReplayFree !== true ||
+    guard.actualDecoderInputObjectSettlementFree !== true ||
+    guard.actualDecoderInputObjectNonDecodable !== true
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_to_decoder_guard_requires_material_replay_settlement_free_non_decodable_object");
+  }
+  if (
+    guard.decoderPassThroughRecognizedAsFutureStep !== true ||
+    guard.actualDecoderInputObjectPassedToDecoder ||
+    guard.decoderPassThroughAllowed ||
+    guard.decoderPassThroughAttempted !== true ||
+    guard.decoderPassThroughBlocked !== true ||
+    guard.decoderPassThroughBlockReason !== "actual_decoder_input_pass_to_decoder_disabled"
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_to_decoder_guard_requires_blocked_decoder_pass_through");
+  }
+  if (
+    guard.decoderInvocationAllowed ||
+    guard.decoderInvocationAttempted ||
+    guard.decoderInvoked ||
+    guard.realDecoderAdapterInvoked ||
+    guard.realDecoderInvoked
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_to_decoder_guard_rejects_decoder_invocation");
+  }
+  if (
+    guard.productionEnablementPresent ||
+    guard.productionEnablementAccepted ||
+    guard.productionDecoderPassThroughAllowed ||
+    guard.productionReleaseAllowed
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_to_decoder_guard_rejects_production_enablement");
+  }
+
+  const prohibitedReceiptMaterial =
+    guard.receiptMaterialAccepted ||
+    guard.receiptMaterialIncluded ||
+    guard.receiptJwsIncluded ||
+    guard.receiptPayloadIncluded ||
+    guard.receiptBytesIncluded ||
+    guard.receiptObjectIncluded ||
+    guard.rawReceiptIncluded ||
+    guard.rawProofIncluded ||
+    guard.settlementFieldsIncluded ||
+    guard.replayKeyIncluded;
+
+  if (prohibitedReceiptMaterial) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_to_decoder_guard_rejects_receipt_material");
+  }
+
+  if (
+    guard.decodedReceiptProduced ||
+    guard.decodedReceiptVerified ||
+    guard.decoderResultProduced ||
+    guard.decoderResultReleaseConsumable ||
+    guard.decoderResultConsumedByReleaseDecision ||
+    guard.releaseDecisionMutatedByDecoderResult ||
+    guard.paymentResponseEmissionAllowed ||
+    guard.crpFulfillAllowed ||
+    guard.replayMutationAllowed ||
+    guard.canonicalReleasePersistenceAllowed
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_to_decoder_guard_rejects_release_side_effects");
+  }
+
+  return guard;
 }
