@@ -40,6 +40,9 @@ export const LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_OBJECT_CONTRACT =
 export const LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_PASS_TO_DECODER_GUARD_CONTRACT =
   "phase3.liveDirectBuyer.receiptDecoderAdapter.actualDecoderInputPassToDecoderGuard.v1" as const;
 
+export const LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_PASS_THROUGH_TEST_ONLY_GATE_CONTRACT =
+  "phase3.liveDirectBuyer.receiptDecoderAdapter.actualDecoderInputPassThroughTestOnlyGate.v1" as const;
+
 export type LiveDirectBuyerReceiptDecoderAdapterMode = "disabled_scaffold";
 
 export type LiveDirectBuyerReceiptDecoderAdapterInput = {
@@ -3366,4 +3369,303 @@ export function validateLiveDirectBuyerActualDecoderInputPassToDecoderGuard(
   }
 
   return guard;
+}
+
+export type LiveDirectBuyerActualDecoderInputPassThroughTestOnlyGate = {
+  readonly contract: typeof LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_PASS_THROUGH_TEST_ONLY_GATE_CONTRACT;
+  readonly mode: "actual_decoder_input_pass_through_test_only_gate";
+  readonly status: "open_test_only";
+  readonly sourcePassToDecoderGuardContract: typeof LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_PASS_TO_DECODER_GUARD_CONTRACT;
+  readonly passToDecoderGuardValidated: true;
+  readonly actualDecoderInputObjectValidated: true;
+  readonly actualDecoderInputObjectBuilt: true;
+  readonly actualDecoderInputObjectReady: true;
+  readonly actualDecoderInputObjectMetadataOnly: true;
+  readonly actualDecoderInputObjectSanitized: true;
+  readonly actualDecoderInputObjectBoundToPaymentRequired: true;
+  readonly actualDecoderInputObjectNonceBound: true;
+  readonly actualDecoderInputObjectResourceBound: true;
+  readonly actualDecoderInputObjectContractBound: true;
+  readonly actualDecoderInputObjectMerchantBound: true;
+  readonly actualDecoderInputObjectPaymentTupleBound: true;
+  readonly actualDecoderInputObjectReceiptMaterialFree: true;
+  readonly actualDecoderInputObjectReplayFree: true;
+  readonly actualDecoderInputObjectSettlementFree: true;
+  readonly actualDecoderInputObjectNonDecodable: true;
+  readonly testOnlyGateRequired: true;
+  readonly testOnlyGatePresent: true;
+  readonly testOnlyGateSatisfied: true;
+  readonly testOnlyAuthorityOpened: true;
+  readonly productionEnablementPresent: false;
+  readonly productionEnablementAccepted: false;
+  readonly productionPassThroughAllowed: false;
+  readonly productionReleaseAllowed: false;
+  readonly decoderPassThroughRecognizedAsFutureStep: true;
+  readonly decoderPassThroughEligible: true;
+  readonly decoderPassThroughAllowed: true;
+  readonly decoderPassThroughExecuted: false;
+  readonly decoderPassThroughStillNotExecuted: true;
+  readonly decoderPassThroughBlockLiftedForTestOnly: true;
+  readonly decoderPassThroughBlockReason: "test_only_gate_open_no_execution";
+  readonly actualDecoderInputObjectPassedToDecoder: false;
+  readonly decoderInvocationAllowed: false;
+  readonly decoderInvocationAttempted: false;
+  readonly decoderInvoked: false;
+  readonly realDecoderAdapterInvoked: false;
+  readonly realDecoderInvoked: false;
+  readonly receiptMaterialAccepted: false;
+  readonly receiptMaterialIncluded: false;
+  readonly receiptJwsIncluded: false;
+  readonly receiptPayloadIncluded: false;
+  readonly receiptBytesIncluded: false;
+  readonly receiptObjectIncluded: false;
+  readonly rawReceiptIncluded: false;
+  readonly rawProofIncluded: false;
+  readonly settlementFieldsIncluded: false;
+  readonly replayKeyIncluded: false;
+  readonly decodedReceiptProduced: false;
+  readonly decodedReceiptVerified: false;
+  readonly decoderResultProduced: false;
+  readonly decoderResultReleaseConsumable: false;
+  readonly decoderResultConsumedByReleaseDecision: false;
+  readonly releaseDecisionMutatedByDecoderResult: false;
+  readonly paymentResponseEmissionAllowed: false;
+  readonly crpFulfillAllowed: false;
+  readonly replayMutationAllowed: false;
+  readonly canonicalReleasePersistenceAllowed: false;
+  readonly sideEffectFree: true;
+};
+
+export function openLiveDirectBuyerActualDecoderInputPassThroughTestOnlyGate(
+  guard: LiveDirectBuyerActualDecoderInputPassToDecoderGuard,
+): LiveDirectBuyerActualDecoderInputPassThroughTestOnlyGate {
+  const validatedGuard = validateLiveDirectBuyerActualDecoderInputPassToDecoderGuard(guard);
+
+  if (
+    validatedGuard.actualDecoderInputObjectValidated !== true ||
+    validatedGuard.actualDecoderInputObjectBuilt !== true ||
+    validatedGuard.actualDecoderInputObjectReady !== true ||
+    validatedGuard.actualDecoderInputObjectMetadataOnly !== true ||
+    validatedGuard.actualDecoderInputObjectSanitized !== true ||
+    validatedGuard.actualDecoderInputObjectBoundToPaymentRequired !== true ||
+    validatedGuard.actualDecoderInputObjectNonDecodable !== true
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_requires_validated_actual_decoder_input_object");
+  }
+  if (
+    validatedGuard.productionEnablementPresent ||
+    validatedGuard.productionEnablementAccepted ||
+    validatedGuard.productionDecoderPassThroughAllowed ||
+    validatedGuard.productionReleaseAllowed
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_rejects_production_enablement");
+  }
+  if (
+    validatedGuard.actualDecoderInputObjectPassedToDecoder ||
+    validatedGuard.decoderInvocationAllowed ||
+    validatedGuard.decoderInvocationAttempted ||
+    validatedGuard.decoderInvoked ||
+    validatedGuard.realDecoderAdapterInvoked ||
+    validatedGuard.realDecoderInvoked
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_rejects_preexisting_decoder_invocation");
+  }
+  if (
+    validatedGuard.receiptMaterialAccepted ||
+    validatedGuard.receiptMaterialIncluded ||
+    validatedGuard.receiptJwsIncluded ||
+    validatedGuard.receiptPayloadIncluded ||
+    validatedGuard.rawReceiptIncluded ||
+    validatedGuard.rawProofIncluded ||
+    validatedGuard.settlementFieldsIncluded ||
+    validatedGuard.replayKeyIncluded
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_rejects_receipt_material");
+  }
+  if (
+    validatedGuard.decoderPassThroughRecognizedAsFutureStep !== true ||
+    validatedGuard.decoderPassThroughAttempted !== true ||
+    validatedGuard.decoderPassThroughBlocked !== true ||
+    validatedGuard.decoderPassThroughAllowed !== false
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_requires_blocked_source_guard");
+  }
+
+  return {
+    contract: LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_PASS_THROUGH_TEST_ONLY_GATE_CONTRACT,
+    mode: "actual_decoder_input_pass_through_test_only_gate",
+    status: "open_test_only",
+    sourcePassToDecoderGuardContract: LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_PASS_TO_DECODER_GUARD_CONTRACT,
+    passToDecoderGuardValidated: true,
+    actualDecoderInputObjectValidated: true,
+    actualDecoderInputObjectBuilt: true,
+    actualDecoderInputObjectReady: true,
+    actualDecoderInputObjectMetadataOnly: true,
+    actualDecoderInputObjectSanitized: true,
+    actualDecoderInputObjectBoundToPaymentRequired: true,
+    actualDecoderInputObjectNonceBound: true,
+    actualDecoderInputObjectResourceBound: true,
+    actualDecoderInputObjectContractBound: true,
+    actualDecoderInputObjectMerchantBound: true,
+    actualDecoderInputObjectPaymentTupleBound: true,
+    actualDecoderInputObjectReceiptMaterialFree: true,
+    actualDecoderInputObjectReplayFree: true,
+    actualDecoderInputObjectSettlementFree: true,
+    actualDecoderInputObjectNonDecodable: true,
+    testOnlyGateRequired: true,
+    testOnlyGatePresent: true,
+    testOnlyGateSatisfied: true,
+    testOnlyAuthorityOpened: true,
+    productionEnablementPresent: false,
+    productionEnablementAccepted: false,
+    productionPassThroughAllowed: false,
+    productionReleaseAllowed: false,
+    decoderPassThroughRecognizedAsFutureStep: true,
+    decoderPassThroughEligible: true,
+    decoderPassThroughAllowed: true,
+    decoderPassThroughExecuted: false,
+    decoderPassThroughStillNotExecuted: true,
+    decoderPassThroughBlockLiftedForTestOnly: true,
+    decoderPassThroughBlockReason: "test_only_gate_open_no_execution",
+    actualDecoderInputObjectPassedToDecoder: false,
+    decoderInvocationAllowed: false,
+    decoderInvocationAttempted: false,
+    decoderInvoked: false,
+    realDecoderAdapterInvoked: false,
+    realDecoderInvoked: false,
+    receiptMaterialAccepted: false,
+    receiptMaterialIncluded: false,
+    receiptJwsIncluded: false,
+    receiptPayloadIncluded: false,
+    receiptBytesIncluded: false,
+    receiptObjectIncluded: false,
+    rawReceiptIncluded: false,
+    rawProofIncluded: false,
+    settlementFieldsIncluded: false,
+    replayKeyIncluded: false,
+    decodedReceiptProduced: false,
+    decodedReceiptVerified: false,
+    decoderResultProduced: false,
+    decoderResultReleaseConsumable: false,
+    decoderResultConsumedByReleaseDecision: false,
+    releaseDecisionMutatedByDecoderResult: false,
+    paymentResponseEmissionAllowed: false,
+    crpFulfillAllowed: false,
+    replayMutationAllowed: false,
+    canonicalReleasePersistenceAllowed: false,
+    sideEffectFree: true,
+  };
+}
+
+export function validateLiveDirectBuyerActualDecoderInputPassThroughTestOnlyGate(
+  gate: LiveDirectBuyerActualDecoderInputPassThroughTestOnlyGate,
+): LiveDirectBuyerActualDecoderInputPassThroughTestOnlyGate {
+  if (gate.contract !== LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_PASS_THROUGH_TEST_ONLY_GATE_CONTRACT) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_unexpected_contract");
+  }
+  if (gate.mode !== "actual_decoder_input_pass_through_test_only_gate") {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_unexpected_mode");
+  }
+  if (gate.status !== "open_test_only") {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_unexpected_status");
+  }
+  if (gate.sourcePassToDecoderGuardContract !== LIVE_DIRECT_BUYER_ACTUAL_DECODER_INPUT_PASS_TO_DECODER_GUARD_CONTRACT) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_unexpected_source_guard_contract");
+  }
+  if (gate.passToDecoderGuardValidated !== true) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_requires_validated_source_guard");
+  }
+  if (
+    gate.actualDecoderInputObjectValidated !== true ||
+    gate.actualDecoderInputObjectBuilt !== true ||
+    gate.actualDecoderInputObjectReady !== true ||
+    gate.actualDecoderInputObjectMetadataOnly !== true ||
+    gate.actualDecoderInputObjectSanitized !== true ||
+    gate.actualDecoderInputObjectBoundToPaymentRequired !== true ||
+    gate.actualDecoderInputObjectNonceBound !== true ||
+    gate.actualDecoderInputObjectResourceBound !== true ||
+    gate.actualDecoderInputObjectContractBound !== true ||
+    gate.actualDecoderInputObjectMerchantBound !== true ||
+    gate.actualDecoderInputObjectPaymentTupleBound !== true
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_requires_validated_payment_required_bound_object");
+  }
+  if (
+    gate.actualDecoderInputObjectReceiptMaterialFree !== true ||
+    gate.actualDecoderInputObjectReplayFree !== true ||
+    gate.actualDecoderInputObjectSettlementFree !== true ||
+    gate.actualDecoderInputObjectNonDecodable !== true
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_requires_material_replay_settlement_free_non_decodable_object");
+  }
+  if (
+    gate.testOnlyGateRequired !== true ||
+    gate.testOnlyGatePresent !== true ||
+    gate.testOnlyGateSatisfied !== true ||
+    gate.testOnlyAuthorityOpened !== true
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_requires_test_only_authority");
+  }
+  if (
+    gate.productionEnablementPresent ||
+    gate.productionEnablementAccepted ||
+    gate.productionPassThroughAllowed ||
+    gate.productionReleaseAllowed
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_rejects_production_enablement");
+  }
+  if (
+    gate.decoderPassThroughRecognizedAsFutureStep !== true ||
+    gate.decoderPassThroughEligible !== true ||
+    gate.decoderPassThroughAllowed !== true ||
+    gate.decoderPassThroughExecuted ||
+    gate.decoderPassThroughStillNotExecuted !== true ||
+    gate.decoderPassThroughBlockLiftedForTestOnly !== true ||
+    gate.decoderPassThroughBlockReason !== "test_only_gate_open_no_execution"
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_requires_open_permission_without_execution");
+  }
+  if (
+    gate.actualDecoderInputObjectPassedToDecoder ||
+    gate.decoderInvocationAllowed ||
+    gate.decoderInvocationAttempted ||
+    gate.decoderInvoked ||
+    gate.realDecoderAdapterInvoked ||
+    gate.realDecoderInvoked
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_rejects_decoder_invocation");
+  }
+
+  const prohibitedReceiptMaterial =
+    gate.receiptMaterialAccepted ||
+    gate.receiptMaterialIncluded ||
+    gate.receiptJwsIncluded ||
+    gate.receiptPayloadIncluded ||
+    gate.receiptBytesIncluded ||
+    gate.receiptObjectIncluded ||
+    gate.rawReceiptIncluded ||
+    gate.rawProofIncluded ||
+    gate.settlementFieldsIncluded ||
+    gate.replayKeyIncluded;
+
+  if (prohibitedReceiptMaterial) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_rejects_receipt_material");
+  }
+
+  if (
+    gate.decodedReceiptProduced ||
+    gate.decodedReceiptVerified ||
+    gate.decoderResultProduced ||
+    gate.decoderResultReleaseConsumable ||
+    gate.decoderResultConsumedByReleaseDecision ||
+    gate.releaseDecisionMutatedByDecoderResult ||
+    gate.paymentResponseEmissionAllowed ||
+    gate.crpFulfillAllowed ||
+    gate.replayMutationAllowed ||
+    gate.canonicalReleasePersistenceAllowed
+  ) {
+    throw new Error("live_direct_buyer_actual_decoder_input_pass_through_test_only_gate_rejects_release_side_effects");
+  }
+
+  return gate;
 }
