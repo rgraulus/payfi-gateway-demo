@@ -154,7 +154,8 @@
     "phase3:live-direct-buyer-actual-decoder-input-seam-result-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-actual-decoder-input-seam-result-selftest.ts",
     "phase3:live-direct-buyer-receipt-material-acceptance-gate-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-receipt-material-acceptance-gate-selftest.ts",
     "phase3:live-direct-buyer-test-only-real-decoder-invocation-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-test-only-real-decoder-invocation-selftest.ts",
-    "phase3:live-direct-buyer-decoded-result-consumption-dry-run-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-decoded-result-consumption-dry-run-selftest.ts"
+    "phase3:live-direct-buyer-decoded-result-consumption-dry-run-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-decoded-result-consumption-dry-run-selftest.ts",
+    "phase3:live-direct-buyer-production-release-preflight-with-decoded-result-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-production-release-preflight-with-decoded-result-selftest.ts"
   },
   "repository": {
     "type": "git",

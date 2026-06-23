@@ -58,6 +58,9 @@ export const LIVE_DIRECT_BUYER_TEST_ONLY_REAL_DECODER_INVOCATION_CONTRACT =
 export const LIVE_DIRECT_BUYER_DECODED_RESULT_CONSUMPTION_DRY_RUN_CONTRACT =
   "phase3.liveDirectBuyer.receiptDecoderAdapter.decodedResultConsumptionDryRun.v1" as const;
 
+export const LIVE_DIRECT_BUYER_PRODUCTION_RELEASE_PREFLIGHT_WITH_DECODED_RESULT_CONTRACT =
+  "phase3.liveDirectBuyer.receiptDecoderAdapter.productionReleasePreflightWithDecodedResult.v1" as const;
+
 export type LiveDirectBuyerReceiptDecoderAdapterMode = "disabled_scaffold";
 
 export type LiveDirectBuyerReceiptDecoderAdapterInput = {
@@ -5270,4 +5273,273 @@ export function validateLiveDirectBuyerDecodedResultConsumptionDryRun(
   }
 
   return dryRun;
+}
+
+export type LiveDirectBuyerProductionReleasePreflightWithDecodedResult = {
+  readonly contract: typeof LIVE_DIRECT_BUYER_PRODUCTION_RELEASE_PREFLIGHT_WITH_DECODED_RESULT_CONTRACT;
+  readonly mode: "production_release_preflight_with_decoded_result";
+  readonly status: "not_authorized_dry_run_only";
+  readonly sourceDecodedResultConsumptionDryRunContract: typeof LIVE_DIRECT_BUYER_DECODED_RESULT_CONSUMPTION_DRY_RUN_CONTRACT;
+  readonly sourceDecodedResultConsumptionDryRunValidated: true;
+  readonly decodedResultObservedByReleaseDecisionDryRun: true;
+  readonly decodedResultPreflightEvaluated: true;
+  readonly productionReleasePreflightRequired: true;
+  readonly productionReleasePreflightPresent: true;
+  readonly productionReleasePreflightObserved: true;
+  readonly productionReleasePreflightMode: "evaluate_decoded_result_without_release";
+  readonly productionReleasePreflightStatus: "not_authorized_dry_run_only";
+  readonly productionReleasePreflightReady: false;
+  readonly productionReleasePreflightBlockReason: "decoded_result_is_test_only_fixture_not_release_consumable";
+  readonly decodedResultSourceSanitized: true;
+  readonly decodedResultSourceMetadataOnly: true;
+  readonly decodedResultSourceFixtureOnly: true;
+  readonly decodedReceiptProduced: true;
+  readonly decodedReceiptVerified: true;
+  readonly decoderResultProduced: true;
+  readonly decoderResultReleaseConsumable: false;
+  readonly decoderResultConsumedByReleaseDecision: false;
+  readonly releaseDecisionMutatedByDecoderResult: false;
+  readonly releaseDecisionAuthorized: false;
+  readonly productionReleaseAuthorizationEvaluated: true;
+  readonly productionReleaseAuthorized: false;
+  readonly productionReleaseAllowed: false;
+  readonly productionRelease: false;
+  readonly paymentResponseEmissionAllowed: false;
+  readonly paymentResponseEmitted: false;
+  readonly resourceReleased: false;
+  readonly crpFulfillAllowed: false;
+  readonly crpFulfillCalled: false;
+  readonly replayMutationAllowed: false;
+  readonly replayTouched: false;
+  readonly canonicalReleasePersistenceAllowed: false;
+  readonly canonicalReleasePersisted: false;
+  readonly receiptMaterialAccepted: false;
+  readonly receiptJwsAcceptedForDecode: false;
+  readonly receiptPayloadAcceptedForDecode: false;
+  readonly receiptBytesAcceptedForDecode: false;
+  readonly receiptObjectAcceptedForDecode: false;
+  readonly rawReceiptAcceptedForDecode: false;
+  readonly rawProofAcceptedForDecode: false;
+  readonly settlementFieldsAcceptedForDecode: false;
+  readonly replayKeyAcceptedForDecode: false;
+  readonly rawProofPrinted: false;
+  readonly rawReceiptPrinted: false;
+  readonly receiptJwsPrinted: false;
+  readonly receiptPayloadPrinted: false;
+  readonly sideEffectFree: true;
+};
+
+export function preflightLiveDirectBuyerProductionReleaseWithDecodedResult(
+  dryRun: LiveDirectBuyerDecodedResultConsumptionDryRun,
+): LiveDirectBuyerProductionReleasePreflightWithDecodedResult {
+  const validatedDryRun = validateLiveDirectBuyerDecodedResultConsumptionDryRun(dryRun);
+
+  if (
+    validatedDryRun.decoderResultObservedByReleaseDecisionDryRun !== true ||
+    validatedDryRun.releaseDecisionDryRunObserved !== true ||
+    validatedDryRun.releaseDecisionDryRunMode !== "observe_decoded_result_without_mutation" ||
+    validatedDryRun.decodedResultConsumptionDryRunOnly !== true ||
+    validatedDryRun.decodedResultReleaseEligibilityEvaluated !== true ||
+    validatedDryRun.decodedResultReleaseEligibility !== "not_release_consumable_dry_run_only"
+  ) {
+    throw new Error("live_direct_buyer_production_release_preflight_with_decoded_result_requires_decoded_result_dry_run_observation");
+  }
+
+  if (
+    validatedDryRun.decoderResultSanitized !== true ||
+    validatedDryRun.decoderResultMetadataOnly !== true ||
+    validatedDryRun.decoderResultFixtureOnly !== true ||
+    validatedDryRun.decodedReceiptProduced !== true ||
+    validatedDryRun.decodedReceiptVerified !== true ||
+    validatedDryRun.decoderResultProduced !== true
+  ) {
+    throw new Error("live_direct_buyer_production_release_preflight_with_decoded_result_requires_sanitized_decoded_fixture_result");
+  }
+
+  if (
+    validatedDryRun.decoderResultReleaseConsumable ||
+    validatedDryRun.decoderResultConsumedByReleaseDecision ||
+    validatedDryRun.releaseDecisionMutatedByDecoderResult ||
+    validatedDryRun.releaseDecisionAuthorized ||
+    validatedDryRun.paymentResponseEmissionAllowed ||
+    validatedDryRun.paymentResponseEmitted ||
+    validatedDryRun.resourceReleased ||
+    validatedDryRun.crpFulfillAllowed ||
+    validatedDryRun.crpFulfillCalled ||
+    validatedDryRun.replayMutationAllowed ||
+    validatedDryRun.replayTouched ||
+    validatedDryRun.canonicalReleasePersistenceAllowed ||
+    validatedDryRun.canonicalReleasePersisted ||
+    validatedDryRun.productionRelease
+  ) {
+    throw new Error("live_direct_buyer_production_release_preflight_with_decoded_result_rejects_preexisting_release_side_effects");
+  }
+
+  if (
+    validatedDryRun.productionEnablementPresent ||
+    validatedDryRun.productionEnablementAccepted ||
+    validatedDryRun.productionReleaseAllowed
+  ) {
+    throw new Error("live_direct_buyer_production_release_preflight_with_decoded_result_rejects_production_enablement");
+  }
+
+  if (
+    validatedDryRun.receiptMaterialAccepted ||
+    validatedDryRun.receiptJwsAcceptedForDecode ||
+    validatedDryRun.receiptPayloadAcceptedForDecode ||
+    validatedDryRun.receiptBytesAcceptedForDecode ||
+    validatedDryRun.receiptObjectAcceptedForDecode ||
+    validatedDryRun.rawReceiptAcceptedForDecode ||
+    validatedDryRun.rawProofAcceptedForDecode ||
+    validatedDryRun.settlementFieldsAcceptedForDecode ||
+    validatedDryRun.replayKeyAcceptedForDecode ||
+    validatedDryRun.rawProofPrinted ||
+    validatedDryRun.rawReceiptPrinted ||
+    validatedDryRun.receiptJwsPrinted ||
+    validatedDryRun.receiptPayloadPrinted
+  ) {
+    throw new Error("live_direct_buyer_production_release_preflight_with_decoded_result_rejects_receipt_material_or_leakage");
+  }
+
+  return {
+    contract: LIVE_DIRECT_BUYER_PRODUCTION_RELEASE_PREFLIGHT_WITH_DECODED_RESULT_CONTRACT,
+    mode: "production_release_preflight_with_decoded_result",
+    status: "not_authorized_dry_run_only",
+    sourceDecodedResultConsumptionDryRunContract: LIVE_DIRECT_BUYER_DECODED_RESULT_CONSUMPTION_DRY_RUN_CONTRACT,
+    sourceDecodedResultConsumptionDryRunValidated: true,
+    decodedResultObservedByReleaseDecisionDryRun: validatedDryRun.decoderResultObservedByReleaseDecisionDryRun,
+    decodedResultPreflightEvaluated: true,
+    productionReleasePreflightRequired: true,
+    productionReleasePreflightPresent: true,
+    productionReleasePreflightObserved: true,
+    productionReleasePreflightMode: "evaluate_decoded_result_without_release",
+    productionReleasePreflightStatus: "not_authorized_dry_run_only",
+    productionReleasePreflightReady: false,
+    productionReleasePreflightBlockReason: "decoded_result_is_test_only_fixture_not_release_consumable",
+    decodedResultSourceSanitized: validatedDryRun.decoderResultSanitized,
+    decodedResultSourceMetadataOnly: validatedDryRun.decoderResultMetadataOnly,
+    decodedResultSourceFixtureOnly: validatedDryRun.decoderResultFixtureOnly,
+    decodedReceiptProduced: validatedDryRun.decodedReceiptProduced,
+    decodedReceiptVerified: validatedDryRun.decodedReceiptVerified,
+    decoderResultProduced: validatedDryRun.decoderResultProduced,
+    decoderResultReleaseConsumable: false,
+    decoderResultConsumedByReleaseDecision: false,
+    releaseDecisionMutatedByDecoderResult: false,
+    releaseDecisionAuthorized: false,
+    productionReleaseAuthorizationEvaluated: true,
+    productionReleaseAuthorized: false,
+    productionReleaseAllowed: false,
+    productionRelease: false,
+    paymentResponseEmissionAllowed: false,
+    paymentResponseEmitted: false,
+    resourceReleased: false,
+    crpFulfillAllowed: false,
+    crpFulfillCalled: false,
+    replayMutationAllowed: false,
+    replayTouched: false,
+    canonicalReleasePersistenceAllowed: false,
+    canonicalReleasePersisted: false,
+    receiptMaterialAccepted: false,
+    receiptJwsAcceptedForDecode: false,
+    receiptPayloadAcceptedForDecode: false,
+    receiptBytesAcceptedForDecode: false,
+    receiptObjectAcceptedForDecode: false,
+    rawReceiptAcceptedForDecode: false,
+    rawProofAcceptedForDecode: false,
+    settlementFieldsAcceptedForDecode: false,
+    replayKeyAcceptedForDecode: false,
+    rawProofPrinted: false,
+    rawReceiptPrinted: false,
+    receiptJwsPrinted: false,
+    receiptPayloadPrinted: false,
+    sideEffectFree: true,
+  };
+}
+
+export function validateLiveDirectBuyerProductionReleasePreflightWithDecodedResult(
+  preflight: LiveDirectBuyerProductionReleasePreflightWithDecodedResult,
+): LiveDirectBuyerProductionReleasePreflightWithDecodedResult {
+  if (preflight.contract !== LIVE_DIRECT_BUYER_PRODUCTION_RELEASE_PREFLIGHT_WITH_DECODED_RESULT_CONTRACT) {
+    throw new Error("live_direct_buyer_production_release_preflight_with_decoded_result_unexpected_contract");
+  }
+  if (preflight.mode !== "production_release_preflight_with_decoded_result") {
+    throw new Error("live_direct_buyer_production_release_preflight_with_decoded_result_unexpected_mode");
+  }
+  if (preflight.status !== "not_authorized_dry_run_only") {
+    throw new Error("live_direct_buyer_production_release_preflight_with_decoded_result_unexpected_status");
+  }
+  if (preflight.sourceDecodedResultConsumptionDryRunContract !== LIVE_DIRECT_BUYER_DECODED_RESULT_CONSUMPTION_DRY_RUN_CONTRACT) {
+    throw new Error("live_direct_buyer_production_release_preflight_with_decoded_result_unexpected_source_contract");
+  }
+  if (
+    preflight.sourceDecodedResultConsumptionDryRunValidated !== true ||
+    preflight.decodedResultObservedByReleaseDecisionDryRun !== true ||
+    preflight.decodedResultPreflightEvaluated !== true ||
+    preflight.productionReleasePreflightRequired !== true ||
+    preflight.productionReleasePreflightPresent !== true ||
+    preflight.productionReleasePreflightObserved !== true ||
+    preflight.productionReleasePreflightMode !== "evaluate_decoded_result_without_release" ||
+    preflight.productionReleasePreflightStatus !== "not_authorized_dry_run_only"
+  ) {
+    throw new Error("live_direct_buyer_production_release_preflight_with_decoded_result_requires_preflight_observation");
+  }
+  if (
+    preflight.productionReleasePreflightReady !== false ||
+    preflight.productionReleasePreflightBlockReason !== "decoded_result_is_test_only_fixture_not_release_consumable"
+  ) {
+    throw new Error("live_direct_buyer_production_release_preflight_with_decoded_result_requires_blocked_dry_run_status");
+  }
+  if (
+    preflight.decodedResultSourceSanitized !== true ||
+    preflight.decodedResultSourceMetadataOnly !== true ||
+    preflight.decodedResultSourceFixtureOnly !== true ||
+    preflight.decodedReceiptProduced !== true ||
+    preflight.decodedReceiptVerified !== true ||
+    preflight.decoderResultProduced !== true
+  ) {
+    throw new Error("live_direct_buyer_production_release_preflight_with_decoded_result_requires_sanitized_decoded_fixture_source");
+  }
+  if (
+    preflight.decoderResultReleaseConsumable ||
+    preflight.decoderResultConsumedByReleaseDecision ||
+    preflight.releaseDecisionMutatedByDecoderResult ||
+    preflight.releaseDecisionAuthorized ||
+    preflight.productionReleaseAuthorizationEvaluated !== true ||
+    preflight.productionReleaseAuthorized ||
+    preflight.productionReleaseAllowed ||
+    preflight.productionRelease ||
+    preflight.paymentResponseEmissionAllowed ||
+    preflight.paymentResponseEmitted ||
+    preflight.resourceReleased ||
+    preflight.crpFulfillAllowed ||
+    preflight.crpFulfillCalled ||
+    preflight.replayMutationAllowed ||
+    preflight.replayTouched ||
+    preflight.canonicalReleasePersistenceAllowed ||
+    preflight.canonicalReleasePersisted
+  ) {
+    throw new Error("live_direct_buyer_production_release_preflight_with_decoded_result_rejects_release_side_effects");
+  }
+  if (
+    preflight.receiptMaterialAccepted ||
+    preflight.receiptJwsAcceptedForDecode ||
+    preflight.receiptPayloadAcceptedForDecode ||
+    preflight.receiptBytesAcceptedForDecode ||
+    preflight.receiptObjectAcceptedForDecode ||
+    preflight.rawReceiptAcceptedForDecode ||
+    preflight.rawProofAcceptedForDecode ||
+    preflight.settlementFieldsAcceptedForDecode ||
+    preflight.replayKeyAcceptedForDecode ||
+    preflight.rawProofPrinted ||
+    preflight.rawReceiptPrinted ||
+    preflight.receiptJwsPrinted ||
+    preflight.receiptPayloadPrinted
+  ) {
+    throw new Error("live_direct_buyer_production_release_preflight_with_decoded_result_rejects_receipt_material_or_leakage");
+  }
+  if (preflight.sideEffectFree !== true) {
+    throw new Error("live_direct_buyer_production_release_preflight_with_decoded_result_requires_side_effect_free");
+  }
+
+  return preflight;
 }
