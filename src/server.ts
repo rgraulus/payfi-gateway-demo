@@ -219,6 +219,13 @@ const phase3GatewayTestReleaseOnly =
 const phase3GatewayProductionReleaseEnabled =
   String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_ENABLED ?? '').toLowerCase() === 'true';
 
+// Phase 3 controlled Live Direct Buyer release demo seam.
+// OFF by default. This is a route/demo-scoped activation marker for the
+// composed eligible/ineligible buyer demo. It must not bypass the existing
+// policy, receipt, replay, or runtime release guards.
+const phase3LiveDirectBuyerControlledReleaseDemoEnabled =
+  String(process.env.PHASE3_LIVE_DIRECT_BUYER_CONTROLLED_RELEASE_DEMO_ENABLED ?? '').toLowerCase() === 'true';
+
 // Phase 3 production release dry-run audit seam.
 // OFF by default. PR #178 exposes a would-execute audit signal only.
 // This does not authorize production release or CRP fulfill.
@@ -1053,6 +1060,7 @@ app.get('/healthz', async (_req, res) => {
       gatewayReleaseEnabled: phase3GatewayReleaseEnabled,
       gatewayTestReleaseOnly: phase3GatewayTestReleaseOnly,
       gatewayProductionReleaseEnabled: phase3GatewayProductionReleaseEnabled,
+      liveDirectBuyerControlledReleaseDemoEnabled: phase3LiveDirectBuyerControlledReleaseDemoEnabled,
       gatewayProductionReleaseDryRunEnabled: phase3GatewayProductionReleaseDryRunEnabled,
       allowParsedOnlyPolicy: phase3AllowParsedOnlyPolicy,
       requireLiveZkp: phase3RequireLiveZkp,
