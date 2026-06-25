@@ -232,6 +232,17 @@ const phase3LiveDirectBuyerControlledReleaseDemoEnabled =
 const phase3GatewayProductionReleaseDryRunEnabled =
   String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_DRY_RUN_ENABLED ?? '').toLowerCase() === 'true';
 
+// Phase 4 real CRP fulfill invocation boundary.
+// OFF by default. This harness-only seam may observe/attempt CRP fulfill,
+// but must not authorize production release, emit PAYMENT-RESPONSE, mutate replay,
+// persist canonical release, or release protected resources.
+const phase4RealCrpFulfillInvocationBoundaryHarness =
+  String(process.env.PHASE4_REAL_CRP_FULFILL_INVOCATION_BOUNDARY_HARNESS ?? '').toLowerCase() === 'true';
+
+const phase4RealCrpFulfillInvocationBoundaryEnabled =
+  phase4RealCrpFulfillInvocationBoundaryHarness === true &&
+  String(process.env.PHASE4_REAL_CRP_FULFILL_INVOCATION_BOUNDARY_ENABLED ?? '').toLowerCase() === 'true';
+
 const phase3GatewayProductionReleaseResultConsumptionEnabled =
   String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_RESULT_CONSUMPTION_ENABLED ?? '').toLowerCase() ===
   'true';
@@ -1064,6 +1075,12 @@ app.get('/healthz', async (_req, res) => {
       gatewayProductionReleaseDryRunEnabled: phase3GatewayProductionReleaseDryRunEnabled,
       allowParsedOnlyPolicy: phase3AllowParsedOnlyPolicy,
       requireLiveZkp: phase3RequireLiveZkp,
+    },
+    phase4: {
+      realCrpFulfillInvocationBoundaryHarness:
+        phase4RealCrpFulfillInvocationBoundaryHarness,
+      realCrpFulfillInvocationBoundaryEnabled:
+        phase4RealCrpFulfillInvocationBoundaryEnabled,
     },
   });
 });
@@ -7660,6 +7677,110 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     amount: contract.amount,
     asset: contract.asset,
   };
+
+  if (
+    resourcePathname === '/paid-gated' &&
+    phase4RealCrpFulfillInvocationBoundaryEnabled === true
+  ) {
+    const phase4PolicyGate = await requirePolicySatisfiedIfGated();
+    if (!phase4PolicyGate.ok) return;
+
+    let phase4Fulfill: any = null;
+    let phase4ErrorMessage: string | null = null;
+    let phase4HttpStatus: number | null = null;
+    let phase4CrpStatus: string | null = null;
+    let phase4ReceiptJwsPresent = false;
+    let phase4ReceiptJwsShapeValid = false;
+    let phase4BoundaryStatus: 'called' | 'unavailable' = 'called';
+
+    try {
+      phase4Fulfill = await crpClient.fulfillPayment(matchReq);
+      phase4HttpStatus =
+        typeof phase4Fulfill?.httpStatus === 'number' ? phase4Fulfill.httpStatus : null;
+      phase4CrpStatus =
+        typeof phase4Fulfill?.status === 'string' ? phase4Fulfill.status : null;
+
+      const phase4ReceiptJws =
+        typeof phase4Fulfill?.match?.receipt?.jws === 'string'
+          ? phase4Fulfill.match.receipt.jws
+          : typeof phase4Fulfill?.receipt?.jws === 'string'
+            ? phase4Fulfill.receipt.jws
+            : typeof phase4Fulfill?.receiptJws === 'string'
+              ? phase4Fulfill.receiptJws
+              : null;
+
+      phase4ReceiptJwsPresent = typeof phase4ReceiptJws === 'string' && phase4ReceiptJws.length > 0;
+      phase4ReceiptJwsShapeValid =
+        phase4ReceiptJwsPresent === true && String(phase4ReceiptJws).split('.').length === 3;
+    } catch (err: any) {
+      phase4BoundaryStatus = 'unavailable';
+      phase4ErrorMessage = String(err?.message ?? err);
+    }
+
+    const phase4BoundaryReason =
+      phase4BoundaryStatus === 'unavailable'
+        ? 'phase4_real_crp_fulfill_invocation_boundary_crp_unavailable'
+        : phase4ReceiptJwsPresent === true
+          ? 'phase4_real_crp_fulfill_invocation_boundary_receipt_observed_release_blocked'
+          : 'phase4_real_crp_fulfill_invocation_boundary_called_release_blocked';
+
+    return reply402AfterPersistingIssuedChallengeIfGated({
+      ok: false,
+      paid: false,
+      paymentRequired: paymentRequiredBody,
+      error: 'Phase 4 real CRP fulfill invocation boundary active',
+      phase4: {
+        realCrpFulfillInvocationBoundary: {
+          contract: 'phase4.realCrpFulfillInvocationBoundary.v1',
+          required: true,
+          observed: true,
+          enabled: true,
+          status: phase4BoundaryStatus,
+          reason: phase4BoundaryReason,
+          httpStatus: phase4HttpStatus,
+          crpStatus: phase4CrpStatus,
+          errorCode: phase4BoundaryStatus === 'unavailable' ? 'crp_unavailable' : null,
+          errorMessage: phase4ErrorMessage,
+          target: {
+            service: 'crp',
+            operation: 'fulfill',
+            method: 'POST',
+            path: '/v1/crp/payments/fulfill',
+          },
+          request: {
+            merchantId: matchReq.merchantId,
+            nonce: matchReq.nonce,
+            network: matchReq.network,
+            payTo: matchReq.payTo,
+            amount: matchReq.amount,
+            asset: matchReq.asset,
+          },
+          receipt: {
+            jwsPresent: phase4ReceiptJwsPresent,
+            jwsShapeValid: phase4ReceiptJwsShapeValid,
+            rawPrinted: false,
+          },
+          safety: {
+            crpFulfillInvocationAttempted: true,
+            externalCallAttempted: true,
+            crpCalled: phase4BoundaryStatus !== 'unavailable',
+            crpFulfillCalled: phase4BoundaryStatus !== 'unavailable',
+            receiptJwsPresent: phase4ReceiptJwsPresent,
+            receiptJwsShapeValid: phase4ReceiptJwsShapeValid,
+            receiptJwsRawPrinted: false,
+            rawProofPrinted: false,
+            rawReceiptPrinted: false,
+            productionRelease: false,
+            resourceReleased: false,
+            paymentResponseEmitted: false,
+            canonicalReleasePersisted: false,
+            replayTouched: false,
+            sideEffectFreeExceptCrpFulfillCall: true,
+          },
+        },
+      },
+    });
+  }
 
   try {
     match = await crpClient.matchPayment(matchReq);
