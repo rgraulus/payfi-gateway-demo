@@ -304,6 +304,19 @@ const phase4RealReceiptTupleBindingVerificationPreflightEnabled =
   phase4RealReceiptSettlementVerificationPreflightEnabled === true &&
   String(process.env.PHASE4_REAL_RECEIPT_TUPLE_BINDING_VERIFICATION_PREFLIGHT_ENABLED ?? '').toLowerCase() === 'true';
 
+// Phase 4 real receipt release eligibility composition preflight.
+// OFF by default. This harness-only seam may compose release eligibility from
+// signature, finalized settlement, and tuple binding prerequisites, but must
+// not consume the receipt for release, mutate replay, persist canonical release,
+// emit PAYMENT-RESPONSE, or release resources.
+const phase4RealReceiptReleaseEligibilityCompositionPreflightHarness =
+  String(process.env.PHASE4_REAL_RECEIPT_RELEASE_ELIGIBILITY_COMPOSITION_PREFLIGHT_HARNESS ?? '').toLowerCase() === 'true';
+
+const phase4RealReceiptReleaseEligibilityCompositionPreflightEnabled =
+  phase4RealReceiptReleaseEligibilityCompositionPreflightHarness === true &&
+  phase4RealReceiptTupleBindingVerificationPreflightEnabled === true &&
+  String(process.env.PHASE4_REAL_RECEIPT_RELEASE_ELIGIBILITY_COMPOSITION_PREFLIGHT_ENABLED ?? '').toLowerCase() === 'true';
+
 const phase3GatewayProductionReleaseResultConsumptionEnabled =
   String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_RESULT_CONSUMPTION_ENABLED ?? '').toLowerCase() ===
   'true';
@@ -1162,6 +1175,10 @@ app.get('/healthz', async (_req, res) => {
         phase4RealReceiptTupleBindingVerificationPreflightHarness,
       realReceiptTupleBindingVerificationPreflightEnabled:
         phase4RealReceiptTupleBindingVerificationPreflightEnabled,
+      realReceiptReleaseEligibilityCompositionPreflightHarness:
+        phase4RealReceiptReleaseEligibilityCompositionPreflightHarness,
+      realReceiptReleaseEligibilityCompositionPreflightEnabled:
+        phase4RealReceiptReleaseEligibilityCompositionPreflightEnabled,
     },
   });
 });
@@ -7848,6 +7865,21 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     let phase4ReceiptTupleBindingAssetTokenIdMatches = false;
     let phase4ReceiptTupleBindingAllFieldsPresent = false;
     let phase4ReceiptTupleBindingExactMatch = false;
+    let phase4ReceiptReleaseEligibilityCompositionPreflightRequired = false;
+    let phase4ReceiptReleaseEligibilityCompositionPreflightObserved = false;
+    let phase4ReceiptReleaseEligibilityCompositionPreflightStatus:
+      | 'not_requested'
+      | 'eligible'
+      | 'tuple_binding_preflight_not_observed'
+      | 'not_eligible'
+      | 'unavailable' = 'not_requested';
+    let phase4ReceiptReleaseEligibilityCompositionPreflightErrorCode: string | null = null;
+    let phase4ReceiptReleaseEligibilitySignatureVerified = false;
+    let phase4ReceiptReleaseEligibilitySettlementVerified = false;
+    let phase4ReceiptReleaseEligibilityFinalizedSettlementVerified = false;
+    let phase4ReceiptReleaseEligibilityTupleBindingVerified = false;
+    let phase4ReceiptReleaseEligibilityAllPrerequisitesVerified = false;
+    let phase4ReceiptReleaseEligible = false;
     let phase4ReceiptJwsHandoffRequired = false;
     let phase4ReceiptJwsHandoffObserved = false;
     let phase4ReceiptJwsHandoffStatus: 'observed' | 'missing' | 'unavailable' = 'missing';
@@ -8179,6 +8211,41 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       }
     }
 
+    if (phase4RealReceiptReleaseEligibilityCompositionPreflightEnabled === true) {
+      phase4ReceiptReleaseEligibilityCompositionPreflightRequired = true;
+
+      phase4ReceiptReleaseEligibilitySignatureVerified =
+        phase4ReceiptJwsSignatureVerificationPreflightObserved === true;
+      phase4ReceiptReleaseEligibilitySettlementVerified =
+        phase4ReceiptSettlementVerificationPreflightObserved === true;
+      phase4ReceiptReleaseEligibilityFinalizedSettlementVerified =
+        phase4ReceiptSettlementVerificationPreflightObserved === true;
+      phase4ReceiptReleaseEligibilityTupleBindingVerified =
+        phase4ReceiptTupleBindingVerificationPreflightObserved === true;
+      phase4ReceiptReleaseEligibilityAllPrerequisitesVerified =
+        phase4ReceiptReleaseEligibilitySignatureVerified === true &&
+        phase4ReceiptReleaseEligibilityFinalizedSettlementVerified === true &&
+        phase4ReceiptReleaseEligibilityTupleBindingVerified === true;
+
+      if (phase4BoundaryStatus === 'unavailable') {
+        phase4ReceiptReleaseEligibilityCompositionPreflightStatus = 'unavailable';
+      } else if (phase4ReceiptTupleBindingVerificationPreflightObserved !== true) {
+        phase4ReceiptReleaseEligibilityCompositionPreflightStatus =
+          'tuple_binding_preflight_not_observed';
+        phase4ReceiptReleaseEligibilityCompositionPreflightErrorCode =
+          'tuple_binding_preflight_not_observed';
+      } else if (phase4ReceiptReleaseEligibilityAllPrerequisitesVerified !== true) {
+        phase4ReceiptReleaseEligibilityCompositionPreflightStatus = 'not_eligible';
+        phase4ReceiptReleaseEligibilityCompositionPreflightErrorCode =
+          'release_prerequisites_not_verified';
+      } else {
+        phase4ReceiptReleaseEligibilityCompositionPreflightObserved = true;
+        phase4ReceiptReleaseEligibilityCompositionPreflightStatus = 'eligible';
+        phase4ReceiptReleaseEligibilityCompositionPreflightErrorCode = null;
+        phase4ReceiptReleaseEligible = true;
+      }
+    }
+
     const phase4ReceiptJwsSignatureVerificationPreflight =
       phase4RealReceiptJwsSignatureVerificationPreflightEnabled === true
         ? {
@@ -8341,6 +8408,57 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           }
         : null;
 
+    const phase4ReceiptReleaseEligibilityCompositionPreflight =
+      phase4RealReceiptReleaseEligibilityCompositionPreflightEnabled === true
+        ? {
+            contract: 'phase4.realReceiptReleaseEligibilityCompositionPreflight.v1',
+            required: phase4ReceiptReleaseEligibilityCompositionPreflightRequired,
+            observed: phase4ReceiptReleaseEligibilityCompositionPreflightObserved,
+            enabled: true,
+            status: phase4ReceiptReleaseEligibilityCompositionPreflightStatus,
+            source: 'phase4.realReceiptTupleBindingVerificationPreflight.v1',
+            prerequisites: {
+              signatureVerified: phase4ReceiptReleaseEligibilitySignatureVerified,
+              settlementVerified: phase4ReceiptReleaseEligibilitySettlementVerified,
+              finalizedSettlementVerified:
+                phase4ReceiptReleaseEligibilityFinalizedSettlementVerified,
+              tupleBindingVerified: phase4ReceiptReleaseEligibilityTupleBindingVerified,
+              allVerified: phase4ReceiptReleaseEligibilityAllPrerequisitesVerified,
+              rawPrinted: false,
+            },
+            releaseEligibilityEvaluated:
+              phase4ReceiptReleaseEligibilityCompositionPreflightRequired === true &&
+              phase4BoundaryStatus !== 'unavailable',
+            releaseEligible: phase4ReceiptReleaseEligible,
+            releaseEligibilityReason:
+              phase4ReceiptReleaseEligible === true
+                ? 'all_prerequisites_verified_release_blocked_by_preflight'
+                : phase4ReceiptReleaseEligibilityCompositionPreflightErrorCode,
+            errorCode: phase4ReceiptReleaseEligibilityCompositionPreflightErrorCode,
+            receiptJwsRawPrinted: false,
+            receiptJwsPrinted: false,
+            verifiedPayloadRawPrinted: false,
+            eligibilityRawPrinted: false,
+            signatureVerified: phase4ReceiptJwsSignatureVerificationPreflightObserved,
+            jwksVerified: phase4ReceiptJwsSignatureVerificationPreflightObserved,
+            settlementVerified: phase4ReceiptSettlementVerificationPreflightObserved,
+            finalizedSettlementVerified:
+              phase4ReceiptSettlementVerificationPreflightObserved,
+            tupleBindingVerified: phase4ReceiptTupleBindingVerificationPreflightObserved,
+            releaseConsumable: false,
+            consumedByReleaseDecision: false,
+            releaseDecisionMutated: false,
+            productionRelease: false,
+            productionReleaseAuthorizationEvaluated: false,
+            productionReleaseAuthorized: false,
+            paymentResponseEmitted: false,
+            resourceReleased: false,
+            replayTouched: false,
+            canonicalReleasePersisted: false,
+            sideEffectFreeExceptCrpFulfillCall: true,
+          }
+        : null;
+
     const phase4ReceiptJwsDecodePreflight =
       phase4RealReceiptJwsDecodePreflightEnabled === true
         ? {
@@ -8476,6 +8594,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
             ? {
                 realReceiptTupleBindingVerificationPreflight:
                   phase4ReceiptTupleBindingVerificationPreflight,
+              }
+            : {}),
+          ...(phase4ReceiptReleaseEligibilityCompositionPreflight
+            ? {
+                realReceiptReleaseEligibilityCompositionPreflight:
+                  phase4ReceiptReleaseEligibilityCompositionPreflight,
               }
             : {}),
           safety: {
