@@ -266,6 +266,19 @@ const phase4RealReceiptJwsDecodePreflightEnabled =
   phase4RealReceiptJwsDecodePreflightHarness === true &&
   String(process.env.PHASE4_REAL_RECEIPT_JWS_DECODE_PREFLIGHT_ENABLED ?? '').toLowerCase() === 'true';
 
+// Phase 4 real receipt JWS signature verification preflight.
+// OFF by default. This harness-only seam may verify the CRP receipt JWS
+// signature via the existing local JWKS verifier, but must not verify settlement,
+// verify tuple binding, mutate replay, persist canonical release, emit
+// PAYMENT-RESPONSE, or release resources.
+const phase4RealReceiptJwsSignatureVerificationPreflightHarness =
+  String(process.env.PHASE4_REAL_RECEIPT_JWS_SIGNATURE_VERIFICATION_PREFLIGHT_HARNESS ?? '').toLowerCase() === 'true';
+
+const phase4RealReceiptJwsSignatureVerificationPreflightEnabled =
+  phase4RealReceiptJwsSignatureVerificationPreflightHarness === true &&
+  phase4RealReceiptJwsDecodePreflightEnabled === true &&
+  String(process.env.PHASE4_REAL_RECEIPT_JWS_SIGNATURE_VERIFICATION_PREFLIGHT_ENABLED ?? '').toLowerCase() === 'true';
+
 const phase3GatewayProductionReleaseResultConsumptionEnabled =
   String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_RESULT_CONSUMPTION_ENABLED ?? '').toLowerCase() ===
   'true';
@@ -1112,6 +1125,10 @@ app.get('/healthz', async (_req, res) => {
         phase4RealReceiptJwsDecodePreflightHarness,
       realReceiptJwsDecodePreflightEnabled:
         phase4RealReceiptJwsDecodePreflightEnabled,
+      realReceiptJwsSignatureVerificationPreflightHarness:
+        phase4RealReceiptJwsSignatureVerificationPreflightHarness,
+      realReceiptJwsSignatureVerificationPreflightEnabled:
+        phase4RealReceiptJwsSignatureVerificationPreflightEnabled,
     },
   });
 });
@@ -7742,6 +7759,23 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     let phase4ReceiptJwsDecodedPayloadReceiptVersion: string | null = null;
     let phase4ReceiptJwsDecodedPayloadTestOnly: boolean | null = null;
     let phase4ReceiptJwsDecodedPayloadReleaseConsumable: boolean | null = null;
+    let phase4ReceiptJwsSignatureVerificationPreflightRequired = false;
+    let phase4ReceiptJwsSignatureVerificationPreflightObserved = false;
+    let phase4ReceiptJwsSignatureVerificationPreflightStatus:
+      | 'not_requested'
+      | 'verified'
+      | 'missing'
+      | 'invalid_shape'
+      | 'decode_preflight_not_observed'
+      | 'verification_failed'
+      | 'unavailable' = 'not_requested';
+    let phase4ReceiptJwsSignatureVerificationPreflightErrorCode: string | null = null;
+    let phase4ReceiptJwsVerifiedHeaderAlg: string | null = null;
+    let phase4ReceiptJwsVerifiedHeaderTyp: string | null = null;
+    let phase4ReceiptJwsVerifiedHeaderKid: string | null = null;
+    let phase4ReceiptJwsVerifiedPayloadReceiptVersion: string | null = null;
+    let phase4ReceiptJwsVerifiedPayloadTestOnly: boolean | null = null;
+    let phase4ReceiptJwsVerifiedPayloadReleaseConsumable: boolean | null = null;
     let phase4ReceiptJwsHandoffRequired = false;
     let phase4ReceiptJwsHandoffObserved = false;
     let phase4ReceiptJwsHandoffStatus: 'observed' | 'missing' | 'unavailable' = 'missing';
@@ -7870,6 +7904,110 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       }
     }
 
+    if (phase4RealReceiptJwsSignatureVerificationPreflightEnabled === true) {
+      phase4ReceiptJwsSignatureVerificationPreflightRequired = true;
+
+      if (phase4BoundaryStatus === 'unavailable') {
+        phase4ReceiptJwsSignatureVerificationPreflightStatus = 'unavailable';
+      } else if (phase4ReceiptJwsPresent !== true || typeof phase4ReceiptJws !== 'string') {
+        phase4ReceiptJwsSignatureVerificationPreflightStatus = 'missing';
+      } else if (phase4ReceiptJwsShapeValid !== true) {
+        phase4ReceiptJwsSignatureVerificationPreflightStatus = 'invalid_shape';
+        phase4ReceiptJwsSignatureVerificationPreflightErrorCode = 'invalid_compact_jws_shape';
+      } else if (phase4ReceiptJwsDecodePreflightObserved !== true) {
+        phase4ReceiptJwsSignatureVerificationPreflightStatus = 'decode_preflight_not_observed';
+        phase4ReceiptJwsSignatureVerificationPreflightErrorCode = 'decode_preflight_not_observed';
+      } else {
+        try {
+          const phase4ReceiptJwsVerify = await verifyReceiptJwsLocal(phase4ReceiptJws);
+          const phase4ReceiptJwsVerifiedHeader = phase4ReceiptJwsVerify.header;
+          const phase4ReceiptJwsVerifiedPayload = phase4ReceiptJwsVerify.payload;
+
+          phase4ReceiptJwsVerifiedHeaderAlg =
+            typeof phase4ReceiptJwsVerifiedHeader?.alg === 'string'
+              ? phase4ReceiptJwsVerifiedHeader.alg
+              : null;
+          phase4ReceiptJwsVerifiedHeaderTyp =
+            typeof phase4ReceiptJwsVerifiedHeader?.typ === 'string'
+              ? phase4ReceiptJwsVerifiedHeader.typ
+              : null;
+          phase4ReceiptJwsVerifiedHeaderKid =
+            typeof phase4ReceiptJwsVerifiedHeader?.kid === 'string'
+              ? phase4ReceiptJwsVerifiedHeader.kid
+              : null;
+
+          phase4ReceiptJwsVerifiedPayloadReceiptVersion =
+            typeof phase4ReceiptJwsVerifiedPayload?.receiptVersion === 'string'
+              ? phase4ReceiptJwsVerifiedPayload.receiptVersion
+              : null;
+          phase4ReceiptJwsVerifiedPayloadTestOnly =
+            typeof phase4ReceiptJwsVerifiedPayload?.testOnly === 'boolean'
+              ? phase4ReceiptJwsVerifiedPayload.testOnly
+              : null;
+          phase4ReceiptJwsVerifiedPayloadReleaseConsumable =
+            typeof phase4ReceiptJwsVerifiedPayload?.releaseConsumable === 'boolean'
+              ? phase4ReceiptJwsVerifiedPayload.releaseConsumable
+              : null;
+
+          phase4ReceiptJwsSignatureVerificationPreflightObserved = true;
+          phase4ReceiptJwsSignatureVerificationPreflightStatus = 'verified';
+          phase4ReceiptJwsSignatureVerificationPreflightErrorCode = null;
+        } catch (_err: any) {
+          phase4ReceiptJwsSignatureVerificationPreflightObserved = false;
+          phase4ReceiptJwsSignatureVerificationPreflightStatus = 'verification_failed';
+          phase4ReceiptJwsSignatureVerificationPreflightErrorCode =
+            'receipt_signature_verification_failed';
+        }
+      }
+    }
+
+    const phase4ReceiptJwsSignatureVerificationPreflight =
+      phase4RealReceiptJwsSignatureVerificationPreflightEnabled === true
+        ? {
+            contract: 'phase4.realReceiptJwsSignatureVerificationPreflight.v1',
+            required: phase4ReceiptJwsSignatureVerificationPreflightRequired,
+            observed: phase4ReceiptJwsSignatureVerificationPreflightObserved,
+            enabled: true,
+            status: phase4ReceiptJwsSignatureVerificationPreflightStatus,
+            source: 'phase4.realReceiptJwsDecodePreflight.v1',
+            receiptJwsPresent: phase4ReceiptJwsPresent,
+            receiptJwsShapeValid: phase4ReceiptJwsShapeValid,
+            decodePreflightObserved: phase4ReceiptJwsDecodePreflightObserved,
+            decodePreflightStatus: phase4ReceiptJwsDecodePreflightStatus,
+            header: {
+              alg: phase4ReceiptJwsVerifiedHeaderAlg,
+              typ: phase4ReceiptJwsVerifiedHeaderTyp,
+              kid: phase4ReceiptJwsVerifiedHeaderKid,
+              rawPrinted: false,
+            },
+            payload: {
+              receiptVersion: phase4ReceiptJwsVerifiedPayloadReceiptVersion,
+              testOnly: phase4ReceiptJwsVerifiedPayloadTestOnly,
+              releaseConsumable: phase4ReceiptJwsVerifiedPayloadReleaseConsumable,
+              rawPrinted: false,
+            },
+            errorCode: phase4ReceiptJwsSignatureVerificationPreflightErrorCode,
+            receiptJwsRawPrinted: false,
+            receiptJwsPrinted: false,
+            verifiedHeaderRawPrinted: false,
+            verifiedPayloadRawPrinted: false,
+            signatureVerified: phase4ReceiptJwsSignatureVerificationPreflightObserved,
+            verified: phase4ReceiptJwsSignatureVerificationPreflightObserved,
+            jwksVerified: phase4ReceiptJwsSignatureVerificationPreflightObserved,
+            settlementVerified: false,
+            tupleBindingVerified: false,
+            releaseConsumable: false,
+            consumedByReleaseDecision: false,
+            releaseDecisionMutated: false,
+            productionRelease: false,
+            paymentResponseEmitted: false,
+            resourceReleased: false,
+            replayTouched: false,
+            canonicalReleasePersisted: false,
+            sideEffectFreeExceptCrpFulfillCall: true,
+          }
+        : null;
+
     const phase4ReceiptJwsDecodePreflight =
       phase4RealReceiptJwsDecodePreflightEnabled === true
         ? {
@@ -7988,6 +8126,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
             : {}),
           ...(phase4ReceiptJwsDecodePreflight
             ? { realReceiptJwsDecodePreflight: phase4ReceiptJwsDecodePreflight }
+            : {}),
+          ...(phase4ReceiptJwsSignatureVerificationPreflight
+            ? {
+                realReceiptJwsSignatureVerificationPreflight:
+                  phase4ReceiptJwsSignatureVerificationPreflight,
+              }
             : {}),
           safety: {
             crpFulfillInvocationAttempted: true,
