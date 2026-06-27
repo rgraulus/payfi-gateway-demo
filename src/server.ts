@@ -254,6 +254,18 @@ const phase4RealReceiptJwsHandoffContractEnabled =
   phase4RealReceiptJwsHandoffContractHarness === true &&
   String(process.env.PHASE4_REAL_RECEIPT_JWS_HANDOFF_CONTRACT_ENABLED ?? '').toLowerCase() === 'true';
 
+// Phase 4 real receipt JWS decode preflight.
+// OFF by default. This harness-only seam may syntactically decode compact JWS
+// header/payload metadata from the CRP receipt handoff, but must not verify,
+// consume for release, emit PAYMENT-RESPONSE, mutate replay, persist canonical
+// release, or release resources.
+const phase4RealReceiptJwsDecodePreflightHarness =
+  String(process.env.PHASE4_REAL_RECEIPT_JWS_DECODE_PREFLIGHT_HARNESS ?? '').toLowerCase() === 'true';
+
+const phase4RealReceiptJwsDecodePreflightEnabled =
+  phase4RealReceiptJwsDecodePreflightHarness === true &&
+  String(process.env.PHASE4_REAL_RECEIPT_JWS_DECODE_PREFLIGHT_ENABLED ?? '').toLowerCase() === 'true';
+
 const phase3GatewayProductionReleaseResultConsumptionEnabled =
   String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_RESULT_CONSUMPTION_ENABLED ?? '').toLowerCase() ===
   'true';
@@ -1096,6 +1108,10 @@ app.get('/healthz', async (_req, res) => {
         phase4RealReceiptJwsHandoffContractHarness,
       realReceiptJwsHandoffContractEnabled:
         phase4RealReceiptJwsHandoffContractEnabled,
+      realReceiptJwsDecodePreflightHarness:
+        phase4RealReceiptJwsDecodePreflightHarness,
+      realReceiptJwsDecodePreflightEnabled:
+        phase4RealReceiptJwsDecodePreflightEnabled,
     },
   });
 });
@@ -7704,8 +7720,28 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     let phase4ErrorMessage: string | null = null;
     let phase4HttpStatus: number | null = null;
     let phase4CrpStatus: string | null = null;
+    let phase4ReceiptJws: string | null = null;
     let phase4ReceiptJwsPresent = false;
     let phase4ReceiptJwsShapeValid = false;
+    let phase4ReceiptJwsDecodePreflightRequired = false;
+    let phase4ReceiptJwsDecodePreflightObserved = false;
+    let phase4ReceiptJwsDecodePreflightStatus:
+      | 'not_requested'
+      | 'decoded'
+      | 'missing'
+      | 'invalid_shape'
+      | 'decode_error'
+      | 'unavailable' = 'not_requested';
+    let phase4ReceiptJwsDecodePreflightErrorCode: string | null = null;
+    let phase4ReceiptJwsCompactPartCount = 0;
+    let phase4ReceiptJwsDecodedHeaderJson = false;
+    let phase4ReceiptJwsDecodedPayloadJson = false;
+    let phase4ReceiptJwsDecodedHeaderAlg: string | null = null;
+    let phase4ReceiptJwsDecodedHeaderTyp: string | null = null;
+    let phase4ReceiptJwsDecodedHeaderKid: string | null = null;
+    let phase4ReceiptJwsDecodedPayloadReceiptVersion: string | null = null;
+    let phase4ReceiptJwsDecodedPayloadTestOnly: boolean | null = null;
+    let phase4ReceiptJwsDecodedPayloadReleaseConsumable: boolean | null = null;
     let phase4ReceiptJwsHandoffRequired = false;
     let phase4ReceiptJwsHandoffObserved = false;
     let phase4ReceiptJwsHandoffStatus: 'observed' | 'missing' | 'unavailable' = 'missing';
@@ -7718,7 +7754,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       phase4CrpStatus =
         typeof phase4Fulfill?.status === 'string' ? phase4Fulfill.status : null;
 
-      const phase4ReceiptJws =
+      phase4ReceiptJws =
         typeof phase4Fulfill?.match?.receipt?.jws === 'string'
           ? phase4Fulfill.match.receipt.jws
           : typeof phase4Fulfill?.receipt?.jws === 'string'
@@ -7756,6 +7792,130 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         : phase4ReceiptJwsPresent === true
           ? 'phase4_real_crp_fulfill_invocation_boundary_receipt_observed_release_blocked'
           : 'phase4_real_crp_fulfill_invocation_boundary_called_release_blocked';
+
+    if (phase4RealReceiptJwsDecodePreflightEnabled === true) {
+      phase4ReceiptJwsDecodePreflightRequired = true;
+      phase4ReceiptJwsCompactPartCount =
+        typeof phase4ReceiptJws === 'string' ? phase4ReceiptJws.split('.').length : 0;
+
+      if (phase4BoundaryStatus === 'unavailable') {
+        phase4ReceiptJwsDecodePreflightStatus = 'unavailable';
+      } else if (phase4ReceiptJwsPresent !== true) {
+        phase4ReceiptJwsDecodePreflightStatus = 'missing';
+      } else if (phase4ReceiptJwsShapeValid !== true || typeof phase4ReceiptJws !== 'string') {
+        phase4ReceiptJwsDecodePreflightStatus = 'invalid_shape';
+        phase4ReceiptJwsDecodePreflightErrorCode = 'invalid_compact_jws_shape';
+      } else {
+        try {
+          const [phase4ReceiptJwsHeaderPart, phase4ReceiptJwsPayloadPart] =
+            phase4ReceiptJws.split('.');
+          const phase4ReceiptJwsDecodedHeader = JSON.parse(
+            Buffer.from(phase4ReceiptJwsHeaderPart ?? '', 'base64url').toString('utf8'),
+          );
+          const phase4ReceiptJwsDecodedPayload = JSON.parse(
+            Buffer.from(phase4ReceiptJwsPayloadPart ?? '', 'base64url').toString('utf8'),
+          );
+
+          phase4ReceiptJwsDecodedHeaderJson =
+            typeof phase4ReceiptJwsDecodedHeader === 'object' &&
+            phase4ReceiptJwsDecodedHeader !== null &&
+            !Array.isArray(phase4ReceiptJwsDecodedHeader);
+          phase4ReceiptJwsDecodedPayloadJson =
+            typeof phase4ReceiptJwsDecodedPayload === 'object' &&
+            phase4ReceiptJwsDecodedPayload !== null &&
+            !Array.isArray(phase4ReceiptJwsDecodedPayload);
+
+          if (phase4ReceiptJwsDecodedHeaderJson === true) {
+            phase4ReceiptJwsDecodedHeaderAlg =
+              typeof phase4ReceiptJwsDecodedHeader.alg === 'string'
+                ? phase4ReceiptJwsDecodedHeader.alg
+                : null;
+            phase4ReceiptJwsDecodedHeaderTyp =
+              typeof phase4ReceiptJwsDecodedHeader.typ === 'string'
+                ? phase4ReceiptJwsDecodedHeader.typ
+                : null;
+            phase4ReceiptJwsDecodedHeaderKid =
+              typeof phase4ReceiptJwsDecodedHeader.kid === 'string'
+                ? phase4ReceiptJwsDecodedHeader.kid
+                : null;
+          }
+
+          if (phase4ReceiptJwsDecodedPayloadJson === true) {
+            phase4ReceiptJwsDecodedPayloadReceiptVersion =
+              typeof phase4ReceiptJwsDecodedPayload.receiptVersion === 'string'
+                ? phase4ReceiptJwsDecodedPayload.receiptVersion
+                : null;
+            phase4ReceiptJwsDecodedPayloadTestOnly =
+              typeof phase4ReceiptJwsDecodedPayload.testOnly === 'boolean'
+                ? phase4ReceiptJwsDecodedPayload.testOnly
+                : null;
+            phase4ReceiptJwsDecodedPayloadReleaseConsumable =
+              typeof phase4ReceiptJwsDecodedPayload.releaseConsumable === 'boolean'
+                ? phase4ReceiptJwsDecodedPayload.releaseConsumable
+                : null;
+          }
+
+          phase4ReceiptJwsDecodePreflightObserved =
+            phase4ReceiptJwsDecodedHeaderJson === true &&
+            phase4ReceiptJwsDecodedPayloadJson === true;
+          phase4ReceiptJwsDecodePreflightStatus =
+            phase4ReceiptJwsDecodePreflightObserved === true ? 'decoded' : 'decode_error';
+          phase4ReceiptJwsDecodePreflightErrorCode =
+            phase4ReceiptJwsDecodePreflightObserved === true ? null : 'decoded_value_not_json_object';
+        } catch (_err: any) {
+          phase4ReceiptJwsDecodePreflightObserved = false;
+          phase4ReceiptJwsDecodePreflightStatus = 'decode_error';
+          phase4ReceiptJwsDecodePreflightErrorCode = 'invalid_base64url_or_json';
+        }
+      }
+    }
+
+    const phase4ReceiptJwsDecodePreflight =
+      phase4RealReceiptJwsDecodePreflightEnabled === true
+        ? {
+            contract: 'phase4.realReceiptJwsDecodePreflight.v1',
+            required: phase4ReceiptJwsDecodePreflightRequired,
+            observed: phase4ReceiptJwsDecodePreflightObserved,
+            enabled: true,
+            status: phase4ReceiptJwsDecodePreflightStatus,
+            source: 'phase4.realReceiptJwsHandoffContract.v1',
+            compactPartCount: phase4ReceiptJwsCompactPartCount,
+            receiptJwsPresent: phase4ReceiptJwsPresent,
+            receiptJwsShapeValid: phase4ReceiptJwsShapeValid,
+            decodedHeaderJson: phase4ReceiptJwsDecodedHeaderJson,
+            decodedPayloadJson: phase4ReceiptJwsDecodedPayloadJson,
+            header: {
+              alg: phase4ReceiptJwsDecodedHeaderAlg,
+              typ: phase4ReceiptJwsDecodedHeaderTyp,
+              kid: phase4ReceiptJwsDecodedHeaderKid,
+              rawPrinted: false,
+            },
+            payload: {
+              receiptVersion: phase4ReceiptJwsDecodedPayloadReceiptVersion,
+              testOnly: phase4ReceiptJwsDecodedPayloadTestOnly,
+              releaseConsumable: phase4ReceiptJwsDecodedPayloadReleaseConsumable,
+              rawPrinted: false,
+            },
+            errorCode: phase4ReceiptJwsDecodePreflightErrorCode,
+            receiptJwsRawPrinted: false,
+            receiptJwsPrinted: false,
+            decodedHeaderRawPrinted: false,
+            decodedPayloadRawPrinted: false,
+            signatureVerified: false,
+            verified: false,
+            settlementVerified: false,
+            tupleBindingVerified: false,
+            releaseConsumable: false,
+            consumedByReleaseDecision: false,
+            releaseDecisionMutated: false,
+            productionRelease: false,
+            paymentResponseEmitted: false,
+            resourceReleased: false,
+            replayTouched: false,
+            canonicalReleasePersisted: false,
+            sideEffectFreeExceptCrpFulfillCall: true,
+          }
+        : null;
 
     const phase4ReceiptJwsHandoffContract =
       phase4RealReceiptJwsHandoffContractEnabled === true
@@ -7825,6 +7985,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           },
           ...(phase4ReceiptJwsHandoffContract
             ? { realReceiptJwsHandoffContract: phase4ReceiptJwsHandoffContract }
+            : {}),
+          ...(phase4ReceiptJwsDecodePreflight
+            ? { realReceiptJwsDecodePreflight: phase4ReceiptJwsDecodePreflight }
             : {}),
           safety: {
             crpFulfillInvocationAttempted: true,

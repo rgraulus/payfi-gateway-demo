@@ -158,7 +158,8 @@
     "phase3:live-direct-buyer-production-release-preflight-with-decoded-result-selftest": "ts-node --transpile-only scripts/phase3-live-direct-buyer-production-release-preflight-with-decoded-result-selftest.ts",
     "phase3:controlled-live-direct-buyer-release-demo-test": "ts-node --transpile-only scripts/ci_phase3_controlled_live_direct_buyer_release_demo.ts",
     "phase4:real-crp-fulfill-invocation-boundary-test": "ts-node --transpile-only scripts/ci_phase4_real_crp_fulfill_invocation_boundary.ts",
-    "phase4:real-receipt-jws-handoff-contract-test": "ts-node --transpile-only scripts/ci_phase4_real_receipt_jws_handoff_contract.ts"
+    "phase4:real-receipt-jws-handoff-contract-test": "ts-node --transpile-only scripts/ci_phase4_real_receipt_jws_handoff_contract.ts",
+    "phase4:real-receipt-jws-decode-preflight-test": "ts-node --transpile-only scripts/ci_phase4_real_receipt_jws_decode_preflight.ts"
   },
   "repository": {
     "type": "git",
