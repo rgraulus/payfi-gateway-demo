@@ -279,6 +279,18 @@ const phase4RealReceiptJwsSignatureVerificationPreflightEnabled =
   phase4RealReceiptJwsDecodePreflightEnabled === true &&
   String(process.env.PHASE4_REAL_RECEIPT_JWS_SIGNATURE_VERIFICATION_PREFLIGHT_ENABLED ?? '').toLowerCase() === 'true';
 
+// Phase 4 real receipt settlement verification preflight.
+// OFF by default. This harness-only seam may classify verified receipt settlement
+// metadata as finalized, but must not verify tuple binding, mutate replay,
+// persist canonical release, emit PAYMENT-RESPONSE, or release resources.
+const phase4RealReceiptSettlementVerificationPreflightHarness =
+  String(process.env.PHASE4_REAL_RECEIPT_SETTLEMENT_VERIFICATION_PREFLIGHT_HARNESS ?? '').toLowerCase() === 'true';
+
+const phase4RealReceiptSettlementVerificationPreflightEnabled =
+  phase4RealReceiptSettlementVerificationPreflightHarness === true &&
+  phase4RealReceiptJwsSignatureVerificationPreflightEnabled === true &&
+  String(process.env.PHASE4_REAL_RECEIPT_SETTLEMENT_VERIFICATION_PREFLIGHT_ENABLED ?? '').toLowerCase() === 'true';
+
 const phase3GatewayProductionReleaseResultConsumptionEnabled =
   String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_RESULT_CONSUMPTION_ENABLED ?? '').toLowerCase() ===
   'true';
@@ -1129,6 +1141,10 @@ app.get('/healthz', async (_req, res) => {
         phase4RealReceiptJwsSignatureVerificationPreflightHarness,
       realReceiptJwsSignatureVerificationPreflightEnabled:
         phase4RealReceiptJwsSignatureVerificationPreflightEnabled,
+      realReceiptSettlementVerificationPreflightHarness:
+        phase4RealReceiptSettlementVerificationPreflightHarness,
+      realReceiptSettlementVerificationPreflightEnabled:
+        phase4RealReceiptSettlementVerificationPreflightEnabled,
     },
   });
 });
@@ -7776,6 +7792,21 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     let phase4ReceiptJwsVerifiedPayloadReceiptVersion: string | null = null;
     let phase4ReceiptJwsVerifiedPayloadTestOnly: boolean | null = null;
     let phase4ReceiptJwsVerifiedPayloadReleaseConsumable: boolean | null = null;
+    let phase4ReceiptJwsVerifiedPayloadSettlementStatus: string | null = null;
+    let phase4ReceiptJwsVerifiedPayloadSettlementTxHash: string | null = null;
+    let phase4ReceiptJwsVerifiedPayloadSettlementSettledAt: number | null = null;
+    let phase4ReceiptSettlementVerificationPreflightRequired = false;
+    let phase4ReceiptSettlementVerificationPreflightObserved = false;
+    let phase4ReceiptSettlementVerificationPreflightStatus:
+      | 'not_requested'
+      | 'verified'
+      | 'missing'
+      | 'signature_preflight_not_observed'
+      | 'not_finalized'
+      | 'unavailable' = 'not_requested';
+    let phase4ReceiptSettlementVerificationPreflightErrorCode: string | null = null;
+    let phase4ReceiptSettlementFinalized = false;
+    let phase4ReceiptSettlementTxHashPresent = false;
     let phase4ReceiptJwsHandoffRequired = false;
     let phase4ReceiptJwsHandoffObserved = false;
     let phase4ReceiptJwsHandoffStatus: 'observed' | 'missing' | 'unavailable' = 'missing';
@@ -7949,6 +7980,27 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
               ? phase4ReceiptJwsVerifiedPayload.releaseConsumable
               : null;
 
+          const phase4ReceiptJwsVerifiedPayloadSettlement =
+            typeof phase4ReceiptJwsVerifiedPayload?.settlement === 'object' &&
+            phase4ReceiptJwsVerifiedPayload?.settlement !== null &&
+            !Array.isArray(phase4ReceiptJwsVerifiedPayload.settlement)
+              ? phase4ReceiptJwsVerifiedPayload.settlement
+              : null;
+
+          phase4ReceiptJwsVerifiedPayloadSettlementStatus =
+            typeof phase4ReceiptJwsVerifiedPayloadSettlement?.status === 'string'
+              ? phase4ReceiptJwsVerifiedPayloadSettlement.status
+              : null;
+          phase4ReceiptJwsVerifiedPayloadSettlementTxHash =
+            typeof phase4ReceiptJwsVerifiedPayloadSettlement?.txHash === 'string'
+              ? phase4ReceiptJwsVerifiedPayloadSettlement.txHash
+              : null;
+          phase4ReceiptJwsVerifiedPayloadSettlementSettledAt =
+            typeof phase4ReceiptJwsVerifiedPayloadSettlement?.settledAt === 'number' &&
+            Number.isFinite(phase4ReceiptJwsVerifiedPayloadSettlement.settledAt)
+              ? phase4ReceiptJwsVerifiedPayloadSettlement.settledAt
+              : null;
+
           phase4ReceiptJwsSignatureVerificationPreflightObserved = true;
           phase4ReceiptJwsSignatureVerificationPreflightStatus = 'verified';
           phase4ReceiptJwsSignatureVerificationPreflightErrorCode = null;
@@ -7958,6 +8010,37 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           phase4ReceiptJwsSignatureVerificationPreflightErrorCode =
             'receipt_signature_verification_failed';
         }
+      }
+    }
+
+    if (phase4RealReceiptSettlementVerificationPreflightEnabled === true) {
+      phase4ReceiptSettlementVerificationPreflightRequired = true;
+
+      phase4ReceiptSettlementFinalized =
+        phase4ReceiptJwsVerifiedPayloadSettlementStatus === 'finalized';
+      phase4ReceiptSettlementTxHashPresent =
+        typeof phase4ReceiptJwsVerifiedPayloadSettlementTxHash === 'string' &&
+        phase4ReceiptJwsVerifiedPayloadSettlementTxHash.length > 0;
+
+      if (phase4BoundaryStatus === 'unavailable') {
+        phase4ReceiptSettlementVerificationPreflightStatus = 'unavailable';
+      } else if (phase4ReceiptJwsSignatureVerificationPreflightObserved !== true) {
+        phase4ReceiptSettlementVerificationPreflightStatus = 'signature_preflight_not_observed';
+        phase4ReceiptSettlementVerificationPreflightErrorCode =
+          'signature_preflight_not_observed';
+      } else if (phase4ReceiptJwsVerifiedPayloadSettlementStatus === null) {
+        phase4ReceiptSettlementVerificationPreflightStatus = 'missing';
+        phase4ReceiptSettlementVerificationPreflightErrorCode = 'settlement_status_missing';
+      } else if (phase4ReceiptSettlementTxHashPresent !== true) {
+        phase4ReceiptSettlementVerificationPreflightStatus = 'missing';
+        phase4ReceiptSettlementVerificationPreflightErrorCode = 'settlement_tx_hash_missing';
+      } else if (phase4ReceiptSettlementFinalized !== true) {
+        phase4ReceiptSettlementVerificationPreflightStatus = 'not_finalized';
+        phase4ReceiptSettlementVerificationPreflightErrorCode = 'settlement_not_finalized';
+      } else {
+        phase4ReceiptSettlementVerificationPreflightObserved = true;
+        phase4ReceiptSettlementVerificationPreflightStatus = 'verified';
+        phase4ReceiptSettlementVerificationPreflightErrorCode = null;
       }
     }
 
@@ -7995,6 +8078,49 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
             verified: phase4ReceiptJwsSignatureVerificationPreflightObserved,
             jwksVerified: phase4ReceiptJwsSignatureVerificationPreflightObserved,
             settlementVerified: false,
+            tupleBindingVerified: false,
+            releaseConsumable: false,
+            consumedByReleaseDecision: false,
+            releaseDecisionMutated: false,
+            productionRelease: false,
+            paymentResponseEmitted: false,
+            resourceReleased: false,
+            replayTouched: false,
+            canonicalReleasePersisted: false,
+            sideEffectFreeExceptCrpFulfillCall: true,
+          }
+        : null;
+
+    const phase4ReceiptSettlementVerificationPreflight =
+      phase4RealReceiptSettlementVerificationPreflightEnabled === true
+        ? {
+            contract: 'phase4.realReceiptSettlementVerificationPreflight.v1',
+            required: phase4ReceiptSettlementVerificationPreflightRequired,
+            observed: phase4ReceiptSettlementVerificationPreflightObserved,
+            enabled: true,
+            status: phase4ReceiptSettlementVerificationPreflightStatus,
+            source: 'phase4.realReceiptJwsSignatureVerificationPreflight.v1',
+            signatureVerificationObserved:
+              phase4ReceiptJwsSignatureVerificationPreflightObserved,
+            signatureVerificationStatus:
+              phase4ReceiptJwsSignatureVerificationPreflightStatus,
+            signatureVerified: phase4ReceiptJwsSignatureVerificationPreflightObserved,
+            jwksVerified: phase4ReceiptJwsSignatureVerificationPreflightObserved,
+            settlement: {
+              status: phase4ReceiptJwsVerifiedPayloadSettlementStatus,
+              finalized: phase4ReceiptSettlementFinalized,
+              txHashPresent: phase4ReceiptSettlementTxHashPresent,
+              txHash: phase4ReceiptJwsVerifiedPayloadSettlementTxHash,
+              settledAt: phase4ReceiptJwsVerifiedPayloadSettlementSettledAt,
+              rawPrinted: false,
+            },
+            errorCode: phase4ReceiptSettlementVerificationPreflightErrorCode,
+            receiptJwsRawPrinted: false,
+            receiptJwsPrinted: false,
+            verifiedPayloadRawPrinted: false,
+            settlementRawPrinted: false,
+            settlementVerified: phase4ReceiptSettlementVerificationPreflightObserved,
+            finalizedSettlementVerified: phase4ReceiptSettlementVerificationPreflightObserved,
             tupleBindingVerified: false,
             releaseConsumable: false,
             consumedByReleaseDecision: false,
@@ -8131,6 +8257,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
             ? {
                 realReceiptJwsSignatureVerificationPreflight:
                   phase4ReceiptJwsSignatureVerificationPreflight,
+              }
+            : {}),
+          ...(phase4ReceiptSettlementVerificationPreflight
+            ? {
+                realReceiptSettlementVerificationPreflight:
+                  phase4ReceiptSettlementVerificationPreflight,
               }
             : {}),
           safety: {
