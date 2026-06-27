@@ -291,6 +291,19 @@ const phase4RealReceiptSettlementVerificationPreflightEnabled =
   phase4RealReceiptJwsSignatureVerificationPreflightEnabled === true &&
   String(process.env.PHASE4_REAL_RECEIPT_SETTLEMENT_VERIFICATION_PREFLIGHT_ENABLED ?? '').toLowerCase() === 'true';
 
+// Phase 4 real receipt tuple binding verification preflight.
+// OFF by default. This harness-only seam may verify that the finalized,
+// signature-verified receipt payload is bound to the issued PAYMENT-REQUIRED
+// tuple, but must not mutate replay, persist canonical release, emit
+// PAYMENT-RESPONSE, or release resources.
+const phase4RealReceiptTupleBindingVerificationPreflightHarness =
+  String(process.env.PHASE4_REAL_RECEIPT_TUPLE_BINDING_VERIFICATION_PREFLIGHT_HARNESS ?? '').toLowerCase() === 'true';
+
+const phase4RealReceiptTupleBindingVerificationPreflightEnabled =
+  phase4RealReceiptTupleBindingVerificationPreflightHarness === true &&
+  phase4RealReceiptSettlementVerificationPreflightEnabled === true &&
+  String(process.env.PHASE4_REAL_RECEIPT_TUPLE_BINDING_VERIFICATION_PREFLIGHT_ENABLED ?? '').toLowerCase() === 'true';
+
 const phase3GatewayProductionReleaseResultConsumptionEnabled =
   String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_RESULT_CONSUMPTION_ENABLED ?? '').toLowerCase() ===
   'true';
@@ -1145,6 +1158,10 @@ app.get('/healthz', async (_req, res) => {
         phase4RealReceiptSettlementVerificationPreflightHarness,
       realReceiptSettlementVerificationPreflightEnabled:
         phase4RealReceiptSettlementVerificationPreflightEnabled,
+      realReceiptTupleBindingVerificationPreflightHarness:
+        phase4RealReceiptTupleBindingVerificationPreflightHarness,
+      realReceiptTupleBindingVerificationPreflightEnabled:
+        phase4RealReceiptTupleBindingVerificationPreflightEnabled,
     },
   });
 });
@@ -7807,6 +7824,30 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     let phase4ReceiptSettlementVerificationPreflightErrorCode: string | null = null;
     let phase4ReceiptSettlementFinalized = false;
     let phase4ReceiptSettlementTxHashPresent = false;
+    let phase4ReceiptJwsVerifiedPayloadMerchantId: string | null = null;
+    let phase4ReceiptJwsVerifiedPayloadNonce: string | null = null;
+    let phase4ReceiptJwsVerifiedPayloadNetwork: string | null = null;
+    let phase4ReceiptJwsVerifiedPayloadPayTo: string | null = null;
+    let phase4ReceiptJwsVerifiedPayloadAmount: string | null = null;
+    let phase4ReceiptJwsVerifiedPayloadAssetTokenId: string | null = null;
+    let phase4ReceiptTupleBindingVerificationPreflightRequired = false;
+    let phase4ReceiptTupleBindingVerificationPreflightObserved = false;
+    let phase4ReceiptTupleBindingVerificationPreflightStatus:
+      | 'not_requested'
+      | 'verified'
+      | 'missing'
+      | 'settlement_preflight_not_observed'
+      | 'mismatch'
+      | 'unavailable' = 'not_requested';
+    let phase4ReceiptTupleBindingVerificationPreflightErrorCode: string | null = null;
+    let phase4ReceiptTupleBindingMerchantIdMatches = false;
+    let phase4ReceiptTupleBindingNonceMatches = false;
+    let phase4ReceiptTupleBindingNetworkMatches = false;
+    let phase4ReceiptTupleBindingPayToMatches = false;
+    let phase4ReceiptTupleBindingAmountMatches = false;
+    let phase4ReceiptTupleBindingAssetTokenIdMatches = false;
+    let phase4ReceiptTupleBindingAllFieldsPresent = false;
+    let phase4ReceiptTupleBindingExactMatch = false;
     let phase4ReceiptJwsHandoffRequired = false;
     let phase4ReceiptJwsHandoffObserved = false;
     let phase4ReceiptJwsHandoffStatus: 'observed' | 'missing' | 'unavailable' = 'missing';
@@ -7980,6 +8021,39 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
               ? phase4ReceiptJwsVerifiedPayload.releaseConsumable
               : null;
 
+          phase4ReceiptJwsVerifiedPayloadMerchantId =
+            typeof phase4ReceiptJwsVerifiedPayload?.merchantId === 'string'
+              ? phase4ReceiptJwsVerifiedPayload.merchantId
+              : null;
+          phase4ReceiptJwsVerifiedPayloadNonce =
+            typeof phase4ReceiptJwsVerifiedPayload?.nonce === 'string'
+              ? phase4ReceiptJwsVerifiedPayload.nonce
+              : null;
+          phase4ReceiptJwsVerifiedPayloadNetwork =
+            typeof phase4ReceiptJwsVerifiedPayload?.network === 'string'
+              ? phase4ReceiptJwsVerifiedPayload.network
+              : null;
+          phase4ReceiptJwsVerifiedPayloadPayTo =
+            typeof phase4ReceiptJwsVerifiedPayload?.payTo === 'string'
+              ? phase4ReceiptJwsVerifiedPayload.payTo
+              : null;
+          phase4ReceiptJwsVerifiedPayloadAmount =
+            typeof phase4ReceiptJwsVerifiedPayload?.amount === 'string'
+              ? phase4ReceiptJwsVerifiedPayload.amount
+              : null;
+
+          const phase4ReceiptJwsVerifiedPayloadAsset =
+            typeof phase4ReceiptJwsVerifiedPayload?.asset === 'object' &&
+            phase4ReceiptJwsVerifiedPayload?.asset !== null &&
+            !Array.isArray(phase4ReceiptJwsVerifiedPayload.asset)
+              ? phase4ReceiptJwsVerifiedPayload.asset
+              : null;
+
+          phase4ReceiptJwsVerifiedPayloadAssetTokenId =
+            typeof phase4ReceiptJwsVerifiedPayloadAsset?.tokenId === 'string'
+              ? phase4ReceiptJwsVerifiedPayloadAsset.tokenId
+              : null;
+
           const phase4ReceiptJwsVerifiedPayloadSettlement =
             typeof phase4ReceiptJwsVerifiedPayload?.settlement === 'object' &&
             phase4ReceiptJwsVerifiedPayload?.settlement !== null &&
@@ -8041,6 +8115,67 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         phase4ReceiptSettlementVerificationPreflightObserved = true;
         phase4ReceiptSettlementVerificationPreflightStatus = 'verified';
         phase4ReceiptSettlementVerificationPreflightErrorCode = null;
+      }
+    }
+
+    if (phase4RealReceiptTupleBindingVerificationPreflightEnabled === true) {
+      phase4ReceiptTupleBindingVerificationPreflightRequired = true;
+
+      const phase4ExpectedTupleAssetTokenId =
+        typeof matchReq.asset?.tokenId === 'string' ? matchReq.asset.tokenId : null;
+
+      phase4ReceiptTupleBindingMerchantIdMatches =
+        phase4ReceiptJwsVerifiedPayloadMerchantId === matchReq.merchantId;
+      phase4ReceiptTupleBindingNonceMatches =
+        phase4ReceiptJwsVerifiedPayloadNonce === matchReq.nonce;
+      phase4ReceiptTupleBindingNetworkMatches =
+        phase4ReceiptJwsVerifiedPayloadNetwork === matchReq.network;
+      phase4ReceiptTupleBindingPayToMatches =
+        phase4ReceiptJwsVerifiedPayloadPayTo === matchReq.payTo;
+      phase4ReceiptTupleBindingAmountMatches =
+        phase4ReceiptJwsVerifiedPayloadAmount === matchReq.amount;
+      phase4ReceiptTupleBindingAssetTokenIdMatches =
+        phase4ReceiptJwsVerifiedPayloadAssetTokenId === phase4ExpectedTupleAssetTokenId;
+
+      phase4ReceiptTupleBindingAllFieldsPresent =
+        typeof phase4ReceiptJwsVerifiedPayloadMerchantId === 'string' &&
+        phase4ReceiptJwsVerifiedPayloadMerchantId.length > 0 &&
+        typeof phase4ReceiptJwsVerifiedPayloadNonce === 'string' &&
+        phase4ReceiptJwsVerifiedPayloadNonce.length > 0 &&
+        typeof phase4ReceiptJwsVerifiedPayloadNetwork === 'string' &&
+        phase4ReceiptJwsVerifiedPayloadNetwork.length > 0 &&
+        typeof phase4ReceiptJwsVerifiedPayloadPayTo === 'string' &&
+        phase4ReceiptJwsVerifiedPayloadPayTo.length > 0 &&
+        typeof phase4ReceiptJwsVerifiedPayloadAmount === 'string' &&
+        phase4ReceiptJwsVerifiedPayloadAmount.length > 0 &&
+        typeof phase4ReceiptJwsVerifiedPayloadAssetTokenId === 'string' &&
+        phase4ReceiptJwsVerifiedPayloadAssetTokenId.length > 0;
+
+      phase4ReceiptTupleBindingExactMatch =
+        phase4ReceiptTupleBindingMerchantIdMatches === true &&
+        phase4ReceiptTupleBindingNonceMatches === true &&
+        phase4ReceiptTupleBindingNetworkMatches === true &&
+        phase4ReceiptTupleBindingPayToMatches === true &&
+        phase4ReceiptTupleBindingAmountMatches === true &&
+        phase4ReceiptTupleBindingAssetTokenIdMatches === true;
+
+      if (phase4BoundaryStatus === 'unavailable') {
+        phase4ReceiptTupleBindingVerificationPreflightStatus = 'unavailable';
+      } else if (phase4ReceiptSettlementVerificationPreflightObserved !== true) {
+        phase4ReceiptTupleBindingVerificationPreflightStatus =
+          'settlement_preflight_not_observed';
+        phase4ReceiptTupleBindingVerificationPreflightErrorCode =
+          'settlement_preflight_not_observed';
+      } else if (phase4ReceiptTupleBindingAllFieldsPresent !== true) {
+        phase4ReceiptTupleBindingVerificationPreflightStatus = 'missing';
+        phase4ReceiptTupleBindingVerificationPreflightErrorCode = 'tuple_fields_missing';
+      } else if (phase4ReceiptTupleBindingExactMatch !== true) {
+        phase4ReceiptTupleBindingVerificationPreflightStatus = 'mismatch';
+        phase4ReceiptTupleBindingVerificationPreflightErrorCode = 'tuple_binding_mismatch';
+      } else {
+        phase4ReceiptTupleBindingVerificationPreflightObserved = true;
+        phase4ReceiptTupleBindingVerificationPreflightStatus = 'verified';
+        phase4ReceiptTupleBindingVerificationPreflightErrorCode = null;
       }
     }
 
@@ -8122,6 +8257,78 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
             settlementVerified: phase4ReceiptSettlementVerificationPreflightObserved,
             finalizedSettlementVerified: phase4ReceiptSettlementVerificationPreflightObserved,
             tupleBindingVerified: false,
+            releaseConsumable: false,
+            consumedByReleaseDecision: false,
+            releaseDecisionMutated: false,
+            productionRelease: false,
+            paymentResponseEmitted: false,
+            resourceReleased: false,
+            replayTouched: false,
+            canonicalReleasePersisted: false,
+            sideEffectFreeExceptCrpFulfillCall: true,
+          }
+        : null;
+
+    const phase4ReceiptTupleBindingVerificationPreflight =
+      phase4RealReceiptTupleBindingVerificationPreflightEnabled === true
+        ? {
+            contract: 'phase4.realReceiptTupleBindingVerificationPreflight.v1',
+            required: phase4ReceiptTupleBindingVerificationPreflightRequired,
+            observed: phase4ReceiptTupleBindingVerificationPreflightObserved,
+            enabled: true,
+            status: phase4ReceiptTupleBindingVerificationPreflightStatus,
+            source: 'phase4.realReceiptSettlementVerificationPreflight.v1',
+            settlementVerificationObserved:
+              phase4ReceiptSettlementVerificationPreflightObserved,
+            settlementVerificationStatus:
+              phase4ReceiptSettlementVerificationPreflightStatus,
+            tuple: {
+              merchantId: {
+                expected: matchReq.merchantId,
+                observed: phase4ReceiptJwsVerifiedPayloadMerchantId,
+                matches: phase4ReceiptTupleBindingMerchantIdMatches,
+              },
+              nonce: {
+                expected: matchReq.nonce,
+                observed: phase4ReceiptJwsVerifiedPayloadNonce,
+                matches: phase4ReceiptTupleBindingNonceMatches,
+              },
+              network: {
+                expected: matchReq.network,
+                observed: phase4ReceiptJwsVerifiedPayloadNetwork,
+                matches: phase4ReceiptTupleBindingNetworkMatches,
+              },
+              payTo: {
+                expected: matchReq.payTo,
+                observed: phase4ReceiptJwsVerifiedPayloadPayTo,
+                matches: phase4ReceiptTupleBindingPayToMatches,
+              },
+              amount: {
+                expected: matchReq.amount,
+                observed: phase4ReceiptJwsVerifiedPayloadAmount,
+                matches: phase4ReceiptTupleBindingAmountMatches,
+              },
+              assetTokenId: {
+                expected:
+                  typeof matchReq.asset?.tokenId === 'string' ? matchReq.asset.tokenId : null,
+                observed: phase4ReceiptJwsVerifiedPayloadAssetTokenId,
+                matches: phase4ReceiptTupleBindingAssetTokenIdMatches,
+              },
+              allFieldsPresent: phase4ReceiptTupleBindingAllFieldsPresent,
+              exactMatch: phase4ReceiptTupleBindingExactMatch,
+              rawPrinted: false,
+            },
+            errorCode: phase4ReceiptTupleBindingVerificationPreflightErrorCode,
+            receiptJwsRawPrinted: false,
+            receiptJwsPrinted: false,
+            verifiedPayloadRawPrinted: false,
+            tupleRawPrinted: false,
+            signatureVerified: phase4ReceiptJwsSignatureVerificationPreflightObserved,
+            jwksVerified: phase4ReceiptJwsSignatureVerificationPreflightObserved,
+            settlementVerified: phase4ReceiptSettlementVerificationPreflightObserved,
+            finalizedSettlementVerified:
+              phase4ReceiptSettlementVerificationPreflightObserved,
+            tupleBindingVerified: phase4ReceiptTupleBindingVerificationPreflightObserved,
             releaseConsumable: false,
             consumedByReleaseDecision: false,
             releaseDecisionMutated: false,
@@ -8263,6 +8470,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
             ? {
                 realReceiptSettlementVerificationPreflight:
                   phase4ReceiptSettlementVerificationPreflight,
+              }
+            : {}),
+          ...(phase4ReceiptTupleBindingVerificationPreflight
+            ? {
+                realReceiptTupleBindingVerificationPreflight:
+                  phase4ReceiptTupleBindingVerificationPreflight,
               }
             : {}),
           safety: {
