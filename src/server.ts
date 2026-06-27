@@ -243,6 +243,17 @@ const phase4RealCrpFulfillInvocationBoundaryEnabled =
   phase4RealCrpFulfillInvocationBoundaryHarness === true &&
   String(process.env.PHASE4_REAL_CRP_FULFILL_INVOCATION_BOUNDARY_ENABLED ?? '').toLowerCase() === 'true';
 
+// Phase 4 real receipt JWS handoff contract.
+// OFF by default. This harness-only seam may classify receipt JWS handoff
+// metadata from CRP fulfill, but must not decode, verify, consume for release,
+// emit PAYMENT-RESPONSE, mutate replay, persist canonical release, or release resources.
+const phase4RealReceiptJwsHandoffContractHarness =
+  String(process.env.PHASE4_REAL_RECEIPT_JWS_HANDOFF_CONTRACT_HARNESS ?? '').toLowerCase() === 'true';
+
+const phase4RealReceiptJwsHandoffContractEnabled =
+  phase4RealReceiptJwsHandoffContractHarness === true &&
+  String(process.env.PHASE4_REAL_RECEIPT_JWS_HANDOFF_CONTRACT_ENABLED ?? '').toLowerCase() === 'true';
+
 const phase3GatewayProductionReleaseResultConsumptionEnabled =
   String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_RESULT_CONSUMPTION_ENABLED ?? '').toLowerCase() ===
   'true';
@@ -1081,6 +1092,10 @@ app.get('/healthz', async (_req, res) => {
         phase4RealCrpFulfillInvocationBoundaryHarness,
       realCrpFulfillInvocationBoundaryEnabled:
         phase4RealCrpFulfillInvocationBoundaryEnabled,
+      realReceiptJwsHandoffContractHarness:
+        phase4RealReceiptJwsHandoffContractHarness,
+      realReceiptJwsHandoffContractEnabled:
+        phase4RealReceiptJwsHandoffContractEnabled,
     },
   });
 });
@@ -7691,6 +7706,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     let phase4CrpStatus: string | null = null;
     let phase4ReceiptJwsPresent = false;
     let phase4ReceiptJwsShapeValid = false;
+    let phase4ReceiptJwsHandoffRequired = false;
+    let phase4ReceiptJwsHandoffObserved = false;
+    let phase4ReceiptJwsHandoffStatus: 'observed' | 'missing' | 'unavailable' = 'missing';
     let phase4BoundaryStatus: 'called' | 'unavailable' = 'called';
 
     try {
@@ -7712,9 +7730,24 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       phase4ReceiptJwsPresent = typeof phase4ReceiptJws === 'string' && phase4ReceiptJws.length > 0;
       phase4ReceiptJwsShapeValid =
         phase4ReceiptJwsPresent === true && String(phase4ReceiptJws).split('.').length === 3;
+
+      if (phase4RealReceiptJwsHandoffContractEnabled === true) {
+        phase4ReceiptJwsHandoffRequired = true;
+        phase4ReceiptJwsHandoffObserved = phase4ReceiptJwsPresent === true;
+        phase4ReceiptJwsHandoffStatus = phase4ReceiptJwsPresent === true ? 'observed' : 'missing';
+      }
     } catch (err: any) {
       phase4BoundaryStatus = 'unavailable';
       phase4ErrorMessage = String(err?.message ?? err);
+    }
+
+    if (
+      phase4RealReceiptJwsHandoffContractEnabled === true &&
+      phase4BoundaryStatus === 'unavailable'
+    ) {
+      phase4ReceiptJwsHandoffRequired = true;
+      phase4ReceiptJwsHandoffObserved = false;
+      phase4ReceiptJwsHandoffStatus = 'unavailable';
     }
 
     const phase4BoundaryReason =
@@ -7723,6 +7756,36 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         : phase4ReceiptJwsPresent === true
           ? 'phase4_real_crp_fulfill_invocation_boundary_receipt_observed_release_blocked'
           : 'phase4_real_crp_fulfill_invocation_boundary_called_release_blocked';
+
+    const phase4ReceiptJwsHandoffContract =
+      phase4RealReceiptJwsHandoffContractEnabled === true
+        ? {
+            contract: 'phase4.realReceiptJwsHandoffContract.v1',
+            required: phase4ReceiptJwsHandoffRequired,
+            observed: phase4ReceiptJwsHandoffObserved,
+            enabled: true,
+            status: phase4ReceiptJwsHandoffStatus,
+            source: 'crp_fulfill',
+            handoffObjectPresent: phase4ReceiptJwsHandoffObserved,
+            receiptJwsPresent: phase4ReceiptJwsPresent,
+            receiptJwsShapeValid: phase4ReceiptJwsShapeValid,
+            receiptJwsRawPrinted: false,
+            receiptJwsPrinted: false,
+            rawReceiptPrinted: false,
+            rawProofPrinted: false,
+            decoded: false,
+            verified: false,
+            releaseConsumable: false,
+            consumedByReleaseDecision: false,
+            releaseDecisionMutated: false,
+            productionRelease: false,
+            paymentResponseEmitted: false,
+            resourceReleased: false,
+            replayTouched: false,
+            canonicalReleasePersisted: false,
+            sideEffectFreeExceptCrpFulfillCall: true,
+          }
+        : null;
 
     return reply402AfterPersistingIssuedChallengeIfGated({
       ok: false,
@@ -7760,6 +7823,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
             jwsShapeValid: phase4ReceiptJwsShapeValid,
             rawPrinted: false,
           },
+          ...(phase4ReceiptJwsHandoffContract
+            ? { realReceiptJwsHandoffContract: phase4ReceiptJwsHandoffContract }
+            : {}),
           safety: {
             crpFulfillInvocationAttempted: true,
             externalCallAttempted: true,

@@ -1,0 +1,337 @@
+#!/usr/bin/env node
+/**
+ * PR 4-2 — Phase 4 real receipt JWS handoff contract.
+ *
+ * Receipt JWS handoff contract checkpoint.
+ *
+ * This validates the Phase 4 receipt JWS handoff contract on top of controlled CRP fulfill invocation:
+ * - boundary is harness-gated
+ * - policy must be satisfied first
+ * - response remains 402
+ * - PAYMENT-RESPONSE is not emitted
+ * - protected resource is not released
+ * - CRP fulfill may be called or may fail closed as unavailable
+ * - no raw receipt/proof material is printed
+ */
+
+import assert from "node:assert/strict";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import process from "node:process";
+
+import {
+  baseUrlForPort,
+  installSignalCleanup,
+  issuePaidGatedChallenge,
+  isPortOpen,
+  killProcessTree,
+  redeemEligiblePolicy,
+  request,
+  startGateway,
+  waitForPortClosed,
+  waitForReady,
+} from "./phase3GatewayHarnessUtils";
+
+const LABEL = "phase4:real-receipt-jws-handoff-contract-test";
+const GATEWAY_PORT = Number(process.env.PHASE4_REAL_RECEIPT_JWS_HANDOFF_CONTRACT_PORT || 3124);
+const CRP_PORT = Number(process.env.PHASE4_REAL_RECEIPT_JWS_HANDOFF_CONTRACT_CRP_PORT || 8124);
+
+function paymentSignatureB64(nonce: string): string {
+  return Buffer.from(JSON.stringify({ nonce }), "utf8").toString("base64");
+}
+
+type MockCrpRequest = {
+  path: string;
+  body: any;
+};
+
+function readJsonBody(req: IncomingMessage): Promise<any> {
+  return new Promise((resolve, reject) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      raw += chunk;
+    });
+    req.on("end", () => {
+      try {
+        resolve(raw.length > 0 ? JSON.parse(raw) : {});
+      } catch (err) {
+        reject(err);
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+function writeJson(res: ServerResponse, statusCode: number, body: unknown) {
+  res.writeHead(statusCode, {
+    "content-type": "application/json",
+  });
+  res.end(JSON.stringify(body));
+}
+
+async function startMockCrp(port: number) {
+  const requests: MockCrpRequest[] = [];
+
+  const server = createServer(async (req, res) => {
+    const path = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
+
+    if (req.method !== "POST" || path !== "/v1/crp/payments/fulfill") {
+      writeJson(res, 404, { ok: false, reason: "not_found" });
+      return;
+    }
+
+    try {
+      const body = await readJsonBody(req);
+      requests.push({ path, body });
+
+      writeJson(res, 200, {
+        ok: true,
+        status: "fulfilled",
+        match: {
+          status: "fulfilled",
+          receipt: {
+            jws: "phase4.header.payload",
+          },
+        },
+      });
+    } catch (err: any) {
+      writeJson(res, 400, {
+        ok: false,
+        reason: "invalid_json",
+        error: String(err?.message ?? err),
+      });
+    }
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+
+  return {
+    baseUrl: `http://127.0.0.1:${port}`,
+    requests,
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      }),
+  };
+}
+
+function restoreEnv(previous: Record<string, string | undefined>) {
+  for (const [key, value] of Object.entries(previous)) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+}
+
+async function main() {
+  const baseUrl = baseUrlForPort(GATEWAY_PORT);
+
+  console.log(`[${LABEL}] BASE=${baseUrl}`);
+
+  if (await isPortOpen(GATEWAY_PORT)) {
+    throw new Error(`gateway port ${GATEWAY_PORT} is already open. Stop the existing gateway and retry.`);
+  }
+
+  if (await isPortOpen(CRP_PORT)) {
+    throw new Error(`mock CRP port ${CRP_PORT} is already open. Stop the existing service and retry.`);
+  }
+
+  const mockCrp = await startMockCrp(CRP_PORT);
+
+  const previous = {
+    PHASE3_GATEWAY_RELEASE_ENABLED: process.env.PHASE3_GATEWAY_RELEASE_ENABLED,
+    PHASE3_GATEWAY_TEST_RELEASE_ONLY: process.env.PHASE3_GATEWAY_TEST_RELEASE_ONLY,
+    PHASE3_GATEWAY_PRODUCTION_RELEASE_ENABLED: process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_ENABLED,
+    PHASE3_GATEWAY_PRODUCTION_RELEASE_DRY_RUN_ENABLED:
+      process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_DRY_RUN_ENABLED,
+    PHASE4_REAL_CRP_FULFILL_INVOCATION_BOUNDARY_HARNESS:
+      process.env.PHASE4_REAL_CRP_FULFILL_INVOCATION_BOUNDARY_HARNESS,
+    PHASE4_REAL_CRP_FULFILL_INVOCATION_BOUNDARY_ENABLED:
+      process.env.PHASE4_REAL_CRP_FULFILL_INVOCATION_BOUNDARY_ENABLED,
+    PHASE4_REAL_RECEIPT_JWS_HANDOFF_CONTRACT_HARNESS:
+      process.env.PHASE4_REAL_RECEIPT_JWS_HANDOFF_CONTRACT_HARNESS,
+    PHASE4_REAL_RECEIPT_JWS_HANDOFF_CONTRACT_ENABLED:
+      process.env.PHASE4_REAL_RECEIPT_JWS_HANDOFF_CONTRACT_ENABLED,
+    CRP_BASE_URL: process.env.CRP_BASE_URL,
+    X402_DEBUG: process.env.X402_DEBUG,
+  };
+
+  process.env.PHASE3_GATEWAY_RELEASE_ENABLED = "false";
+  process.env.PHASE3_GATEWAY_TEST_RELEASE_ONLY = "false";
+  process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_ENABLED = "false";
+  process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_DRY_RUN_ENABLED = "false";
+  process.env.PHASE4_REAL_CRP_FULFILL_INVOCATION_BOUNDARY_HARNESS = "true";
+  process.env.PHASE4_REAL_CRP_FULFILL_INVOCATION_BOUNDARY_ENABLED = "true";
+  process.env.PHASE4_REAL_RECEIPT_JWS_HANDOFF_CONTRACT_HARNESS = "true";
+  process.env.PHASE4_REAL_RECEIPT_JWS_HANDOFF_CONTRACT_ENABLED = "true";
+  process.env.CRP_BASE_URL = mockCrp.baseUrl;
+  process.env.X402_DEBUG = "true";
+
+  const gateway = startGateway({
+    port: GATEWAY_PORT,
+    label: LABEL,
+  });
+
+  const cleanup = async () => {
+    restoreEnv(previous);
+    await killProcessTree(gateway);
+    await waitForPortClosed(GATEWAY_PORT);
+    await mockCrp.close();
+    await waitForPortClosed(CRP_PORT);
+  };
+
+  installSignalCleanup(cleanup);
+
+  try {
+    const health = await waitForReady(baseUrl);
+
+    assert.equal(health.phase3?.gatewayPolicyGateEnabled, true);
+    assert.equal(health.phase3?.gatewayReleaseEnabled, false);
+    assert.equal(health.phase3?.gatewayTestReleaseOnly, false);
+    assert.equal(health.phase3?.gatewayProductionReleaseEnabled, false);
+    assert.equal(health.phase4?.realCrpFulfillInvocationBoundaryHarness, true);
+    assert.equal(health.phase4?.realCrpFulfillInvocationBoundaryEnabled, true);
+    assert.equal(health.phase4?.realReceiptJwsHandoffContractHarness, true);
+    assert.equal(health.phase4?.realReceiptJwsHandoffContractEnabled, true);
+
+    const pr = await issuePaidGatedChallenge(baseUrl);
+
+    const redeem = await redeemEligiblePolicy(baseUrl, pr);
+    assert.equal(redeem.status, 200, `eligible policy redeem should succeed: ${redeem.text}`);
+    assert.equal(redeem.headers.get("payment-response"), null, "policy redeem must not emit PAYMENT-RESPONSE");
+    assert.equal(redeem.json?.policyStatus, "POLICY_SATISFIED");
+    assert.equal(redeem.json?.policyDecision?.allowed, true);
+    assert.equal(redeem.json?.policyDecision?.rawProofPrinted, false);
+
+    const boundary = await request(baseUrl, `/paid-gated?nonce=${encodeURIComponent(pr.nonce)}`, {
+      headers: {
+        "PAYMENT-SIGNATURE": paymentSignatureB64(pr.nonce),
+      },
+    });
+
+    assert.equal(boundary.status, 402, `Phase 4 boundary skeleton must keep resource blocked: ${boundary.text}`);
+    assert.equal(boundary.headers.get("payment-response"), null, "boundary must not emit PAYMENT-RESPONSE");
+    assert.equal(boundary.json?.ok, false);
+    assert.equal(boundary.json?.paid, false);
+    assert.notEqual(boundary.json?.resource, "secret-data", "boundary must not release protected resource");
+
+    const result = boundary.json?.phase4?.realCrpFulfillInvocationBoundary;
+    assert.equal(result?.contract, "phase4.realCrpFulfillInvocationBoundary.v1");
+    assert.equal(result?.required, true);
+    assert.equal(result?.observed, true);
+    assert.equal(result?.enabled, true);
+    assert.equal(result?.status, "called");
+    assert.equal(
+      result?.reason,
+      "phase4_real_crp_fulfill_invocation_boundary_receipt_observed_release_blocked",
+    );
+    assert.equal(result?.errorCode, null);
+    assert.equal(result?.errorMessage, null);
+    assert.equal(result?.target?.service, "crp");
+    assert.equal(result?.target?.operation, "fulfill");
+    assert.equal(result?.target?.path, "/v1/crp/payments/fulfill");
+    assert.equal(result?.request?.merchantId, pr.merchantId);
+    assert.equal(result?.request?.nonce, pr.nonce);
+    assert.equal(result?.request?.network, pr.network);
+    assert.equal(result?.request?.payTo, pr.payTo);
+    assert.equal(result?.request?.amount, pr.amount);
+    assert.equal(result?.request?.asset?.tokenId, pr.asset.tokenId);
+
+    assert.equal(result?.safety?.crpFulfillInvocationAttempted, true);
+    assert.equal(result?.safety?.externalCallAttempted, true);
+
+    assert.equal(result?.safety?.crpCalled, true);
+    assert.equal(result?.safety?.crpFulfillCalled, true);
+    assert.equal(result?.receipt?.jwsPresent, true);
+    assert.equal(result?.receipt?.jwsShapeValid, true);
+    assert.equal(result?.receipt?.rawPrinted, false);
+
+    const handoff = result?.realReceiptJwsHandoffContract;
+    assert.equal(handoff?.contract, "phase4.realReceiptJwsHandoffContract.v1");
+    assert.equal(handoff?.required, true);
+    assert.equal(handoff?.observed, true);
+    assert.equal(handoff?.enabled, true);
+    assert.equal(handoff?.status, "observed");
+    assert.equal(handoff?.source, "crp_fulfill");
+    assert.equal(handoff?.handoffObjectPresent, true);
+    assert.equal(handoff?.receiptJwsPresent, true);
+    assert.equal(handoff?.receiptJwsShapeValid, true);
+    assert.equal(handoff?.receiptJwsRawPrinted, false);
+    assert.equal(handoff?.receiptJwsPrinted, false);
+    assert.equal(handoff?.rawReceiptPrinted, false);
+    assert.equal(handoff?.rawProofPrinted, false);
+    assert.equal(handoff?.decoded, false);
+    assert.equal(handoff?.verified, false);
+    assert.equal(handoff?.releaseConsumable, false);
+    assert.equal(handoff?.consumedByReleaseDecision, false);
+    assert.equal(handoff?.releaseDecisionMutated, false);
+    assert.equal(handoff?.productionRelease, false);
+    assert.equal(handoff?.paymentResponseEmitted, false);
+    assert.equal(handoff?.resourceReleased, false);
+    assert.equal(handoff?.replayTouched, false);
+    assert.equal(handoff?.canonicalReleasePersisted, false);
+    assert.equal(handoff?.sideEffectFreeExceptCrpFulfillCall, true);
+
+    assert.equal(result?.safety?.receiptJwsPresent, true);
+    assert.equal(result?.safety?.receiptJwsShapeValid, true);
+    assert.equal(result?.safety?.receiptJwsRawPrinted, false);
+    assert.equal(result?.safety?.rawProofPrinted, false);
+    assert.equal(result?.safety?.rawReceiptPrinted, false);
+    assert.equal(result?.safety?.productionRelease, false);
+    assert.equal(result?.safety?.resourceReleased, false);
+    assert.equal(result?.safety?.paymentResponseEmitted, false);
+    assert.equal(result?.safety?.canonicalReleasePersisted, false);
+    assert.equal(result?.safety?.replayTouched, false);
+    assert.equal(result?.safety?.sideEffectFreeExceptCrpFulfillCall, true);
+
+    const fulfillRequests = mockCrp.requests.filter((entry) => entry.path === "/v1/crp/payments/fulfill");
+    assert.equal(fulfillRequests.length, 1, "mock CRP fulfill should be called exactly once");
+    assert.equal(fulfillRequests[0]?.body?.merchantId, pr.merchantId);
+    assert.equal(fulfillRequests[0]?.body?.nonce, pr.nonce);
+    assert.equal(fulfillRequests[0]?.body?.network, pr.network);
+    assert.equal(fulfillRequests[0]?.body?.payTo, pr.payTo);
+    assert.equal(fulfillRequests[0]?.body?.amount, pr.amount);
+    assert.equal(fulfillRequests[0]?.body?.asset?.tokenId, pr.asset.tokenId);
+
+    console.log(
+      JSON.stringify(
+        {
+          ok: true,
+          label: LABEL,
+          phase4BoundaryObserved: true,
+          phase4BoundaryStatus: result?.status,
+          phase4BoundaryReason: result?.reason,
+          receiptJwsPresent: result?.receipt?.jwsPresent === true,
+          receiptJwsShapeValid: result?.receipt?.jwsShapeValid === true,
+          handoffObserved: result?.realReceiptJwsHandoffContract?.observed === true,
+          handoffStatus: result?.realReceiptJwsHandoffContract?.status,
+          handoffDecoded: result?.realReceiptJwsHandoffContract?.decoded === true,
+          handoffVerified: result?.realReceiptJwsHandoffContract?.verified === true,
+          paymentResponseEmitted: boundary.headers.get("payment-response") !== null,
+          resourceReleased: boundary.json?.resource === "secret-data",
+          crpFulfillCalled: result?.safety?.crpFulfillCalled === true,
+        },
+        null,
+        2,
+      ),
+    );
+  } finally {
+    await cleanup();
+  }
+}
+
+main().catch((err) => {
+  console.error(`[${LABEL}] failed:`, err);
+  process.exit(1);
+});
