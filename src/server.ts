@@ -330,6 +330,19 @@ const phase4RealReceiptReplayCanonicalPersistencePreflightEnabled =
   phase4RealReceiptReleaseEligibilityCompositionPreflightEnabled === true &&
   String(process.env.PHASE4_REAL_RECEIPT_REPLAY_CANONICAL_PERSISTENCE_PREFLIGHT_ENABLED ?? '').toLowerCase() === 'true';
 
+// Phase 4 controlled real receipt release decision preflight.
+// OFF by default. This harness-only seam may evaluate release-decision
+// readiness after replay/canonical persistence readiness is composed, but must
+// not mutate release decision state, mutate replay, persist canonical release,
+// emit PAYMENT-RESPONSE, or release resources.
+const phase4RealReceiptReleaseDecisionPreflightHarness =
+  String(process.env.PHASE4_REAL_RECEIPT_RELEASE_DECISION_PREFLIGHT_HARNESS ?? '').toLowerCase() === 'true';
+
+const phase4RealReceiptReleaseDecisionPreflightEnabled =
+  phase4RealReceiptReleaseDecisionPreflightHarness === true &&
+  phase4RealReceiptReplayCanonicalPersistencePreflightEnabled === true &&
+  String(process.env.PHASE4_REAL_RECEIPT_RELEASE_DECISION_PREFLIGHT_ENABLED ?? '').toLowerCase() === 'true';
+
 const phase3GatewayProductionReleaseResultConsumptionEnabled =
   String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_RESULT_CONSUMPTION_ENABLED ?? '').toLowerCase() ===
   'true';
@@ -1196,6 +1209,10 @@ app.get('/healthz', async (_req, res) => {
         phase4RealReceiptReplayCanonicalPersistencePreflightHarness,
       realReceiptReplayCanonicalPersistencePreflightEnabled:
         phase4RealReceiptReplayCanonicalPersistencePreflightEnabled,
+      realReceiptReleaseDecisionPreflightHarness:
+        phase4RealReceiptReleaseDecisionPreflightHarness,
+      realReceiptReleaseDecisionPreflightEnabled:
+        phase4RealReceiptReleaseDecisionPreflightEnabled,
     },
   });
 });
@@ -7911,6 +7928,19 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     let phase4ReceiptCanonicalReleasePersistenceEvaluated = false;
     let phase4ReceiptCanonicalReleasePersistenceReady = false;
     let phase4ReceiptReplayCanonicalPersistenceAllReady = false;
+    let phase4ReceiptReleaseDecisionPreflightRequired = false;
+    let phase4ReceiptReleaseDecisionPreflightObserved = false;
+    let phase4ReceiptReleaseDecisionPreflightStatus:
+      | 'not_requested'
+      | 'ready'
+      | 'replay_canonical_persistence_preflight_not_observed'
+      | 'not_ready'
+      | 'unavailable' = 'not_requested';
+    let phase4ReceiptReleaseDecisionPreflightErrorCode: string | null = null;
+    let phase4ReceiptReleaseDecisionEligibilityReady = false;
+    let phase4ReceiptReleaseDecisionReplayReady = false;
+    let phase4ReceiptReleaseDecisionCanonicalReady = false;
+    let phase4ReceiptReleaseDecisionReady = false;
     let phase4ReceiptJwsHandoffRequired = false;
     let phase4ReceiptJwsHandoffObserved = false;
     let phase4ReceiptJwsHandoffStatus: 'observed' | 'missing' | 'unavailable' = 'missing';
@@ -8314,6 +8344,41 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       }
     }
 
+    if (phase4RealReceiptReleaseDecisionPreflightEnabled === true) {
+      phase4ReceiptReleaseDecisionPreflightRequired = true;
+
+      phase4ReceiptReleaseDecisionEligibilityReady =
+        phase4ReceiptReleaseEligibilityCompositionPreflightObserved === true &&
+        phase4ReceiptReleaseEligible === true;
+      phase4ReceiptReleaseDecisionReplayReady =
+        phase4ReceiptReplayCanonicalPersistencePreflightObserved === true &&
+        phase4ReceiptReplayMutationReady === true;
+      phase4ReceiptReleaseDecisionCanonicalReady =
+        phase4ReceiptReplayCanonicalPersistencePreflightObserved === true &&
+        phase4ReceiptCanonicalReleasePersistenceReady === true;
+      phase4ReceiptReleaseDecisionReady =
+        phase4ReceiptReleaseDecisionEligibilityReady === true &&
+        phase4ReceiptReleaseDecisionReplayReady === true &&
+        phase4ReceiptReleaseDecisionCanonicalReady === true;
+
+      if (phase4BoundaryStatus === 'unavailable') {
+        phase4ReceiptReleaseDecisionPreflightStatus = 'unavailable';
+      } else if (phase4ReceiptReplayCanonicalPersistencePreflightObserved !== true) {
+        phase4ReceiptReleaseDecisionPreflightStatus =
+          'replay_canonical_persistence_preflight_not_observed';
+        phase4ReceiptReleaseDecisionPreflightErrorCode =
+          'replay_canonical_persistence_preflight_not_observed';
+      } else if (phase4ReceiptReleaseDecisionReady !== true) {
+        phase4ReceiptReleaseDecisionPreflightStatus = 'not_ready';
+        phase4ReceiptReleaseDecisionPreflightErrorCode =
+          'release_decision_prerequisites_not_ready';
+      } else {
+        phase4ReceiptReleaseDecisionPreflightObserved = true;
+        phase4ReceiptReleaseDecisionPreflightStatus = 'ready';
+        phase4ReceiptReleaseDecisionPreflightErrorCode = null;
+      }
+    }
+
     const phase4ReceiptJwsSignatureVerificationPreflight =
       phase4RealReceiptJwsSignatureVerificationPreflightEnabled === true
         ? {
@@ -8585,6 +8650,80 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           }
         : null;
 
+    const phase4ReceiptReleaseDecisionPreflight =
+      phase4RealReceiptReleaseDecisionPreflightEnabled === true
+        ? {
+            contract: 'phase4.realReceiptReleaseDecisionPreflight.v1',
+            required: phase4ReceiptReleaseDecisionPreflightRequired,
+            observed: phase4ReceiptReleaseDecisionPreflightObserved,
+            enabled: true,
+            status: phase4ReceiptReleaseDecisionPreflightStatus,
+            source: 'phase4.realReceiptReplayCanonicalPersistencePreflight.v1',
+            replayCanonicalPersistenceObserved:
+              phase4ReceiptReplayCanonicalPersistencePreflightObserved,
+            replayCanonicalPersistenceStatus:
+              phase4ReceiptReplayCanonicalPersistencePreflightStatus,
+            prerequisites: {
+              releaseEligible: phase4ReceiptReleaseEligible,
+              releaseEligibilityReady: phase4ReceiptReleaseDecisionEligibilityReady,
+              replayMutationReady: phase4ReceiptReleaseDecisionReplayReady,
+              canonicalReleasePersistenceReady:
+                phase4ReceiptReleaseDecisionCanonicalReady,
+              allReady: phase4ReceiptReleaseDecisionReady,
+              rawPrinted: false,
+            },
+            releaseDecisionPreflightEvaluated:
+              phase4ReceiptReleaseDecisionPreflightRequired === true &&
+              phase4BoundaryStatus !== 'unavailable',
+            releaseDecisionReady: phase4ReceiptReleaseDecisionReady,
+            releaseDecisionReason:
+              phase4ReceiptReleaseDecisionReady === true
+                ? 'release_decision_ready_release_blocked_by_preflight'
+                : phase4ReceiptReleaseDecisionPreflightErrorCode,
+            decision: {
+              evaluated:
+                phase4ReceiptReleaseDecisionPreflightRequired === true &&
+                phase4BoundaryStatus !== 'unavailable',
+              ready: phase4ReceiptReleaseDecisionReady,
+              mutationAllowed: false,
+              mutated: false,
+              rawPrinted: false,
+            },
+            errorCode: phase4ReceiptReleaseDecisionPreflightErrorCode,
+            receiptJwsRawPrinted: false,
+            receiptJwsPrinted: false,
+            verifiedPayloadRawPrinted: false,
+            releaseDecisionRawPrinted: false,
+            signatureVerified: phase4ReceiptJwsSignatureVerificationPreflightObserved,
+            jwksVerified: phase4ReceiptJwsSignatureVerificationPreflightObserved,
+            settlementVerified: phase4ReceiptSettlementVerificationPreflightObserved,
+            finalizedSettlementVerified:
+              phase4ReceiptSettlementVerificationPreflightObserved,
+            tupleBindingVerified: phase4ReceiptTupleBindingVerificationPreflightObserved,
+            releaseEligibilityEvaluated:
+              phase4ReceiptReleaseEligibilityCompositionPreflightRequired === true &&
+              phase4BoundaryStatus !== 'unavailable',
+            releaseEligible: phase4ReceiptReleaseEligible,
+            replayCheckEvaluated: phase4ReceiptReplayCheckEvaluated,
+            replayMutationReady: phase4ReceiptReplayMutationReady,
+            canonicalReleasePersistenceEvaluated:
+              phase4ReceiptCanonicalReleasePersistenceEvaluated,
+            canonicalReleasePersistenceReady:
+              phase4ReceiptCanonicalReleasePersistenceReady,
+            releaseConsumable: false,
+            consumedByReleaseDecision: false,
+            releaseDecisionMutated: false,
+            productionRelease: false,
+            productionReleaseAuthorizationEvaluated: false,
+            productionReleaseAuthorized: false,
+            paymentResponseEmitted: false,
+            resourceReleased: false,
+            replayTouched: false,
+            canonicalReleasePersisted: false,
+            sideEffectFreeExceptCrpFulfillCall: true,
+          }
+        : null;
+
     const phase4ReceiptJwsDecodePreflight =
       phase4RealReceiptJwsDecodePreflightEnabled === true
         ? {
@@ -8732,6 +8871,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
             ? {
                 realReceiptReplayCanonicalPersistencePreflight:
                   phase4ReceiptReplayCanonicalPersistencePreflight,
+              }
+            : {}),
+          ...(phase4ReceiptReleaseDecisionPreflight
+            ? {
+                realReceiptReleaseDecisionPreflight:
+                  phase4ReceiptReleaseDecisionPreflight,
               }
             : {}),
           safety: {
