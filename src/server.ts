@@ -343,6 +343,19 @@ const phase4RealReceiptReleaseDecisionPreflightEnabled =
   phase4RealReceiptReplayCanonicalPersistencePreflightEnabled === true &&
   String(process.env.PHASE4_REAL_RECEIPT_RELEASE_DECISION_PREFLIGHT_ENABLED ?? '').toLowerCase() === 'true';
 
+// Phase 4 controlled real receipt release execution harness.
+// OFF by default. This harness-only seam may consume a release-decision-ready
+// real CRP receipt into the actual release path: replay mutation, canonical
+// release persistence, PAYMENT-RESPONSE emission, and protected resource release.
+// It is intentionally gated by every prior Phase 4 receipt verification layer.
+const phase4ControlledRealReceiptReleaseExecutionHarness =
+  String(process.env.PHASE4_CONTROLLED_REAL_RECEIPT_RELEASE_EXECUTION_HARNESS ?? '').toLowerCase() === 'true';
+
+const phase4ControlledRealReceiptReleaseExecutionEnabled =
+  phase4ControlledRealReceiptReleaseExecutionHarness === true &&
+  phase4RealReceiptReleaseDecisionPreflightEnabled === true &&
+  String(process.env.PHASE4_CONTROLLED_REAL_RECEIPT_RELEASE_EXECUTION_ENABLED ?? '').toLowerCase() === 'true';
+
 const phase3GatewayProductionReleaseResultConsumptionEnabled =
   String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_RESULT_CONSUMPTION_ENABLED ?? '').toLowerCase() ===
   'true';
@@ -1213,6 +1226,10 @@ app.get('/healthz', async (_req, res) => {
         phase4RealReceiptReleaseDecisionPreflightHarness,
       realReceiptReleaseDecisionPreflightEnabled:
         phase4RealReceiptReleaseDecisionPreflightEnabled,
+      controlledRealReceiptReleaseExecutionHarness:
+        phase4ControlledRealReceiptReleaseExecutionHarness,
+      controlledRealReceiptReleaseExecutionEnabled:
+        phase4ControlledRealReceiptReleaseExecutionEnabled,
     },
   });
 });
@@ -7860,6 +7877,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     let phase4ReceiptJwsVerifiedPayloadReceiptVersion: string | null = null;
     let phase4ReceiptJwsVerifiedPayloadTestOnly: boolean | null = null;
     let phase4ReceiptJwsVerifiedPayloadReleaseConsumable: boolean | null = null;
+    let phase4ReceiptJwsVerifiedPayloadForExecution: any = null;
     let phase4ReceiptJwsVerifiedPayloadSettlementStatus: string | null = null;
     let phase4ReceiptJwsVerifiedPayloadSettlementTxHash: string | null = null;
     let phase4ReceiptJwsVerifiedPayloadSettlementSettledAt: number | null = null;
@@ -7941,6 +7959,28 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     let phase4ReceiptReleaseDecisionReplayReady = false;
     let phase4ReceiptReleaseDecisionCanonicalReady = false;
     let phase4ReceiptReleaseDecisionReady = false;
+    let phase4ControlledRealReceiptReleaseExecutionRequired = false;
+    let phase4ControlledRealReceiptReleaseExecutionObserved = false;
+    let phase4ControlledRealReceiptReleaseExecutionStatus:
+      | 'not_requested'
+      | 'ready'
+      | 'released'
+      | 'release_decision_preflight_not_observed'
+      | 'not_ready'
+      | 'verification_failed'
+      | 'canonical_persistence_failed'
+      | 'unavailable' = 'not_requested';
+    let phase4ControlledRealReceiptReleaseExecutionErrorCode: string | null = null;
+    let phase4ControlledRealReceiptReleaseExecutionReplayTouched = false;
+    let phase4ControlledRealReceiptReleaseExecutionReplayTupleKey: string | null = null;
+    let phase4ControlledRealReceiptReleaseExecutionCanonicalReleasePersisted = false;
+    let phase4ControlledRealReceiptReleaseExecutionCanonicalReleasePersistenceResult:
+      | CanonicalReleasePersistenceResult
+      | null = null;
+    let phase4ControlledRealReceiptReleaseExecutionPaymentResponseEmitted = false;
+    let phase4ControlledRealReceiptReleaseExecutionResourceReleased = false;
+    let phase4ControlledRealReceiptReleaseExecutionReleaseDecisionMutated = false;
+    let phase4ControlledRealReceiptReleaseExecutionReleaseConsumable = false;
     let phase4ReceiptJwsHandoffRequired = false;
     let phase4ReceiptJwsHandoffObserved = false;
     let phase4ReceiptJwsHandoffStatus: 'observed' | 'missing' | 'unavailable' = 'missing';
@@ -8087,6 +8127,7 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           const phase4ReceiptJwsVerify = await verifyReceiptJwsLocal(phase4ReceiptJws);
           const phase4ReceiptJwsVerifiedHeader = phase4ReceiptJwsVerify.header;
           const phase4ReceiptJwsVerifiedPayload = phase4ReceiptJwsVerify.payload;
+          phase4ReceiptJwsVerifiedPayloadForExecution = phase4ReceiptJwsVerifiedPayload;
 
           phase4ReceiptJwsVerifiedHeaderAlg =
             typeof phase4ReceiptJwsVerifiedHeader?.alg === 'string'
@@ -8376,6 +8417,29 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
         phase4ReceiptReleaseDecisionPreflightObserved = true;
         phase4ReceiptReleaseDecisionPreflightStatus = 'ready';
         phase4ReceiptReleaseDecisionPreflightErrorCode = null;
+      }
+    }
+
+    if (phase4ControlledRealReceiptReleaseExecutionEnabled === true) {
+      phase4ControlledRealReceiptReleaseExecutionRequired = true;
+
+      if (phase4BoundaryStatus === 'unavailable') {
+        phase4ControlledRealReceiptReleaseExecutionStatus = 'unavailable';
+        phase4ControlledRealReceiptReleaseExecutionErrorCode = 'crp_unavailable';
+      } else if (phase4ReceiptReleaseDecisionPreflightObserved !== true) {
+        phase4ControlledRealReceiptReleaseExecutionStatus =
+          'release_decision_preflight_not_observed';
+        phase4ControlledRealReceiptReleaseExecutionErrorCode =
+          'release_decision_preflight_not_observed';
+      } else if (phase4ReceiptReleaseDecisionReady !== true) {
+        phase4ControlledRealReceiptReleaseExecutionStatus = 'not_ready';
+        phase4ControlledRealReceiptReleaseExecutionErrorCode =
+          'release_decision_not_ready';
+      } else {
+        phase4ControlledRealReceiptReleaseExecutionObserved = true;
+        phase4ControlledRealReceiptReleaseExecutionStatus = 'ready';
+        phase4ControlledRealReceiptReleaseExecutionErrorCode = null;
+        phase4ControlledRealReceiptReleaseExecutionReleaseConsumable = true;
       }
     }
 
@@ -8724,6 +8788,107 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           }
         : null;
 
+    const buildPhase4ControlledRealReceiptReleaseExecution = () =>
+      phase4ControlledRealReceiptReleaseExecutionEnabled === true
+        ? {
+            contract: 'phase4.controlledRealReceiptReleaseExecutionHarness.v1',
+            required: phase4ControlledRealReceiptReleaseExecutionRequired,
+            observed: phase4ControlledRealReceiptReleaseExecutionObserved,
+            enabled: true,
+            status: phase4ControlledRealReceiptReleaseExecutionStatus,
+            source: 'phase4.realReceiptReleaseDecisionPreflight.v1',
+            releaseDecisionPreflightObserved:
+              phase4ReceiptReleaseDecisionPreflightObserved,
+            releaseDecisionPreflightStatus:
+              phase4ReceiptReleaseDecisionPreflightStatus,
+            prerequisites: {
+              releaseEligible: phase4ReceiptReleaseEligible,
+              releaseDecisionReady: phase4ReceiptReleaseDecisionReady,
+              replayMutationReady: phase4ReceiptReleaseDecisionReplayReady,
+              canonicalReleasePersistenceReady:
+                phase4ReceiptReleaseDecisionCanonicalReady,
+              allReady: phase4ReceiptReleaseDecisionReady,
+              rawPrinted: false,
+            },
+            receipt: {
+              jwsPresent: phase4ReceiptJwsPresent,
+              jwsShapeValid: phase4ReceiptJwsShapeValid,
+              verifiedPayloadPresent:
+                phase4ReceiptJwsVerifiedPayloadForExecution !== null,
+              rawPrinted: false,
+            },
+            replay: {
+              checkEvaluated: phase4ReceiptReplayCheckEvaluated,
+              mutationReady: phase4ReceiptReplayMutationReady,
+              mutationAllowed:
+                phase4ControlledRealReceiptReleaseExecutionStatus === 'ready' ||
+                phase4ControlledRealReceiptReleaseExecutionStatus === 'released',
+              touched: phase4ControlledRealReceiptReleaseExecutionReplayTouched,
+              tupleKeyPresent:
+                typeof phase4ControlledRealReceiptReleaseExecutionReplayTupleKey === 'string',
+              rawPrinted: false,
+            },
+            canonicalReleasePersistence: {
+              evaluated: phase4ReceiptCanonicalReleasePersistenceEvaluated,
+              ready: phase4ReceiptCanonicalReleasePersistenceReady,
+              persistenceAllowed:
+                phase4ControlledRealReceiptReleaseExecutionStatus === 'ready' ||
+                phase4ControlledRealReceiptReleaseExecutionStatus === 'released',
+              persisted:
+                phase4ControlledRealReceiptReleaseExecutionCanonicalReleasePersisted,
+              resultReason:
+                phase4ControlledRealReceiptReleaseExecutionCanonicalReleasePersistenceResult
+                  ?.reason ?? null,
+              releaseReason:
+                phase4ControlledRealReceiptReleaseExecutionCanonicalReleasePersistenceResult
+                  ?.releaseReason ?? null,
+              rawPrinted: false,
+            },
+            decision: {
+              evaluated: phase4ReceiptReleaseDecisionPreflightObserved,
+              ready: phase4ReceiptReleaseDecisionReady,
+              mutationAllowed:
+                phase4ControlledRealReceiptReleaseExecutionStatus === 'ready' ||
+                phase4ControlledRealReceiptReleaseExecutionStatus === 'released',
+              mutated:
+                phase4ControlledRealReceiptReleaseExecutionReleaseDecisionMutated,
+              rawPrinted: false,
+            },
+            releaseConsumable:
+              phase4ControlledRealReceiptReleaseExecutionReleaseConsumable,
+            errorCode: phase4ControlledRealReceiptReleaseExecutionErrorCode,
+            receiptJwsRawPrinted: false,
+            receiptJwsPrinted: false,
+            verifiedPayloadRawPrinted: false,
+            releaseDecisionRawPrinted: false,
+            replayRawPrinted: false,
+            canonicalPersistenceRawPrinted: false,
+            signatureVerified: phase4ReceiptJwsSignatureVerificationPreflightObserved,
+            jwksVerified: phase4ReceiptJwsSignatureVerificationPreflightObserved,
+            settlementVerified: phase4ReceiptSettlementVerificationPreflightObserved,
+            finalizedSettlementVerified:
+              phase4ReceiptSettlementVerificationPreflightObserved,
+            tupleBindingVerified: phase4ReceiptTupleBindingVerificationPreflightObserved,
+            releaseEligible: phase4ReceiptReleaseEligible,
+            releaseDecisionReady: phase4ReceiptReleaseDecisionReady,
+            releaseDecisionMutated:
+              phase4ControlledRealReceiptReleaseExecutionReleaseDecisionMutated,
+            productionRelease: false,
+            productionReleaseAuthorizationEvaluated: false,
+            productionReleaseAuthorized: false,
+            paymentResponseEmitted:
+              phase4ControlledRealReceiptReleaseExecutionPaymentResponseEmitted,
+            resourceReleased:
+              phase4ControlledRealReceiptReleaseExecutionResourceReleased,
+            replayTouched:
+              phase4ControlledRealReceiptReleaseExecutionReplayTouched,
+            canonicalReleasePersisted:
+              phase4ControlledRealReceiptReleaseExecutionCanonicalReleasePersisted,
+            sideEffectFreeExceptCrpFulfillCall:
+              phase4ControlledRealReceiptReleaseExecutionStatus !== 'released',
+          }
+        : null;
+
     const phase4ReceiptJwsDecodePreflight =
       phase4RealReceiptJwsDecodePreflightEnabled === true
         ? {
@@ -8801,6 +8966,137 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           }
         : null;
 
+    const phase4ControlledRealReceiptReleaseExecution =
+      buildPhase4ControlledRealReceiptReleaseExecution();
+
+    if (
+      phase4ControlledRealReceiptReleaseExecutionEnabled === true &&
+      phase4ControlledRealReceiptReleaseExecutionStatus === 'ready'
+    ) {
+      if (typeof phase4ReceiptJws !== 'string' || phase4ReceiptJws.length === 0) {
+        phase4ControlledRealReceiptReleaseExecutionStatus = 'not_ready';
+        phase4ControlledRealReceiptReleaseExecutionErrorCode = 'receipt_jws_missing';
+
+        return reply402AfterPersistingIssuedChallengeIfGated({
+          ok: false,
+          paid: false,
+          paymentRequired: paymentRequiredBody,
+          error: 'Phase 4 controlled release execution missing receipt JWS',
+          phase4: {
+            controlledRealReceiptReleaseExecution:
+              buildPhase4ControlledRealReceiptReleaseExecution(),
+          },
+        });
+      }
+
+      let phase4ExecutionVerify: any;
+      let phase4ExecutionPayload: any;
+
+      try {
+        phase4ExecutionVerify = await verifyReceiptJwsLocal(phase4ReceiptJws);
+        phase4ExecutionPayload = phase4ExecutionVerify.payload;
+        phase4ReceiptJwsVerifiedPayloadForExecution = phase4ExecutionPayload;
+      } catch (err: any) {
+        phase4ControlledRealReceiptReleaseExecutionStatus = 'verification_failed';
+        phase4ControlledRealReceiptReleaseExecutionErrorCode =
+          'receipt_signature_verification_failed';
+
+        return reply402AfterPersistingIssuedChallengeIfGated({
+          ok: false,
+          paid: false,
+          paymentRequired: paymentRequiredBody,
+          error: 'Phase 4 controlled release execution receipt verification failed',
+          phase4: {
+            controlledRealReceiptReleaseExecution:
+              buildPhase4ControlledRealReceiptReleaseExecution(),
+          },
+          ...(x402Debug
+            ? { debug: { reason: String(err?.message ?? err) } }
+            : {}),
+        });
+      }
+
+      const phase4Replay = await enforceReplay({
+        receiptJws: phase4ReceiptJws,
+        verify: phase4ExecutionVerify,
+        proof: phase4ExecutionPayload,
+        fulfill: phase4Fulfill,
+      });
+
+      if (!phase4Replay.ok) return;
+
+      phase4ControlledRealReceiptReleaseExecutionReplayTouched = true;
+      phase4ControlledRealReceiptReleaseExecutionReplayTupleKey =
+        phase4Replay.tupleKey;
+      phase4ControlledRealReceiptReleaseExecutionReleaseDecisionMutated = true;
+
+      void sendReleaseCheckToOrchestrator({
+        challengeId: nonce,
+        nonce,
+      });
+
+      phase4ControlledRealReceiptReleaseExecutionCanonicalReleasePersistenceResult =
+        await finalizeSuccessfulSettlementAndRelease({
+          receiptJws: phase4ReceiptJws,
+          settlementReasonMessage:
+            'Gateway accepted finalized settlement for Phase 4 controlled real receipt release execution harness',
+        });
+
+      phase4ControlledRealReceiptReleaseExecutionCanonicalReleasePersisted =
+        phase4ControlledRealReceiptReleaseExecutionCanonicalReleasePersistenceResult
+          ?.canonicalReleasePersisted === true;
+
+      if (phase4ControlledRealReceiptReleaseExecutionCanonicalReleasePersisted !== true) {
+        phase4ControlledRealReceiptReleaseExecutionStatus =
+          'canonical_persistence_failed';
+        phase4ControlledRealReceiptReleaseExecutionErrorCode =
+          phase4ControlledRealReceiptReleaseExecutionCanonicalReleasePersistenceResult
+            ?.reason ?? 'canonical_release_persistence_failed';
+
+        return reply402AfterPersistingIssuedChallengeIfGated({
+          ok: false,
+          paid: false,
+          paymentRequired: paymentRequiredBody,
+          error: 'Phase 4 controlled release execution canonical persistence failed',
+          phase4: {
+            controlledRealReceiptReleaseExecution:
+              buildPhase4ControlledRealReceiptReleaseExecution(),
+          },
+        });
+      }
+
+      phase4ControlledRealReceiptReleaseExecutionStatus = 'released';
+      phase4ControlledRealReceiptReleaseExecutionPaymentResponseEmitted = true;
+      phase4ControlledRealReceiptReleaseExecutionResourceReleased = true;
+
+      maybeSetPaymentResponseHeader(true, phase4ReceiptJws, phase4ExecutionPayload);
+
+      return res.status(200).json({
+        ok: true,
+        paid: true,
+        nonce,
+        resource: 'secret-data',
+        contract: {
+          contractId: contract.contractId,
+          contractVersion: contract.contractVersion,
+          isFrozen: contract.isFrozen,
+          mode: contract.mode ?? 'local',
+        },
+        phase4: {
+          controlledRealReceiptReleaseExecution:
+            buildPhase4ControlledRealReceiptReleaseExecution(),
+        },
+        ...(x402Debug
+          ? {
+              debug: {
+                phase4ControlledRealReceiptReleaseExecution:
+                  buildPhase4ControlledRealReceiptReleaseExecution(),
+              },
+            }
+          : {}),
+      });
+    }
+
     return reply402AfterPersistingIssuedChallengeIfGated({
       ok: false,
       paid: false,
@@ -8877,6 +9173,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
             ? {
                 realReceiptReleaseDecisionPreflight:
                   phase4ReceiptReleaseDecisionPreflight,
+              }
+            : {}),
+          ...(phase4ControlledRealReceiptReleaseExecution
+            ? {
+                controlledRealReceiptReleaseExecution:
+                  phase4ControlledRealReceiptReleaseExecution,
               }
             : {}),
           safety: {

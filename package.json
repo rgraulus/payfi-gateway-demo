@@ -165,7 +165,8 @@
     "phase4:real-receipt-tuple-binding-verification-preflight-test": "ts-node --transpile-only scripts/ci_phase4_real_receipt_tuple_binding_verification_preflight.ts",
     "phase4:real-receipt-release-eligibility-composition-preflight-test": "ts-node --transpile-only scripts/ci_phase4_real_receipt_release_eligibility_composition_preflight.ts",
     "phase4:real-receipt-replay-canonical-persistence-preflight-test": "ts-node --transpile-only scripts/ci_phase4_real_receipt_replay_canonical_persistence_preflight.ts",
-    "phase4:real-receipt-release-decision-preflight-test": "ts-node --transpile-only scripts/ci_phase4_real_receipt_release_decision_preflight.ts"
+    "phase4:real-receipt-release-decision-preflight-test": "ts-node --transpile-only scripts/ci_phase4_real_receipt_release_decision_preflight.ts",
+    "phase4:controlled-real-receipt-release-execution-harness-test": "ts-node --transpile-only scripts/ci_phase4_controlled_real_receipt_release_execution_harness.ts"
   },
   "repository": {
     "type": "git",
