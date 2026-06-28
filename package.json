@@ -168,7 +168,8 @@
     "phase4:real-receipt-release-decision-preflight-test": "ts-node --transpile-only scripts/ci_phase4_real_receipt_release_decision_preflight.ts",
     "phase4:controlled-real-receipt-release-execution-harness-test": "ts-node --transpile-only scripts/ci_phase4_controlled_real_receipt_release_execution_harness.ts",
     "phase4:controlled-real-receipt-release-execution-not-ready-guard-test": "ts-node --transpile-only scripts/ci_phase4_controlled_real_receipt_release_execution_not_ready_guard.ts",
-    "phase4:controlled-real-receipt-release-execution-signature-guard-test": "ts-node --transpile-only scripts/ci_phase4_controlled_real_receipt_release_execution_signature_guard.ts"
+    "phase4:controlled-real-receipt-release-execution-signature-guard-test": "ts-node --transpile-only scripts/ci_phase4_controlled_real_receipt_release_execution_signature_guard.ts",
+    "phase4:controlled-real-receipt-release-execution-tuple-binding-guard-test": "ts-node --transpile-only scripts/ci_phase4_controlled_real_receipt_release_execution_tuple_binding_guard.ts"
   },
   "repository": {
     "type": "git",
