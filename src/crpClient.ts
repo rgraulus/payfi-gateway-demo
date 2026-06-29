@@ -19,6 +19,8 @@ export type MatchPaymentRequest = {
   payTo: string;
   amount: string;
   asset: Asset;
+  networkGenesisIndex?: number;
+  txHash?: string;
 };
 
 export type CrpResponse<T = any> = T & { httpStatus: number };

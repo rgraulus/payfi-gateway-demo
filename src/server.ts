@@ -1334,6 +1334,16 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       ? paymentSignature.nonce
       : null;
 
+  const txHashFromSig =
+    typeof paymentSignature?.txHash === 'string' && /^[a-f0-9]{64}$/i.test(paymentSignature.txHash)
+      ? paymentSignature.txHash
+      : null;
+
+  const networkGenesisIndexFromSig =
+    Number.isFinite(Number(paymentSignature?.networkGenesisIndex))
+      ? Math.floor(Number(paymentSignature.networkGenesisIndex))
+      : null;
+
   // We may override this nonce if we successfully verify a client-provided receipt.
   let nonce = nonceFromQuery ?? nonceFromSig ?? `demo-${randomUUID()}`;
 
@@ -7825,6 +7835,10 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     payTo: contract.payTo,
     amount: contract.amount,
     asset: contract.asset,
+    ...(txHashFromSig ? { txHash: txHashFromSig } : {}),
+    ...(typeof networkGenesisIndexFromSig === 'number'
+      ? { networkGenesisIndex: networkGenesisIndexFromSig }
+      : {}),
   };
 
   if (
@@ -8155,10 +8169,93 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
               ? phase4ReceiptJwsVerifiedPayload.releaseConsumable
               : null;
 
+          const phase4ReceiptJwsVerifiedPayloadContract =
+            typeof phase4ReceiptJwsVerifiedPayload?.contract === 'object' &&
+            phase4ReceiptJwsVerifiedPayload?.contract !== null &&
+            !Array.isArray(phase4ReceiptJwsVerifiedPayload.contract)
+              ? phase4ReceiptJwsVerifiedPayload.contract
+              : null;
+
+          const phase4ReceiptJwsVerifiedPayloadChain =
+            typeof phase4ReceiptJwsVerifiedPayload?.chain === 'object' &&
+            phase4ReceiptJwsVerifiedPayload?.chain !== null &&
+            !Array.isArray(phase4ReceiptJwsVerifiedPayload.chain)
+              ? phase4ReceiptJwsVerifiedPayload.chain
+              : null;
+
+          const phase4ReceiptJwsVerifiedPayloadPaymentEvent =
+            typeof phase4ReceiptJwsVerifiedPayload?.paymentEvent === 'object' &&
+            phase4ReceiptJwsVerifiedPayload?.paymentEvent !== null &&
+            !Array.isArray(phase4ReceiptJwsVerifiedPayload.paymentEvent)
+              ? phase4ReceiptJwsVerifiedPayload.paymentEvent
+              : null;
+
+          const phase4ReceiptJwsVerifiedPayloadSettlement =
+            typeof phase4ReceiptJwsVerifiedPayload?.settlement === 'object' &&
+            phase4ReceiptJwsVerifiedPayload?.settlement !== null &&
+            !Array.isArray(phase4ReceiptJwsVerifiedPayload.settlement)
+              ? phase4ReceiptJwsVerifiedPayload.settlement
+              : null;
+
+          const phase4ReceiptJwsVerifiedPayloadChainTxHash =
+            typeof phase4ReceiptJwsVerifiedPayloadChain?.transactionHash === 'string'
+              ? phase4ReceiptJwsVerifiedPayloadChain.transactionHash
+              : typeof phase4ReceiptJwsVerifiedPayloadChain?.txHash === 'string'
+                ? phase4ReceiptJwsVerifiedPayloadChain.txHash
+                : null;
+
+          const phase4ReceiptJwsVerifiedPayloadPaymentEventAmountRaw =
+            typeof phase4ReceiptJwsVerifiedPayloadPaymentEvent?.amountRaw === 'string'
+              ? phase4ReceiptJwsVerifiedPayloadPaymentEvent.amountRaw
+              : null;
+
+          const phase4ReceiptExpectedAmountRaw = (() => {
+            const decimals =
+              typeof matchReq.asset?.decimals === 'number' &&
+              Number.isInteger(matchReq.asset.decimals) &&
+              matchReq.asset.decimals >= 0
+                ? matchReq.asset.decimals
+                : null;
+
+            if (decimals === null) return null;
+            if (!/^\d+(\.\d+)?$/.test(matchReq.amount)) return null;
+
+            const [wholePart, fractionalPart = ''] = matchReq.amount.split('.');
+            if (fractionalPart.length > decimals) return null;
+
+            const paddedFractionalPart = fractionalPart.padEnd(decimals, '0');
+            const wholeRaw = BigInt(wholePart) * (10n ** BigInt(decimals));
+            const fractionalRaw =
+              paddedFractionalPart.length > 0 ? BigInt(paddedFractionalPart) : 0n;
+
+            return (wholeRaw + fractionalRaw).toString();
+          })();
+
+          const phase4ReceiptAmountRawMatches =
+            phase4ReceiptJwsVerifiedPayloadPaymentEventAmountRaw !== null &&
+            phase4ReceiptExpectedAmountRaw !== null &&
+            phase4ReceiptJwsVerifiedPayloadPaymentEventAmountRaw === phase4ReceiptExpectedAmountRaw;
+
+          const phase4ReceiptSignedNonceMatches =
+            typeof phase4ReceiptJwsVerifiedPayload?.nonce === 'string' &&
+            phase4ReceiptJwsVerifiedPayload.nonce === matchReq.nonce;
+
+          const phase4ReceiptSignedPaymentEventBindingPresent =
+            phase4ReceiptSignedNonceMatches === true &&
+            typeof phase4ReceiptJwsVerifiedPayloadChainTxHash === 'string' &&
+            phase4ReceiptJwsVerifiedPayloadChainTxHash.length > 0 &&
+            typeof phase4ReceiptJwsVerifiedPayloadPaymentEvent?.to === 'string' &&
+            typeof phase4ReceiptJwsVerifiedPayloadPaymentEvent?.tokenId === 'string' &&
+            phase4ReceiptAmountRawMatches === true;
+
           phase4ReceiptJwsVerifiedPayloadMerchantId =
             typeof phase4ReceiptJwsVerifiedPayload?.merchantId === 'string'
               ? phase4ReceiptJwsVerifiedPayload.merchantId
-              : null;
+              : typeof phase4ReceiptJwsVerifiedPayloadContract?.merchantId === 'string'
+                ? phase4ReceiptJwsVerifiedPayloadContract.merchantId
+                : phase4ReceiptSignedPaymentEventBindingPresent === true
+                  ? matchReq.merchantId
+                  : null;
           phase4ReceiptJwsVerifiedPayloadNonce =
             typeof phase4ReceiptJwsVerifiedPayload?.nonce === 'string'
               ? phase4ReceiptJwsVerifiedPayload.nonce
@@ -8166,15 +8263,23 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           phase4ReceiptJwsVerifiedPayloadNetwork =
             typeof phase4ReceiptJwsVerifiedPayload?.network === 'string'
               ? phase4ReceiptJwsVerifiedPayload.network
-              : null;
+              : typeof phase4ReceiptJwsVerifiedPayloadChain?.network === 'string'
+                ? phase4ReceiptJwsVerifiedPayloadChain.network
+                : phase4ReceiptSignedPaymentEventBindingPresent === true
+                  ? matchReq.network
+                  : null;
           phase4ReceiptJwsVerifiedPayloadPayTo =
             typeof phase4ReceiptJwsVerifiedPayload?.payTo === 'string'
               ? phase4ReceiptJwsVerifiedPayload.payTo
-              : null;
+              : typeof phase4ReceiptJwsVerifiedPayloadPaymentEvent?.to === 'string'
+                ? phase4ReceiptJwsVerifiedPayloadPaymentEvent.to
+                : null;
           phase4ReceiptJwsVerifiedPayloadAmount =
             typeof phase4ReceiptJwsVerifiedPayload?.amount === 'string'
               ? phase4ReceiptJwsVerifiedPayload.amount
-              : null;
+              : phase4ReceiptAmountRawMatches === true
+                ? matchReq.amount
+                : null;
 
           const phase4ReceiptJwsVerifiedPayloadAsset =
             typeof phase4ReceiptJwsVerifiedPayload?.asset === 'object' &&
@@ -8186,14 +8291,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           phase4ReceiptJwsVerifiedPayloadAssetTokenId =
             typeof phase4ReceiptJwsVerifiedPayloadAsset?.tokenId === 'string'
               ? phase4ReceiptJwsVerifiedPayloadAsset.tokenId
-              : null;
-
-          const phase4ReceiptJwsVerifiedPayloadSettlement =
-            typeof phase4ReceiptJwsVerifiedPayload?.settlement === 'object' &&
-            phase4ReceiptJwsVerifiedPayload?.settlement !== null &&
-            !Array.isArray(phase4ReceiptJwsVerifiedPayload.settlement)
-              ? phase4ReceiptJwsVerifiedPayload.settlement
-              : null;
+              : typeof phase4ReceiptJwsVerifiedPayloadPaymentEvent?.tokenId === 'string'
+                ? phase4ReceiptJwsVerifiedPayloadPaymentEvent.tokenId
+                : null;
 
           phase4ReceiptJwsVerifiedPayloadSettlementStatus =
             typeof phase4ReceiptJwsVerifiedPayloadSettlement?.status === 'string'
@@ -8202,7 +8302,9 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
           phase4ReceiptJwsVerifiedPayloadSettlementTxHash =
             typeof phase4ReceiptJwsVerifiedPayloadSettlement?.txHash === 'string'
               ? phase4ReceiptJwsVerifiedPayloadSettlement.txHash
-              : null;
+              : typeof phase4ReceiptJwsVerifiedPayloadChainTxHash === 'string'
+                ? phase4ReceiptJwsVerifiedPayloadChainTxHash
+                : null;
           phase4ReceiptJwsVerifiedPayloadSettlementSettledAt =
             typeof phase4ReceiptJwsVerifiedPayloadSettlement?.settledAt === 'number' &&
             Number.isFinite(phase4ReceiptJwsVerifiedPayloadSettlement.settledAt)
@@ -9127,6 +9229,13 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
             payTo: matchReq.payTo,
             amount: matchReq.amount,
             asset: matchReq.asset,
+            networkGenesisIndex:
+              typeof (matchReq as any).networkGenesisIndex === 'number'
+                ? (matchReq as any).networkGenesisIndex
+                : null,
+            txHashPresent:
+              typeof (matchReq as any).txHash === 'string' &&
+              (matchReq as any).txHash.length > 0,
           },
           receipt: {
             jwsPresent: phase4ReceiptJwsPresent,
