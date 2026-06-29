@@ -170,7 +170,8 @@
     "phase4:controlled-real-receipt-release-execution-not-ready-guard-test": "ts-node --transpile-only scripts/ci_phase4_controlled_real_receipt_release_execution_not_ready_guard.ts",
     "phase4:controlled-real-receipt-release-execution-signature-guard-test": "ts-node --transpile-only scripts/ci_phase4_controlled_real_receipt_release_execution_signature_guard.ts",
     "phase4:controlled-real-receipt-release-execution-tuple-binding-guard-test": "ts-node --transpile-only scripts/ci_phase4_controlled_real_receipt_release_execution_tuple_binding_guard.ts",
-    "phase4:live-stack-readiness-harness-test": "ts-node --transpile-only scripts/ci_phase4_live_stack_readiness_harness.ts"
+    "phase4:live-stack-readiness-harness-test": "ts-node --transpile-only scripts/ci_phase4_live_stack_readiness_harness.ts",
+    "phase4:live-rehearsal-input-contract-test": "ts-node --transpile-only scripts/ci_phase4_live_rehearsal_input_contract.ts"
   },
   "repository": {
     "type": "git",
