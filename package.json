@@ -173,7 +173,8 @@
     "phase4:live-stack-readiness-harness-test": "ts-node --transpile-only scripts/ci_phase4_live_stack_readiness_harness.ts",
     "phase4:live-rehearsal-input-contract-test": "ts-node --transpile-only scripts/ci_phase4_live_rehearsal_input_contract.ts",
     "phase4:controlled-live-rehearsal-execution-preflight-test": "ts-node --transpile-only scripts/ci_phase4_controlled_live_rehearsal_execution_preflight.ts",
-    "phase4:controlled-live-rehearsal-execution-happy-path-test": "ts-node --transpile-only scripts/ci_phase4_controlled_live_rehearsal_execution_happy_path.ts"
+    "phase4:controlled-live-rehearsal-execution-happy-path-test": "ts-node --transpile-only scripts/ci_phase4_controlled_live_rehearsal_execution_happy_path.ts",
+    "phase4:consolidated-live-rehearsal-fail-closed-evidence-test": "ts-node --transpile-only scripts/ci_phase4_consolidated_live_rehearsal_fail_closed_evidence.ts"
   },
   "repository": {
     "type": "git",
