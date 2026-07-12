@@ -179,7 +179,8 @@
     "phase5:agent-delegated-authorization-contract-test": "ts-node --transpile-only scripts/ci_phase5_agent_delegated_authorization_contract.ts",
     "phase5:agent-delegation-verifier-seam-test": "ts-node --transpile-only scripts/ci_phase5_agent_delegation_verifier_seam.ts",
     "phase5:agent-challenge-scope-expiry-binding-test": "ts-node --transpile-only scripts/ci_phase5_agent_challenge_scope_expiry_binding.ts",
-    "phase5:agent-policy-evaluation-integration-test": "ts-node --transpile-only scripts/ci_phase5_agent_policy_evaluation_integration.ts"
+    "phase5:agent-policy-evaluation-integration-test": "ts-node --transpile-only scripts/ci_phase5_agent_policy_evaluation_integration.ts",
+    "phase5:agent-driven-controlled-demo-test": "ts-node --transpile-only scripts/ci_phase5_agent_driven_controlled_demo.ts"
   },
   "repository": {
     "type": "git",
