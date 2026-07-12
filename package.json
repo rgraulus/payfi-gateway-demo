@@ -176,7 +176,8 @@
     "phase4:controlled-live-rehearsal-execution-happy-path-test": "ts-node --transpile-only scripts/ci_phase4_controlled_live_rehearsal_execution_happy_path.ts",
     "phase4:consolidated-live-rehearsal-fail-closed-evidence-test": "ts-node --transpile-only scripts/ci_phase4_consolidated_live_rehearsal_fail_closed_evidence.ts",
     "demo:x402-v2-direct-buyer-e2e": "bash ./scripts/demo_x402_v2_direct_buyer_e2e.sh",
-    "phase5:agent-delegated-authorization-contract-test": "ts-node --transpile-only scripts/ci_phase5_agent_delegated_authorization_contract.ts"
+    "phase5:agent-delegated-authorization-contract-test": "ts-node --transpile-only scripts/ci_phase5_agent_delegated_authorization_contract.ts",
+    "phase5:agent-delegation-verifier-seam-test": "ts-node --transpile-only scripts/ci_phase5_agent_delegation_verifier_seam.ts"
   },
   "repository": {
     "type": "git",

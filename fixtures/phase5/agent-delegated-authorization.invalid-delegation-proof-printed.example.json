@@ -1,0 +1,82 @@
+{
+  "authorizationProofType": "xcf.concordium.authorization.agent-delegated.v1",
+  "agent": {
+    "agentId": "agent:local-demo:phase5-agent-1",
+    "agentKind": "local_demo_agent",
+    "agentAccount": "4AgentDemoAccountPlaceholder",
+    "agentPublicKey": "ed25519-demo-agent-public-key-placeholder"
+  },
+  "buyer": {
+    "buyerCommitment": "buyer-commitment-demo-eligible-eu-21",
+    "buyerAccount": "4BuyerDemoAccountPlaceholder",
+    "policySubject": "wallet-proof-subject-demo-eligible-eu-21"
+  },
+  "delegation": {
+    "delegationId": "delegation-demo-phase5-invalid-proof-printed",
+    "delegationType": "wallet_signed_consent_or_test_fixture_v1",
+    "delegationIssuedAt": 1780000000,
+    "delegationExpiresAt": 1780000300,
+    "delegationProofPresent": true,
+    "delegationProofPrinted": true
+  },
+  "scope": {
+    "merchantId": "demo-merchant",
+    "resource": {
+      "method": "GET",
+      "path": "/paid-gated"
+    },
+    "contractId": "cid_e7fb8ef3933f5b45c7a246267858baf5b84ba60a7c178d0b84cc4e90fc564d98",
+    "contractVersion": "1.0.0",
+    "network": "concordium:testnet",
+    "asset": {
+      "type": "PLT",
+      "tokenId": "EUDemo",
+      "decimals": 6
+    },
+    "amount": "0.050101",
+    "payTo": "4jPLfUuSeFeP5SFLrf2eDeZEnT7ixbqXyQp9bg6qrgXyHReDfZ",
+    "allowedAction": "authorize_payment_and_resource_access",
+    "maxUses": 1
+  },
+  "policyEvidence": {
+    "proofType": "concordium.VerifiablePresentation",
+    "claims": {
+      "region": "EU",
+      "ageOver": 21
+    },
+    "rawProofPrinted": false
+  },
+  "challenge": {
+    "nonce": "demo-phase5-invalid-delegation-proof-printed",
+    "challengeHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "issuedAt": 1780000000,
+    "expiresAt": 1780000300
+  },
+  "replay": {
+    "replayKeyVersion": "phase5-agent-delegated-v1",
+    "replayKeyFields": [
+      "agent.agentId",
+      "buyer.buyerCommitment",
+      "delegation.delegationId",
+      "scope.merchantId",
+      "scope.resource.method",
+      "scope.resource.path",
+      "scope.contractId",
+      "scope.contractVersion",
+      "scope.network",
+      "scope.asset.tokenId",
+      "scope.amount",
+      "scope.payTo",
+      "challenge.nonce",
+      "challenge.challengeHash"
+    ]
+  },
+  "safety": {
+    "gatewayCalled": false,
+    "crpCalled": false,
+    "paymentAttempted": false,
+    "receiptJwsPrinted": false,
+    "paymentResponsePrinted": false,
+    "productionActivation": false
+  }
+}
