@@ -257,6 +257,94 @@ export async function getChallengeStatusByNonce(
   };
 }
 
+
+export type CanonicalChallengeBindingRecord = {
+  challengeId: string;
+  nonce: string;
+  status: string;
+  releaseStatus: string;
+  merchantId: string;
+  contractId: string;
+  contractVersion: string;
+  contractSnapshot: unknown;
+  network: string;
+  asset: unknown;
+  amount: string;
+  payTo: string;
+  issuedAtSec: number;
+  expiresAtSec: number;
+};
+
+export type CanonicalChallengeBindingLookupResult =
+  | { found: false }
+  | ({ found: true } & CanonicalChallengeBindingRecord);
+
+export async function getCanonicalChallengeBindingByNonce(
+  nonce: string,
+): Promise<CanonicalChallengeBindingLookupResult> {
+  const rows = await query<{
+    challenge_id: string;
+    nonce: string;
+    status: string;
+    release_status: string;
+    merchant_id: string;
+    contract_id: string;
+    contract_version: string;
+    contract_snapshot: any;
+    network: string;
+    asset: any;
+    amount: string;
+    pay_to: string;
+    issued_at_sec: number | string;
+    expires_at_sec: number | string;
+  }>(
+    `
+    SELECT
+      challenge_id,
+      nonce,
+      status,
+      release_status,
+      merchant_id,
+      contract_id,
+      contract_version,
+      contract_snapshot,
+      network,
+      asset,
+      amount::text AS amount,
+      pay_to,
+      EXTRACT(EPOCH FROM issued_at)::double precision AS issued_at_sec,
+      EXTRACT(EPOCH FROM expires_at)::double precision AS expires_at_sec
+    FROM payment_challenges
+    WHERE nonce = $1
+    `,
+    [nonce],
+  );
+
+  if (rows.length !== 1) {
+    return { found: false };
+  }
+
+  const row = rows[0];
+
+  return {
+    found: true,
+    challengeId: row.challenge_id,
+    nonce: row.nonce,
+    status: row.status,
+    releaseStatus: row.release_status,
+    merchantId: row.merchant_id,
+    contractId: row.contract_id,
+    contractVersion: row.contract_version,
+    contractSnapshot: row.contract_snapshot,
+    network: row.network,
+    asset: row.asset,
+    amount: String(row.amount),
+    payTo: row.pay_to,
+    issuedAtSec: Math.trunc(Number(row.issued_at_sec)),
+    expiresAtSec: Math.trunc(Number(row.expires_at_sec)),
+  };
+}
+
 export async function transitionChallengeStateByNonce(
   args: TransitionChallengeStateArgs,
 ): Promise<{

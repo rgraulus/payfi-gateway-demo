@@ -112,9 +112,18 @@ import {
   completeSettlementOutcomeByNonce,
   completeSourceVerificationByNonce,
   getChallengeStatusByNonce,
+  getCanonicalChallengeBindingByNonce,
   persistIssuedChallenge,
   transitionChallengeStateByNonce,
 } from './db/gatewayPersistence';
+import {
+  PHASE5_AGENT_DELEGATED_AUTHORIZATION_PROOF_TYPE,
+} from './phase5/agentDelegationVerifier';
+import {
+  PHASE5_AGENT_RUNTIME_MODE,
+  evaluatePhase5AgentRuntimeAuthorization,
+  isPhase5AgentDelegatedAuthorizationEnvelope,
+} from './phase5/agentRuntimeAuthorization';
 
 import type { ContractBinding, HttpMethod } from './proofPayload';
 import {
@@ -225,6 +234,15 @@ const phase3GatewayProductionReleaseEnabled =
 // policy, receipt, replay, or runtime release guards.
 const phase3LiveDirectBuyerControlledReleaseDemoEnabled =
   String(process.env.PHASE3_LIVE_DIRECT_BUYER_CONTROLLED_RELEASE_DEMO_ENABLED ?? '').toLowerCase() === 'true';
+
+// Phase 5 controlled agent-delegated authorization runtime.
+// OFF by default. This enables only the controlled E2E composition seam.
+// It does not activate production authorization, Agent Registry lookup,
+// or cryptographic delegation verification.
+const phase5AgentDelegatedRuntimeEnabled =
+  String(
+    process.env.PHASE5_AGENT_DELEGATED_RUNTIME_ENABLED ?? '',
+  ).toLowerCase() === 'true';
 
 // Phase 3 production release dry-run audit seam.
 // OFF by default. PR #178 exposes a would-execute audit signal only.
@@ -1189,6 +1207,16 @@ app.get('/healthz', async (_req, res) => {
       allowParsedOnlyPolicy: phase3AllowParsedOnlyPolicy,
       requireLiveZkp: phase3RequireLiveZkp,
     },
+    phase5: {
+      agentDelegatedRuntimeEnabled:
+        phase5AgentDelegatedRuntimeEnabled,
+      mode: PHASE5_AGENT_RUNTIME_MODE,
+      authorizationProofType:
+        PHASE5_AGENT_DELEGATED_AUTHORIZATION_PROOF_TYPE,
+      cryptographicDelegationVerification: false,
+      agentRegistryLookupAttempted: false,
+      productionActivation: false,
+    },
     phase4: {
       realCrpFulfillInvocationBoundaryHarness:
         phase4RealCrpFulfillInvocationBoundaryHarness,
@@ -1262,6 +1290,15 @@ function buildPolicyRequirements(contract: LoadedContractDefinition): Record<str
       'policy_evidence_v1',
       'agent_attestation_v1',
       'concordium_zkp_v1',
+      ...(
+        phase5AgentDelegatedRuntimeEnabled &&
+        contract.resource.method.toUpperCase() === 'GET' &&
+        contract.resource.path === '/paid-gated'
+          ? [
+              PHASE5_AGENT_DELEGATED_AUTHORIZATION_PROOF_TYPE,
+            ]
+          : []
+      ),
     ],
     ext: policy?.ext ?? {},
   };
@@ -9926,6 +9963,294 @@ app.post('/paid-gated/redeem', async (req, res) => {
   const body = req.body ?? {};
   const nonce = typeof body.nonce === 'string' ? body.nonce : '';
   const authorizationProof = (body as any).authorizationProof ?? null;
+
+  if (
+    isPhase5AgentDelegatedAuthorizationEnvelope(
+      authorizationProof,
+    )
+  ) {
+    if (!nonce) {
+      return res.status(400).json({
+        ok: false,
+        code: 'invalid_request',
+        reason: 'invalid_request',
+        message: 'Request body must include nonce.',
+        policyStatus: 'POLICY_NOT_EVALUATED',
+        phase5: {
+          mode: PHASE5_AGENT_RUNTIME_MODE,
+          runtimeEnabled:
+            phase5AgentDelegatedRuntimeEnabled,
+          productionActivation: false,
+        },
+      });
+    }
+
+    if (!phase5AgentDelegatedRuntimeEnabled) {
+      return res.status(403).json({
+        ok: false,
+        nonce,
+        code:
+          'phase5_agent_delegated_runtime_disabled',
+        reason:
+          'phase5_agent_delegated_runtime_disabled',
+        message:
+          'Phase 5 agent-delegated authorization runtime is disabled.',
+        policyStatus: 'POLICY_NOT_EVALUATED',
+        phase5: {
+          mode: PHASE5_AGENT_RUNTIME_MODE,
+          runtimeEnabled: false,
+          policyStateMutated: false,
+          cryptographicDelegationVerification: false,
+          agentRegistryLookupAttempted: false,
+          productionActivation: false,
+        },
+      });
+    }
+
+    let canonicalChallenge;
+
+    try {
+      canonicalChallenge =
+        await getCanonicalChallengeBindingByNonce(
+          nonce,
+        );
+    } catch (err) {
+      console.error(
+        'Failed to load canonical Phase 5 challenge binding:',
+        err,
+      );
+
+      return res.status(503).json({
+        ok: false,
+        nonce,
+        code:
+          'phase5_canonical_challenge_lookup_failed',
+        reason:
+          'phase5_canonical_challenge_lookup_failed',
+        message:
+          'Canonical challenge state could not be loaded.',
+        policyStatus: 'POLICY_NOT_EVALUATED',
+        phase5: {
+          mode: PHASE5_AGENT_RUNTIME_MODE,
+          runtimeEnabled: true,
+          policyStateMutated: false,
+          productionActivation: false,
+        },
+      });
+    }
+
+    if (!canonicalChallenge.found) {
+      return res.status(409).json({
+        ok: false,
+        nonce,
+        code:
+          'phase5_canonical_challenge_not_found',
+        reason:
+          'phase5_canonical_challenge_not_found',
+        message:
+          'No canonical issued challenge exists for this nonce.',
+        policyStatus: 'POLICY_NOT_EVALUATED',
+        phase5: {
+          mode: PHASE5_AGENT_RUNTIME_MODE,
+          runtimeEnabled: true,
+          policyStateMutated: false,
+          productionActivation: false,
+        },
+      });
+    }
+
+    const phase5RuntimeResult =
+      evaluatePhase5AgentRuntimeAuthorization({
+        nonce,
+        envelope: authorizationProof,
+        nowSec: Math.floor(Date.now() / 1000),
+        canonical: canonicalChallenge,
+        contract: getPaidGatedContract(),
+      });
+
+    let phase5PolicyPersistence:
+      | {
+          ok: boolean;
+          updated: boolean;
+          reason: string;
+          challengeId?: string;
+          currentState?: string;
+        }
+      | null = null;
+
+    if (
+      phase5RuntimeResult
+        .shouldPersistPolicyOutcome !== null
+    ) {
+      try {
+        const transition =
+          await completePolicyEvaluationByNonce({
+            nonce,
+            fromState: 'ISSUED',
+            outcome:
+              phase5RuntimeResult
+                .shouldPersistPolicyOutcome,
+            actor: 'gateway',
+            reasonCode:
+              phase5RuntimeResult.reason,
+            reasonMessage:
+              `Phase 5 controlled runtime decision: ${phase5RuntimeResult.reason}.`,
+          });
+
+        phase5PolicyPersistence = {
+          ok:
+            transition.updated ||
+            transition.reason ===
+              'already_in_target',
+          updated: transition.updated,
+          reason: transition.reason,
+          challengeId:
+            transition.challengeId,
+          currentState:
+            transition.currentState,
+        };
+      } catch (err) {
+        console.error(
+          'Failed to persist Phase 5 policy outcome:',
+          err,
+        );
+
+        return res.status(503).json({
+          ok: false,
+          nonce,
+          code:
+            'phase5_policy_persistence_error',
+          reason:
+            'phase5_policy_persistence_error',
+          message:
+            'Phase 5 policy decision could not be persisted.',
+          policyStatus:
+            'POLICY_NOT_EVALUATED',
+          phase5: {
+            mode: PHASE5_AGENT_RUNTIME_MODE,
+            runtimeEnabled: true,
+            policyStateMutated: false,
+            productionActivation: false,
+          },
+        });
+      }
+
+      if (!phase5PolicyPersistence.ok) {
+        return res.status(409).json({
+          ok: false,
+          nonce,
+          code:
+            'phase5_policy_persistence_failed',
+          reason:
+            phase5PolicyPersistence.reason,
+          message:
+            'Phase 5 policy decision was not accepted by the canonical state machine.',
+          policyStatus:
+            'POLICY_NOT_EVALUATED',
+          phase5: {
+            mode: PHASE5_AGENT_RUNTIME_MODE,
+            runtimeEnabled: true,
+            policyStateMutated: false,
+            productionActivation: false,
+          },
+          ...(x402Debug
+            ? {
+                debug: {
+                  policyPersistence:
+                    phase5PolicyPersistence,
+                },
+              }
+            : {}),
+        });
+      }
+    }
+
+    const phase5VerifierAudit = {
+      ok: phase5RuntimeResult.ok,
+      type:
+        'phase5_agent_delegated_authorization_v1',
+      mode: phase5RuntimeResult.mode,
+      authorizationProofType:
+        phase5RuntimeResult.authorizationProofType,
+      authorizationAccepted:
+        phase5RuntimeResult.authorizationAccepted,
+      authorizationReason:
+        phase5RuntimeResult.authorizationReason,
+      canonicalChallengeAccepted:
+        phase5RuntimeResult
+          .canonicalChallengeAccepted,
+      contractBindingAccepted:
+        phase5RuntimeResult
+          .contractBindingAccepted,
+      policyEvaluated:
+        phase5RuntimeResult.policyEvaluated,
+      policyDecision:
+        phase5RuntimeResult.policyDecision,
+      rawProofPrinted:
+        phase5RuntimeResult.rawProofPrinted,
+      cryptographicDelegationVerification:
+        phase5RuntimeResult
+          .cryptographicDelegationVerification,
+      agentRegistryLookupAttempted:
+        phase5RuntimeResult
+          .agentRegistryLookupAttempted,
+      productionActivation:
+        phase5RuntimeResult.productionActivation,
+    };
+
+    return res
+      .status(phase5RuntimeResult.httpStatus)
+      .json({
+        ok: phase5RuntimeResult.ok,
+        nonce,
+        ...(
+          phase5RuntimeResult.ok
+            ? {
+                access: 'policy-satisfied',
+              }
+            : {
+                code:
+                  phase5RuntimeResult.reason,
+              }
+        ),
+        reason:
+          phase5RuntimeResult.reason,
+        message:
+          phase5RuntimeResult.ok
+            ? 'Phase 5 agent-delegated authorization and buyer policy satisfied.'
+            : `Phase 5 agent-delegated authorization denied: ${phase5RuntimeResult.reason}.`,
+        policyStatus:
+          phase5RuntimeResult.policyStatus,
+        verifier: phase5VerifierAudit,
+        policyDecision:
+          phase5RuntimeResult
+            .policyEvaluation,
+        phase5: {
+          mode: phase5RuntimeResult.mode,
+          runtimeEnabled: true,
+          policyStateMutated:
+            phase5PolicyPersistence?.ok === true,
+          cryptographicDelegationVerification:
+            false,
+          agentRegistryLookupAttempted: false,
+          productionActivation: false,
+        },
+        ...(x402Debug
+          ? {
+              debug: {
+                expectedChallengeHash:
+                  phase5RuntimeResult
+                    .expectedChallengeHash,
+                canonicalMismatchFields:
+                  phase5RuntimeResult
+                    .canonicalMismatchFields,
+                policyPersistence:
+                  phase5PolicyPersistence,
+              },
+            }
+          : {}),
+      });
+  }
 
   const verifierResult = authorizationProof
     ? await verifyConcordiumZkpAuthorizationEnvelope(authorizationProof, {
