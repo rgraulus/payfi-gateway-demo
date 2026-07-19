@@ -181,7 +181,8 @@
     "phase5:agent-challenge-scope-expiry-binding-test": "ts-node --transpile-only scripts/ci_phase5_agent_challenge_scope_expiry_binding.ts",
     "phase5:agent-policy-evaluation-integration-test": "ts-node --transpile-only scripts/ci_phase5_agent_policy_evaluation_integration.ts",
     "phase5:agent-driven-controlled-demo-test": "ts-node --transpile-only scripts/ci_phase5_agent_driven_controlled_demo.ts",
-    "phase5:agent-runtime-authorization-composition-test": "ts-node --transpile-only scripts/ci_phase5_agent_runtime_authorization_composition.ts"
+    "phase5:agent-runtime-authorization-composition-test": "ts-node --transpile-only scripts/ci_phase5_agent_runtime_authorization_composition.ts",
+    "phase5:buyer-to-agent-delegation-credential-contract-test": "ts-node --transpile-only scripts/ci_phase5_buyer_to_agent_delegation_credential_contract.ts"
   },
   "repository": {
     "type": "git",
@@ -207,6 +208,7 @@
     "@concordium/web-sdk": "^12.0.2",
     "@grpc/grpc-js": "^1.14.3",
     "body-parser": "^1.20.3",
+    "canonicalize": "2.1.0",
     "express": "^4.21.2",
     "jose": "^6.1.3",
     "pg": "^8.20.0"

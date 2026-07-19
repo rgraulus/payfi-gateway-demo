@@ -1,0 +1,70 @@
+{
+  "credential": {
+    "credentialType": "xcf.concordium.delegation.buyer-to-agent.v1",
+    "credentialVersion": "1.0.0",
+    "delegationId": "delegation-pr293-valid-001",
+    "issuer": {
+      "buyerId": "buyer:demo:001",
+      "buyerKeyId": "buyer-key-demo-001"
+    },
+    "subject": {
+      "agentId": "agent:demo:001",
+      "agentKeyId": "agent-key-demo-001",
+      "agentPublicKeyJwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+        "kid": "agent-key-demo-001",
+        "use": "sig",
+        "alg": "EdDSA"
+      }
+    },
+    "scope": {
+      "merchantId": "demo-merchant",
+      "resource": {
+        "method": "GET",
+        "path": "/paid-gated"
+      },
+      "contract": {
+        "contractId": "cid_demo_contract_001",
+        "contractVersion": "1.0.0"
+      },
+      "network": "concordium:testnet",
+      "asset": {
+        "type": "PLT",
+        "tokenId": "EUDemo",
+        "decimals": 6
+      },
+      "amount": {
+        "mode": "exact",
+        "value": "0.050101"
+      },
+      "payTo": "4jPLfUuSeFeP5SFLrf2eDeZEnT7ixbqXyQp9bg6qrgXyHReDfZ",
+      "allowedAction": "authorize_payment_only"
+    },
+    "validity": {
+      "issuedAt": 1780000000,
+      "notBefore": 1780000000,
+      "expiresAt": 1780000300
+    },
+    "usage": {
+      "maxUses": 1
+    },
+    "replay": {
+      "audience": "xcf-gateway:demo",
+      "domain": "xcf.concordium.delegation.buyer-to-agent.v1",
+      "credentialNonce": "delegation-nonce-pr293-001"
+    },
+    "lifecycle": {
+      "revocationId": "revocation-pr293-001",
+      "buyerKeyVersion": 1,
+      "agentKeyVersion": 1
+    }
+  },
+  "proof": {
+    "signatureAlgorithm": "Ed25519",
+    "canonicalizationAlgorithm": "RFC8785",
+    "verificationMethod": "buyer-key-demo-001",
+    "signatureValue": "CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQ"
+  }
+}
