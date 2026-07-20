@@ -1,0 +1,23 @@
+{
+  "statement": {
+    "proofType": "xcf.concordium.agent-proof-of-possession.v1",
+    "proofVersion": "1.0.0",
+    "delegationId": "delegation-pr295-pop-001",
+    "credentialHash": "76cb86a7e5f9f10d14ebe723ffb5ae828dfa3fd32ccbb6e273593e1e2cfd8dab",
+    "agentId": "agent:demo:pr295:001",
+    "agentKeyId": "agent-key-pr295-001",
+    "audience": "xcf-gateway:demo",
+    "challenge": {
+      "nonce": "agent-pop-challenge-pr295-001",
+      "challengeHash": "8340216760f23a3110c31a45ebb875f6d8764ddf6fd1731eb9f55320f53086e6",
+      "issuedAt": 1780000000,
+      "expiresAt": 1780000300
+    }
+  },
+  "proof": {
+    "signatureAlgorithm": "Ed25519",
+    "canonicalizationAlgorithm": "RFC8785",
+    "verificationMethod": "agent-key-pr295-001",
+    "signatureValue": "VaRyOKC5m5DL7s1IWp1y6MLy_IvKDHkYUxDCldOlmwRZ8zVtD3EOTXSmecgiLAeptPQLvnOTr0AGxtQkpbJCBg"
+  }
+}

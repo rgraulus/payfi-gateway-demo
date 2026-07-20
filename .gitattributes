@@ -3,3 +3,5 @@
 fixtures/phase5/delegation/*.txt text eol=lf
 fixtures/phase5/delegation-signature/*.txt text eol=lf
 fixtures/phase5/delegation-signature/*.json text eol=lf
+fixtures/phase5/agent-proof-of-possession/*.json text eol=lf
+fixtures/phase5/agent-proof-of-possession/*.txt text eol=lf

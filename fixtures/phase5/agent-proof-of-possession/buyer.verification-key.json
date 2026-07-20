@@ -1,0 +1,12 @@
+{
+  "buyerKeyId": "buyer-key-pr295-001",
+  "publicKeyJwk": {
+    "kty": "OKP",
+    "crv": "Ed25519",
+    "x": "ASre9LSahUqmglZ9BwfUWip0An4JM9HESzKEq2UWfpg",
+    "kid": "buyer-key-pr295-001",
+    "use": "sig",
+    "alg": "EdDSA"
+  },
+  "source": "test_fixture_only"
+}
