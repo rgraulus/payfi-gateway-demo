@@ -1,0 +1,12 @@
+{
+  "buyerKeyId": "buyer-key-demo-001",
+  "publicKeyJwk": {
+    "kty": "OKP",
+    "crv": "Ed25519",
+    "x": "WbVy9etU3JLnZnjcis1Jpfz2PvXoG7kIMYr18W87y-I",
+    "kid": "buyer-key-demo-001",
+    "use": "sig",
+    "alg": "EdDSA"
+  },
+  "source": "test_fixture_only"
+}

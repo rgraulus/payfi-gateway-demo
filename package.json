@@ -182,7 +182,8 @@
     "phase5:agent-policy-evaluation-integration-test": "ts-node --transpile-only scripts/ci_phase5_agent_policy_evaluation_integration.ts",
     "phase5:agent-driven-controlled-demo-test": "ts-node --transpile-only scripts/ci_phase5_agent_driven_controlled_demo.ts",
     "phase5:agent-runtime-authorization-composition-test": "ts-node --transpile-only scripts/ci_phase5_agent_runtime_authorization_composition.ts",
-    "phase5:buyer-to-agent-delegation-credential-contract-test": "ts-node --transpile-only scripts/ci_phase5_buyer_to_agent_delegation_credential_contract.ts"
+    "phase5:buyer-to-agent-delegation-credential-contract-test": "ts-node --transpile-only scripts/ci_phase5_buyer_to_agent_delegation_credential_contract.ts",
+    "phase5:buyer-delegation-signature-verifier-seam-test": "ts-node --transpile-only scripts/ci_phase5_buyer_delegation_signature_verifier_seam.ts"
   },
   "repository": {
     "type": "git",

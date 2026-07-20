@@ -1,2 +1,5 @@
 *.sh text eol=lf
 .gitattributes text eol=lf
+fixtures/phase5/delegation/*.txt text eol=lf
+fixtures/phase5/delegation-signature/*.txt text eol=lf
+fixtures/phase5/delegation-signature/*.json text eol=lf
