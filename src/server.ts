@@ -92,6 +92,7 @@ import {
 } from './phase3/demoChallengeBinding';
 import bodyParser from 'body-parser';
 import { randomUUID, createHash } from 'crypto';
+import { readFileSync } from 'fs';
 
 import { CrpClient, MatchPaymentRequest } from './crpClient';
 import { buildPaymentRequiredPayload, b64jsonHeader, ContractDefinition, LoadedContractDefinition } from './contracts';
@@ -124,6 +125,10 @@ import {
   evaluatePhase5AgentRuntimeAuthorization,
   isPhase5AgentDelegatedAuthorizationEnvelope,
 } from './phase5/agentRuntimeAuthorization';
+import {
+  BUYER_DELEGATION_SIGNATURE_VERIFIER_MODE,
+  type BuyerDelegationVerificationKey,
+} from './phase5/buyerDelegationSignatureVerifier';
 
 import type { ContractBinding, HttpMethod } from './proofPayload';
 import {
@@ -243,6 +248,98 @@ const phase5AgentDelegatedRuntimeEnabled =
   String(
     process.env.PHASE5_AGENT_DELEGATED_RUNTIME_ENABLED ?? '',
   ).toLowerCase() === 'true';
+
+// Phase 5 controlled cryptographic delegation runtime.
+// OFF by default and subordinate to the existing Phase 5 agent runtime.
+// Enabling this flag alone cannot activate the Phase 5 runtime.
+const phase5CryptographicDelegationRuntimeEnabled =
+  String(
+    process.env
+      .PHASE5_CRYPTOGRAPHIC_DELEGATION_RUNTIME_ENABLED ??
+      '',
+  ).toLowerCase() === 'true';
+
+// Controlled public buyer-verification-key file.
+// The request envelope cannot supply or override this key.
+const phase5CryptographicBuyerVerificationKeyPath =
+  String(
+    process.env
+      .PHASE5_CRYPTOGRAPHIC_BUYER_VERIFICATION_KEY_PATH ??
+      '',
+  ).trim();
+
+function loadPhase5CryptographicBuyerVerificationKey():
+  BuyerDelegationVerificationKey | null {
+  if (
+    !phase5AgentDelegatedRuntimeEnabled ||
+    !phase5CryptographicDelegationRuntimeEnabled
+  ) {
+    return null;
+  }
+
+  if (
+    phase5CryptographicBuyerVerificationKeyPath.length ===
+    0
+  ) {
+    console.warn(
+      '[phase5] controlled cryptographic runtime enabled without a buyer verification key path.',
+    );
+
+    return null;
+  }
+
+  try {
+    const candidate = JSON.parse(
+      readFileSync(
+        phase5CryptographicBuyerVerificationKeyPath,
+        'utf8',
+      ),
+    ) as unknown;
+
+    if (
+      typeof candidate !== 'object' ||
+      candidate === null ||
+      Array.isArray(candidate)
+    ) {
+      console.warn(
+        '[phase5] controlled buyer verification key file is not a JSON object.',
+      );
+
+      return null;
+    }
+
+    const record =
+      candidate as Record<string, unknown>;
+
+    if (
+      typeof record.buyerKeyId !== 'string' ||
+      record.buyerKeyId.length === 0 ||
+      typeof record.publicKeyJwk !== 'object' ||
+      record.publicKeyJwk === null ||
+      Array.isArray(record.publicKeyJwk) ||
+      record.source !==
+        BUYER_DELEGATION_SIGNATURE_VERIFIER_MODE
+    ) {
+      console.warn(
+        '[phase5] controlled buyer verification key file has an invalid outer contract.',
+      );
+
+      return null;
+    }
+
+    return candidate as
+      BuyerDelegationVerificationKey;
+  } catch {
+    console.warn(
+      '[phase5] controlled buyer verification key file could not be loaded.',
+    );
+
+    return null;
+  }
+}
+
+const phase5CryptographicBuyerVerificationKey =
+  loadPhase5CryptographicBuyerVerificationKey();
 
 // Phase 3 production release dry-run audit seam.
 // OFF by default. PR #178 exposes a would-execute audit signal only.
@@ -1210,6 +1307,17 @@ app.get('/healthz', async (_req, res) => {
     phase5: {
       agentDelegatedRuntimeEnabled:
         phase5AgentDelegatedRuntimeEnabled,
+      cryptographicDelegationRuntimeEnabled:
+        phase5CryptographicDelegationRuntimeEnabled,
+      cryptographicDelegationRuntimeActive:
+        phase5AgentDelegatedRuntimeEnabled &&
+        phase5CryptographicDelegationRuntimeEnabled,
+      buyerVerificationKeyPathConfigured:
+        phase5CryptographicBuyerVerificationKeyPath
+          .length > 0,
+      buyerVerificationKeyLoaded:
+        phase5CryptographicBuyerVerificationKey !==
+        null,
       mode: PHASE5_AGENT_RUNTIME_MODE,
       authorizationProofType:
         PHASE5_AGENT_DELEGATED_AUTHORIZATION_PROOF_TYPE,
@@ -10066,6 +10174,12 @@ app.post('/paid-gated/redeem', async (req, res) => {
         nowSec: Math.floor(Date.now() / 1000),
         canonical: canonicalChallenge,
         contract: getPaidGatedContract(),
+        cryptographicDelegation: {
+          enabled:
+            phase5CryptographicDelegationRuntimeEnabled,
+          buyerVerificationKey:
+            phase5CryptographicBuyerVerificationKey,
+        },
       });
 
     let phase5PolicyPersistence:
@@ -10191,6 +10305,64 @@ app.post('/paid-gated/redeem', async (req, res) => {
       cryptographicDelegationVerification:
         phase5RuntimeResult
           .cryptographicDelegationVerification,
+      delegationContractValidated:
+        phase5RuntimeResult
+          .delegationContractValidated,
+      buyerSignatureVerified:
+        phase5RuntimeResult
+          .buyerSignatureVerified,
+      agentPublicKeyBoundByBuyerSignature:
+        phase5RuntimeResult
+          .agentPublicKeyBoundByBuyerSignature,
+      agentProofOfPossessionVerified:
+        phase5RuntimeResult
+          .agentProofOfPossessionVerified,
+      verifiedDelegationDocumentMatched:
+        phase5RuntimeResult
+          .verifiedDelegationDocumentMatched,
+      outerDelegationIdentityBound:
+        phase5RuntimeResult
+          .outerDelegationIdentityBound,
+      buyerPolicySubjectBound:
+        phase5RuntimeResult
+          .buyerPolicySubjectBound,
+      signedScopeBound:
+        phase5RuntimeResult.signedScopeBound,
+      signedPaymentTupleBound:
+        phase5RuntimeResult
+          .signedPaymentTupleBound,
+      credentialValidityCoversChallenge:
+        phase5RuntimeResult
+          .credentialValidityCoversChallenge,
+      signedUsageBound:
+        phase5RuntimeResult.signedUsageBound,
+      signedReplayBound:
+        phase5RuntimeResult.signedReplayBound,
+      cryptographicAuthorizationReason:
+        phase5RuntimeResult
+          .cryptographicAuthorizationReason,
+      cryptographicBindingReason:
+        phase5RuntimeResult
+          .cryptographicBindingReason,
+      cryptographicMismatchFields:
+        phase5RuntimeResult
+          .cryptographicMismatchFields,
+      buyerVerificationKeyTrustEstablished:
+        phase5RuntimeResult
+          .buyerVerificationKeyTrustEstablished,
+      buyerIdentityAuthenticated:
+        phase5RuntimeResult
+          .buyerIdentityAuthenticated,
+      currentAuthorizationEstablished:
+        phase5RuntimeResult
+          .currentAuthorizationEstablished,
+      validityEvaluatedAgainstClock:
+        phase5RuntimeResult
+          .validityEvaluatedAgainstClock,
+      revocationChecked:
+        phase5RuntimeResult.revocationChecked,
+      boundedUseConsumed:
+        phase5RuntimeResult.boundedUseConsumed,
       agentRegistryLookupAttempted:
         phase5RuntimeResult
           .agentRegistryLookupAttempted,
@@ -10228,12 +10400,55 @@ app.post('/paid-gated/redeem', async (req, res) => {
         phase5: {
           mode: phase5RuntimeResult.mode,
           runtimeEnabled: true,
+          cryptographicDelegationRuntimeEnabled:
+            phase5CryptographicDelegationRuntimeEnabled,
+          cryptographicDelegationRuntimeActive:
+            phase5AgentDelegatedRuntimeEnabled &&
+            phase5CryptographicDelegationRuntimeEnabled,
+          buyerVerificationKeyLoaded:
+            phase5CryptographicBuyerVerificationKey !==
+            null,
           policyStateMutated:
             phase5PolicyPersistence?.ok === true,
           cryptographicDelegationVerification:
-            false,
-          agentRegistryLookupAttempted: false,
-          productionActivation: false,
+            phase5RuntimeResult
+              .cryptographicDelegationVerification,
+          delegationContractValidated:
+            phase5RuntimeResult
+              .delegationContractValidated,
+          buyerSignatureVerified:
+            phase5RuntimeResult
+              .buyerSignatureVerified,
+          agentPublicKeyBoundByBuyerSignature:
+            phase5RuntimeResult
+              .agentPublicKeyBoundByBuyerSignature,
+          agentProofOfPossessionVerified:
+            phase5RuntimeResult
+              .agentProofOfPossessionVerified,
+          credentialValidityCoversChallenge:
+            phase5RuntimeResult
+              .credentialValidityCoversChallenge,
+          buyerVerificationKeyTrustEstablished:
+            phase5RuntimeResult
+              .buyerVerificationKeyTrustEstablished,
+          buyerIdentityAuthenticated:
+            phase5RuntimeResult
+              .buyerIdentityAuthenticated,
+          currentAuthorizationEstablished:
+            phase5RuntimeResult
+              .currentAuthorizationEstablished,
+          validityEvaluatedAgainstClock:
+            phase5RuntimeResult
+              .validityEvaluatedAgainstClock,
+          revocationChecked:
+            phase5RuntimeResult.revocationChecked,
+          boundedUseConsumed:
+            phase5RuntimeResult.boundedUseConsumed,
+          agentRegistryLookupAttempted:
+            phase5RuntimeResult
+              .agentRegistryLookupAttempted,
+          productionActivation:
+            phase5RuntimeResult.productionActivation,
         },
         ...(x402Debug
           ? {
