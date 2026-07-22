@@ -36,6 +36,13 @@ PHASE5_BUYER_ID="${PHASE5_BUYER_ID:-buyer:phase5-agent-delegated-demo}"
 PHASE5_AGENT_ID="${PHASE5_AGENT_ID:-agent:local-demo:phase5-agent-delegated-e2e}"
 PHASE5_DEMO2_PREFLIGHT_ONLY="${PHASE5_DEMO2_PREFLIGHT_ONLY:-false}"
 GATEWAY_DATABASE_URL="${GATEWAY_DATABASE_URL:-postgres://postgres:pg@127.0.0.1:5432/transaction-outcome}"
+PHASE5_LIFECYCLE_MIGRATION="${PHASE5_LIFECYCLE_MIGRATION:-db/migrations/002_phase5_agent_delegation_lifecycle.sql}"
+
+LIFECYCLE_MIGRATION_LOG="$WORKDIR/lifecycle-migration.log"
+KEY_BUNDLE_HELPER_LOG="$WORKDIR/key-bundle-helper.json"
+KEY_BUNDLE_HELPER_ERR="$WORKDIR/key-bundle-helper.err"
+FINAL_CANONICAL_STATE_LOG="$WORKDIR/final-canonical-state.log"
+POSITIVE_TRANSITION_CHAIN_LOG="$WORKDIR/positive-transition-chain.log"
 
 mkdir -p "$WORKDIR"
 
@@ -51,6 +58,11 @@ cleanup() {
   rm -f \
     "$WORKDIR"/gateway-health.json \
     "$WORKDIR"/gateway.log \
+    "$WORKDIR"/lifecycle-migration.log \
+    "$WORKDIR"/final-canonical-state.log \
+    "$WORKDIR"/positive-transition-chain.log \
+    "$WORKDIR"/*-helper.json \
+    "$WORKDIR"/*-helper.err \
     "$WORKDIR"/negative-gated-headers.txt \
     "$WORKDIR"/negative-gated-body.json \
     "$WORKDIR"/negative-gated-pr.json \
@@ -151,14 +163,65 @@ if [[ "$PHASE5_DEMO2_PREFLIGHT_ONLY" != "true" ]]; then
 fi
 
 [[ -f "node_modules/ts-node/dist/bin.js" ]] || fail "Local ts-node executable was not found"
+[[ -f "$PHASE5_LIFECYCLE_MIGRATION" ]] || fail "Phase 5 lifecycle migration was not found: $PHASE5_LIFECYCLE_MIGRATION"
 
 if curl -fsS "$GW/healthz" >/dev/null 2>&1; then
   fail "A Gateway is already reachable at $GW. Stop it before running the managed Demo2 autorun."
 fi
 
+say "Preparing PR #297 delegation lifecycle storage"
+
+if ! docker exec \
+  -i \
+  "$DB_CONTAINER" \
+  psql \
+  -v ON_ERROR_STOP=1 \
+  -U "$DB_USER" \
+  -d "$DB_NAME" \
+  < "$PHASE5_LIFECYCLE_MIGRATION" \
+  > "$LIFECYCLE_MIGRATION_LOG" \
+  2>&1
+then
+  echo
+  echo "Lifecycle migration diagnostics:" >&2
+  sed 's/^/  /' "$LIFECYCLE_MIGRATION_LOG" >&2 || true
+  fail "Phase 5 lifecycle migration failed"
+fi
+
+echo "Lifecycle storage ready: true"
+echo "Lifecycle enforcement will be active: true"
+
 say "Generating temporary Demo2 cryptographic keys"
 
-npm exec -- ts-node --transpile-only   scripts/demo_phase5_cryptographic_key_bundle.ts   --out-dir "$KEYDIR"   --buyer-id "$PHASE5_BUYER_ID"   --agent-id "$PHASE5_AGENT_ID"
+if ! npm exec -- ts-node --transpile-only \
+  scripts/demo_phase5_cryptographic_key_bundle.ts \
+  --out-dir "$KEYDIR" \
+  --buyer-id "$PHASE5_BUYER_ID" \
+  --agent-id "$PHASE5_AGENT_ID" \
+  > "$KEY_BUNDLE_HELPER_LOG" \
+  2> "$KEY_BUNDLE_HELPER_ERR"
+then
+  echo
+  echo "Cryptographic key helper diagnostics:" >&2
+  sed 's/^/  /' "$KEY_BUNDLE_HELPER_ERR" >&2 || true
+  sed 's/^/  /' "$KEY_BUNDLE_HELPER_LOG" >&2 || true
+  fail "Temporary Demo2 cryptographic key generation failed"
+fi
+
+jq -e '
+  .ok == true and
+  .privateMaterialTemporary == true and
+  .privateMaterialPrinted == false and
+  .productionActivation == false
+' "$KEY_BUNDLE_HELPER_LOG" >/dev/null || {
+  echo
+  echo "Unexpected cryptographic key helper result:" >&2
+  sed 's/^/  /' "$KEY_BUNDLE_HELPER_LOG" >&2 || true
+  fail "Temporary Demo2 key helper returned an invalid result"
+}
+
+echo "Temporary cryptographic key bundle generated: true"
+echo "Private key material printed: false"
 
 BUYER_VERIFICATION_KEY_PATH="$KEYDIR/buyer.verification-key.json"
 
@@ -166,7 +229,16 @@ BUYER_VERIFICATION_KEY_PATH="$KEYDIR/buyer.verification-key.json"
 
 say "Starting dedicated Demo2 Gateway"
 
-DATABASE_URL="$GATEWAY_DATABASE_URL" PHASE3_GATEWAY_POLICY_GATE_ENABLED=true PHASE5_AGENT_DELEGATED_RUNTIME_ENABLED=true PHASE5_CRYPTOGRAPHIC_DELEGATION_RUNTIME_ENABLED=true PHASE5_CRYPTOGRAPHIC_BUYER_VERIFICATION_KEY_PATH="$BUYER_VERIFICATION_KEY_PATH"   node.exe node_modules/ts-node/dist/bin.js src/server.ts     >"$GATEWAY_LOG" 2>&1 &
+DATABASE_URL="$GATEWAY_DATABASE_URL" \
+PHASE3_GATEWAY_POLICY_GATE_ENABLED=true \
+PHASE5_AGENT_DELEGATED_RUNTIME_ENABLED=true \
+PHASE5_CRYPTOGRAPHIC_DELEGATION_RUNTIME_ENABLED=true \
+PHASE5_DELEGATION_LIFECYCLE_ENFORCEMENT_ENABLED=true \
+PHASE5_CRYPTOGRAPHIC_BUYER_VERIFICATION_KEY_PATH="$BUYER_VERIFICATION_KEY_PATH" \
+  node.exe \
+    node_modules/ts-node/dist/bin.js \
+    src/server.ts \
+    >"$GATEWAY_LOG" 2>&1 &
 
 GATEWAY_PID=$!
 
@@ -196,13 +268,18 @@ fi
 
 echo
 echo "============================================================"
-echo " x402 v2 Agent-Delegated Cryptographic E2E Demo — Demo2"
+echo " x402 v2 Agent-Delegated Cryptographic E2E Demo - Demo2"
 echo " Scenario: gated online purchase"
 echo " Resource: /paid-gated engineering protected resource"
-echo " Crypto rejection 1: invalid buyer signature fails before policy"
-echo " Crypto rejection 2: invalid agent proof fails before policy"
-echo " Policy rejection: authenticated agent with ineligible buyer fails before payment"
-echo " Positive path: authenticated agent with eligible buyer pays and releases"
+echo
+echo " PATH 1 OF 4 - Invalid buyer signature"
+echo "   Expected: reject before policy; no payment or release"
+echo " PATH 2 OF 4 - Invalid agent proof-of-possession"
+echo "   Expected: reject before policy; no payment or release"
+echo " PATH 3 OF 4 - Authenticated agent, ineligible buyer"
+echo "   Expected: policy denial before payment; no release"
+echo " PATH 4 OF 4 - Authenticated agent, eligible buyer"
+echo "   Expected: lifecycle authorization first; payment and release in the full run"
 echo "============================================================"
 echo
 echo "Demo configuration"
@@ -212,6 +289,7 @@ echo "  DB container:             $DB_CONTAINER"
 echo "  TokenId:                  $TOKEN_ID"
 echo "  Authorization proof type: $PHASE5_AUTHORIZATION_PROOF_TYPE"
 echo "  Delegation verification:  controlled cryptographic Demo2"
+echo "  Lifecycle enforcement:    enabled - PR #297"
 echo "  Agent Registry lookup:    disabled"
 echo "  Phase 5 production mode:  disabled"
 echo "  Positive buyer:           $POSITIVE_BUYER_REGION / ageOver=$POSITIVE_BUYER_AGE_OVER"
@@ -233,6 +311,8 @@ jq -e \
     .phase5.agentDelegatedRuntimeEnabled == true and
     .phase5.cryptographicDelegationRuntimeEnabled == true and
     .phase5.cryptographicDelegationRuntimeActive == true and
+    .phase5.delegationLifecycleEnforcementEnabled == true and
+    .phase5.delegationLifecycleEnforcementActive == true and
     .phase5.buyerVerificationKeyPathConfigured == true and
     .phase5.buyerVerificationKeyLoaded == true and
     .phase5.mode == "controlled_e2e_demo" and
@@ -246,6 +326,8 @@ jq -e \
 echo "Service readiness: ok"
 echo "Phase 5 controlled runtime enabled: true"
 echo "Cryptographic runtime active: true"
+echo "Delegation lifecycle enforcement enabled: true"
+echo "Delegation lifecycle enforcement active: true"
 echo "Buyer verification key loaded: true"
 echo "Per-request cryptographic verification pending: true"
 echo "Agent Registry lookup attempted: false"
@@ -287,10 +369,10 @@ issue_challenge() {
   amount="$(jq -r '.amount' "$WORKDIR/$prefix-gated-pr.json")"
   pay_to="$(jq -r '.payTo' "$WORKDIR/$prefix-gated-pr.json")"
 
-  echo "$prefix challenge issued"
-  echo "  Nonce:  $nonce"
-  echo "  Amount: $amount"
-  echo "  PayTo:  $pay_to"
+  echo "$prefix challenge issued: true"
+  echo "  Challenge nonce generated: true"
+  echo "  Payment amount: $amount $TOKEN_ID"
+  echo "  Payment destination bound: true"
 }
 
 build_agent_delegated_auth() {
@@ -298,20 +380,74 @@ build_agent_delegated_auth() {
   local region="$2"
   local age_over="$3"
 
-  npm exec -- ts-node --transpile-only \
+  local structural_log="$WORKDIR/$prefix-structural-helper.json"
+  local structural_err="$WORKDIR/$prefix-structural-helper.err"
+  local cryptographic_log="$WORKDIR/$prefix-cryptographic-helper.json"
+  local cryptographic_err="$WORKDIR/$prefix-cryptographic-helper.err"
+
+  if ! npm exec -- ts-node --transpile-only \
     scripts/demo_agent_delegated_authorization_proof.ts \
     --payment-required "$WORKDIR/$prefix-gated-pr.json" \
     --out "$WORKDIR/$prefix-agent-delegated-structural-auth.json" \
     --region "$region" \
     --age-over "$age_over" \
     --agent-id "$PHASE5_AGENT_ID" \
-    --policy-subject "$PHASE5_BUYER_ID"
+    --policy-subject "$PHASE5_BUYER_ID" \
+    > "$structural_log" \
+    2> "$structural_err"
+  then
+    echo
+    echo "$prefix structural helper diagnostics:" >&2
+    sed 's/^/  /' "$structural_err" >&2 || true
+    sed 's/^/  /' "$structural_log" >&2 || true
+    fail "$prefix structural authorization helper failed"
+  fi
 
-  npm exec -- ts-node --transpile-only \
+  jq -e '
+    .ok == true and
+    .rawProofPrinted == false and
+    .paymentAttempted == false and
+    .productionActivation == false
+  ' "$structural_log" >/dev/null || {
+    echo
+    echo "$prefix unexpected structural helper result:" >&2
+    sed 's/^/  /' "$structural_log" >&2 || true
+    fail "$prefix structural authorization helper returned an invalid result"
+  }
+
+  echo "$prefix structural authorization envelope built: true"
+
+  if ! npm exec -- ts-node --transpile-only \
     scripts/demo_agent_delegated_cryptographic_authorization_proof.ts \
     --input "$WORKDIR/$prefix-agent-delegated-structural-auth.json" \
     --key-bundle "$KEYDIR/phase5-cryptographic-key-bundle.json" \
-    --out "$WORKDIR/$prefix-agent-delegated-auth.json"
+    --out "$WORKDIR/$prefix-agent-delegated-auth.json" \
+    > "$cryptographic_log" \
+    2> "$cryptographic_err"
+  then
+    echo
+    echo "$prefix cryptographic helper diagnostics:" >&2
+    sed 's/^/  /' "$cryptographic_err" >&2 || true
+    sed 's/^/  /' "$cryptographic_log" >&2 || true
+    fail "$prefix cryptographic authorization helper failed"
+  fi
+
+  jq -e '
+    .ok == true and
+    .delegationContractValidated == true and
+    .buyerSignatureVerified == true and
+    .agentProofOfPossessionVerified == true and
+    .privateMaterialPrinted == false and
+    .paymentAttempted == false and
+    .productionActivation == false
+  ' "$cryptographic_log" >/dev/null || {
+    echo
+    echo "$prefix unexpected cryptographic helper result:" >&2
+    sed 's/^/  /' "$cryptographic_log" >&2 || true
+    fail "$prefix cryptographic authorization helper returned an invalid result"
+  }
+
+  echo "$prefix cryptographic delegation proof built: true"
 }
 
 submit_agent_delegated_auth() {
@@ -708,7 +844,9 @@ assert_protected_resource_not_released() {
   fi
 }
 
-say "Invalid buyer signature path — reject before policy"
+say "PATH 1 OF 4 - Invalid buyer signature"
+echo "Viewer guide: the buyer-signed delegation is intentionally tampered."
+echo "Expected outcome: cryptographic rejection before policy; no payment and no release."
 
 issue_challenge \
   "invalid-buyer-signature"
@@ -742,7 +880,7 @@ INVALID_BUYER_SIGNATURE_NONCE="$(
     "$WORKDIR/invalid-buyer-signature-gated-pr.json"
 )"
 
-echo "Invalid buyer signature path result"
+echo "PATH 1 RESULT - REJECTED SAFELY"
 echo "  structurally valid envelope generated first: true"
 echo "  buyer signature verification failed: true"
 echo "  policy evaluated: false"
@@ -752,7 +890,9 @@ echo "  CRP fulfill attempted: false"
 echo "  PAYMENT-RESPONSE emitted: false"
 echo "  protected resource released: false"
 
-say "Invalid agent proof-of-possession path — reject before policy"
+say "PATH 2 OF 4 - Invalid agent proof-of-possession"
+echo "Viewer guide: the buyer delegation is valid, but the agent proof is intentionally tampered."
+echo "Expected outcome: cryptographic rejection before policy; no payment and no release."
 
 issue_challenge \
   "invalid-agent-pop"
@@ -786,7 +926,7 @@ INVALID_AGENT_POP_NONCE="$(
     "$WORKDIR/invalid-agent-pop-gated-pr.json"
 )"
 
-echo "Invalid agent proof-of-possession path result"
+echo "PATH 2 RESULT - REJECTED SAFELY"
 echo "  buyer signature verified: true"
 echo "  agent public key bound by buyer signature: true"
 echo "  agent proof-of-possession verification failed: true"
@@ -797,7 +937,9 @@ echo "  CRP fulfill attempted: false"
 echo "  PAYMENT-RESPONSE emitted: false"
 echo "  protected resource released: false"
 
-say "Negative buyer path — fail before payment"
+say "PATH 3 OF 4 - Authenticated agent with ineligible buyer"
+echo "Viewer guide: both signatures are valid, so buyer policy is evaluated."
+echo "Expected outcome: policy denial before payment; no receipt and no release."
 issue_challenge "negative"
 build_agent_delegated_auth "negative" "$NEGATIVE_BUYER_REGION" "$NEGATIVE_BUYER_AGE_OVER"
 submit_agent_delegated_auth "negative"
@@ -832,8 +974,8 @@ jq -e '
   .verifier.buyerVerificationKeyTrustEstablished == false and
   .verifier.buyerIdentityAuthenticated == false and
   .verifier.currentAuthorizationEstablished == false and
-  .verifier.validityEvaluatedAgainstClock == false and
-  .verifier.revocationChecked == false and
+  .verifier.validityEvaluatedAgainstClock == true and
+  .verifier.revocationChecked == true and
   .verifier.boundedUseConsumed == false and
   .verifier.agentRegistryLookupAttempted == false and
   .verifier.productionActivation == false and
@@ -850,8 +992,10 @@ jq -e '
   .phase5.buyerVerificationKeyTrustEstablished == false and
   .phase5.buyerIdentityAuthenticated == false and
   .phase5.currentAuthorizationEstablished == false and
-  .phase5.validityEvaluatedAgainstClock == false and
-  .phase5.revocationChecked == false and
+  .phase5.validityEvaluatedAgainstClock == true and
+    .phase5.credentialCurrentlyValid == true and
+  .phase5.revocationChecked == true and
+    .phase5.delegationRevoked == false and
   .phase5.boundedUseConsumed == false and
   .phase5.agentRegistryLookupAttempted == false and
   .phase5.productionActivation == false
@@ -874,7 +1018,7 @@ if jq -e '.resource == "secret-data"' "$WORKDIR/negative-blocked-body.json" >/de
   fail "negative path must not release protected resource"
 fi
 
-echo "Negative buyer path result"
+echo "PATH 3 RESULT - POLICY DENIED SAFELY"
 echo "  cryptographic delegation verified: true"
 echo "  signed runtime bindings matched: true"
 echo "  POLICY_FAILED: true"
@@ -883,7 +1027,14 @@ echo "  CRP fulfill attempted: false"
 echo "  PAYMENT-RESPONSE emitted: false"
 echo "  protected resource released: false"
 
-say "Positive buyer path — authorize, pay, settle, release"
+say "PATH 4 OF 4 - Authenticated agent with eligible buyer"
+echo "Viewer guide: cryptography, lifecycle, and policy must all pass before payment."
+
+if [[ "$PHASE5_DEMO2_PREFLIGHT_ONLY" == "true" ]]; then
+  echo "Expected outcome: authorization and bounded-use claim succeed; payment is intentionally skipped."
+else
+  echo "Expected outcome: finalized payment, receipt redemption, release, then replay rejection."
+fi
 issue_challenge "positive"
 build_agent_delegated_auth "positive" "$POSITIVE_BUYER_REGION" "$POSITIVE_BUYER_AGE_OVER"
 submit_agent_delegated_auth "positive"
@@ -921,10 +1072,10 @@ jq -e \
 
     .verifier.buyerVerificationKeyTrustEstablished == false and
     .verifier.buyerIdentityAuthenticated == false and
-    .verifier.currentAuthorizationEstablished == false and
-    .verifier.validityEvaluatedAgainstClock == false and
-    .verifier.revocationChecked == false and
-    .verifier.boundedUseConsumed == false and
+    .verifier.currentAuthorizationEstablished == true and
+    .verifier.validityEvaluatedAgainstClock == true and
+    .verifier.revocationChecked == true and
+    .verifier.boundedUseConsumed == true and
     .verifier.agentRegistryLookupAttempted == false and
     .verifier.productionActivation == false and
 
@@ -940,10 +1091,20 @@ jq -e \
     .phase5.credentialValidityCoversChallenge == true and
     .phase5.buyerVerificationKeyTrustEstablished == false and
     .phase5.buyerIdentityAuthenticated == false and
-    .phase5.currentAuthorizationEstablished == false and
-    .phase5.validityEvaluatedAgainstClock == false and
-    .phase5.revocationChecked == false and
-    .phase5.boundedUseConsumed == false and
+    .phase5.currentAuthorizationEstablished == true and
+    .phase5.validityEvaluatedAgainstClock == true and
+    .phase5.credentialCurrentlyValid == true and
+    .phase5.revocationChecked == true and
+    .phase5.delegationRevoked == false and
+    .phase5.boundedUseChecked == true and
+    .phase5.boundedUseConsumed == true and
+    .phase5.usageClaimReason == "claimed" and
+    .phase5.usageClaimCreated == true and
+    .phase5.usageClaimIdempotent == false and
+    .phase5.delegationUseCount == 1 and
+    .phase5.delegationMaxUses == 1 and
+    .phase5.delegationUseNumber == 1 and
+    .phase5.lifecyclePolicyStateMutated == true and
     .phase5.agentRegistryLookupAttempted == false and
     .phase5.productionActivation == false
   ' "$WORKDIR/positive-auth-body.json" >/dev/null \
@@ -966,7 +1127,12 @@ if [[ "$PHASE5_DEMO2_PREFLIGHT_ONLY" == "true" ]]; then
   echo "  negative cryptographic authorization verified: true"
   echo "  negative policy denial verified: true"
   echo "  positive cryptographic authorization verified: true"
+  echo "  delegation lifecycle enforcement active: true"
+  echo "  positive current authorization established: true"
+  echo "  positive bounded-use claim created: true"
+  echo "  positive delegation use count: 1 / 1"
   echo "  positive policy satisfaction verified: true"
+  echo "  payment and release intentionally skipped: true"
   echo "  CRP payment created: false"
   echo "  PLT payment attempted: false"
   echo "  receipt requested: false"
@@ -1012,7 +1178,7 @@ payload = {
     }
 }
 (workdir / "positive-crp-create.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
-print("CRP payment payload written")
+print("Payment request prepared: true")
 PY
 
 say "Creating CRP payment record"
@@ -1034,8 +1200,9 @@ TX="$(npm run -s payer:plt -- \
   --wait)"
 
 [[ -n "$TX" ]] || fail "Payer helper did not return a tx hash"
-echo "PLT transfer submitted"
-echo "  TxHash: $TX"
+echo "PLT transfer submitted: true"
+echo "  Transaction identifier captured: true"
+echo "  Raw transaction hash printed: false"
 
 say "Waiting for indexed transfer"
 deadline="$(( $(date +%s) + POLL_MAX_SECS ))"
@@ -1071,7 +1238,6 @@ for attempt in $(seq 1 "$FULFILL_MAX_ATTEMPTS"); do
       break
     fi
   fi
-  echo "Fulfill not ready yet (attempt $attempt/$FULFILL_MAX_ATTEMPTS). Backing off..."
   backoff_sleep "$attempt"
 done
 
@@ -1109,15 +1275,19 @@ POSITIVE_PAYMENT_RESPONSE="$(header_value "$WORKDIR/positive-redeem-headers.txt"
 jq -e '.ok == true and .paid == true and .resource == "secret-data"' "$WORKDIR/positive-redeem-body.json" >/dev/null \
   || fail "positive final redeem must release engineering protected resource"
 
-echo "Positive buyer path result"
+echo "PATH 4 RESULT - PAYMENT FINALIZED AND RESOURCE RELEASED"
 echo "  cryptographic delegation verified: true"
 echo "  signed runtime bindings matched: true"
+echo "  delegation lifecycle enforcement active: true"
+echo "  current authorization established: true"
+echo "  bounded-use claim created: true"
+echo "  delegation use count: 1 / 1"
 echo "  POLICY_SATISFIED: true"
 echo "  receipt JWS present: true"
 echo "  PAYMENT-RESPONSE emitted: true"
 echo "  raw PAYMENT-RESPONSE printed: false"
 echo "  protected resource released: true"
-echo "  protected resource value: secret-data"
+echo "  protected resource payload verified: true"
 
 say "Checking replay / second use"
 curl -sS -D "$WORKDIR/positive-replay-headers.txt" -o "$WORKDIR/positive-replay-body.json" \
@@ -1135,8 +1305,17 @@ fi
 
 echo "Replay blocked: true"
 
-say "Reading final canonical state"
-docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -P pager=off -c \
+say "Verifying final canonical state"
+
+if ! docker exec \
+  -i \
+  "$DB_CONTAINER" \
+  psql \
+  -v ON_ERROR_STOP=1 \
+  -U "$DB_USER" \
+  -d "$DB_NAME" \
+  -P pager=off \
+  -c \
 "SELECT nonce, status, release_status, updated_at
  FROM payment_challenges
  WHERE nonce IN (
@@ -1145,10 +1324,33 @@ docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -P pager=off -c 
    '$NEGATIVE_NONCE',
    '$POSITIVE_NONCE'
  )
- ORDER BY updated_at ASC;"
+ ORDER BY updated_at ASC;" \
+  > "$FINAL_CANONICAL_STATE_LOG" \
+  2>&1
+then
+  echo
+  echo "Final canonical-state diagnostics:" >&2
+  sed 's/^/  /' "$FINAL_CANONICAL_STATE_LOG" >&2 || true
+  fail "Could not read final canonical challenge state"
+fi
 
-say "Reading positive transition chain"
-docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -P pager=off -c \
+[[ -s "$FINAL_CANONICAL_STATE_LOG" ]] \
+  || fail "Final canonical-state evidence was empty"
+
+echo "Final canonical challenge states captured: true"
+echo "Raw canonical database rows printed: false"
+
+say "Verifying positive transition chain"
+
+if ! docker exec \
+  -i \
+  "$DB_CONTAINER" \
+  psql \
+  -v ON_ERROR_STOP=1 \
+  -U "$DB_USER" \
+  -d "$DB_NAME" \
+  -P pager=off \
+  -c \
 "SELECT
    gst.created_at,
    gst.from_state,
@@ -1160,14 +1362,32 @@ docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -P pager=off -c 
  JOIN payment_challenges pc
    ON pc.challenge_id = gst.challenge_id
  WHERE pc.nonce = '$POSITIVE_NONCE'
- ORDER BY gst.created_at ASC;"
+ ORDER BY gst.created_at ASC;" \
+  > "$POSITIVE_TRANSITION_CHAIN_LOG" \
+  2>&1
+then
+  echo
+  echo "Positive transition-chain diagnostics:" >&2
+  sed 's/^/  /' "$POSITIVE_TRANSITION_CHAIN_LOG" >&2 || true
+  fail "Could not read the positive canonical transition chain"
+fi
+
+[[ -s "$POSITIVE_TRANSITION_CHAIN_LOG" ]] \
+  || fail "Positive transition-chain evidence was empty"
+
+echo "Positive canonical transition chain captured: true"
+echo "Raw transition database rows printed: false"
 
 echo
 echo "============================================================"
 echo "Final result: x402 v2 Agent-Delegated Cryptographic Demo2 complete"
-echo "  Invalid buyer signature: rejected before policy"
-echo "  Invalid agent proof-of-possession: rejected before policy"
-echo "  Authenticated agent with ineligible buyer: failed before payment"
-echo "  Authenticated agent with eligible buyer: released engineering protected resource"
-echo "  Replay: blocked"
+echo "  PR #297 lifecycle enforcement: active"
+echo "  PATH 1 - Invalid buyer signature: rejected before policy; no payment"
+echo "  PATH 2 - Invalid agent proof: rejected before policy; no payment"
+echo "  PATH 3 - Ineligible buyer: policy denied before payment"
+echo "  PATH 4 - Eligible buyer: payment finalized and resource released"
+echo "  Canonical state and transition evidence: captured"
+echo "  Replay after release: blocked"
+echo "  Agent Registry lookup: disabled"
+echo "  Production activation: false"
 echo "============================================================"

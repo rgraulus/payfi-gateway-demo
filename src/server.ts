@@ -122,9 +122,23 @@ import {
 } from './phase5/agentDelegationVerifier';
 import {
   PHASE5_AGENT_RUNTIME_MODE,
+  applyPhase5AgentRuntimeLifecycleSignals,
+  buildPhase5AgentRuntimeLifecycleFailure,
+  completePhase5AgentRuntimePolicyEvaluation,
   evaluatePhase5AgentRuntimeAuthorization,
+  evaluatePhase5AgentRuntimeCryptographicPreflight,
   isPhase5AgentDelegatedAuthorizationEnvelope,
+  type Phase5AgentRuntimeAuthorizationInput,
+  type Phase5AgentRuntimeAuthorizationResult,
+  type Phase5AgentRuntimeLifecycleFailureReason,
 } from './phase5/agentRuntimeAuthorization';
+import {
+  evaluatePhase5AgentDelegationLifecycle,
+} from './phase5/agentDelegationLifecycle';
+import {
+  checkPhase5AgentDelegationRevocation,
+  claimPhase5AgentDelegationUseAndPersistPolicySatisfied,
+} from './db/phase5AgentDelegationLifecycleStore';
 import {
   BUYER_DELEGATION_SIGNATURE_VERIFIER_MODE,
   type BuyerDelegationVerificationKey,
@@ -258,6 +272,45 @@ const phase5CryptographicDelegationRuntimeEnabled =
       .PHASE5_CRYPTOGRAPHIC_DELEGATION_RUNTIME_ENABLED ??
       '',
   ).toLowerCase() === 'true';
+
+// Phase 5 delegation lifecycle enforcement.
+// OFF by default and subordinate to both controlled Phase 5 runtimes.
+// This does not activate production authorization or Agent Registry lookup.
+const phase5DelegationLifecycleEnforcementEnabled =
+  String(
+    process.env
+      .PHASE5_DELEGATION_LIFECYCLE_ENFORCEMENT_ENABLED ??
+      '',
+  ).toLowerCase() === 'true';
+
+const phase5DelegationLifecycleEnforcementActive =
+  phase5AgentDelegatedRuntimeEnabled &&
+  phase5CryptographicDelegationRuntimeEnabled &&
+  phase5DelegationLifecycleEnforcementEnabled;
+
+function phase5RuntimeLifecycleFailureReason(
+  reason: string,
+): Phase5AgentRuntimeLifecycleFailureReason {
+  switch (reason) {
+    case 'invalid_lifecycle_input':
+    case 'invalid_lifecycle_contract':
+    case 'lifecycle_contract_mismatch':
+    case 'delegation_not_yet_valid':
+    case 'delegation_expired':
+    case 'delegation_revoked':
+    case 'revocation_record_mismatch':
+    case 'delegation_use_exhausted':
+    case 'usage_contract_mismatch':
+    case 'claim_conflict':
+    case 'claim_state_inconsistent':
+    case 'challenge_missing':
+    case 'challenge_state_conflict':
+      return reason;
+
+    default:
+      return 'invalid_lifecycle_claim';
+  }
+}
 
 // Controlled public buyer-verification-key file.
 // The request envelope cannot supply or override this key.
@@ -1312,6 +1365,10 @@ app.get('/healthz', async (_req, res) => {
       cryptographicDelegationRuntimeActive:
         phase5AgentDelegatedRuntimeEnabled &&
         phase5CryptographicDelegationRuntimeEnabled,
+      delegationLifecycleEnforcementEnabled:
+        phase5DelegationLifecycleEnforcementEnabled,
+      delegationLifecycleEnforcementActive:
+        phase5DelegationLifecycleEnforcementActive,
       buyerVerificationKeyPathConfigured:
         phase5CryptographicBuyerVerificationKeyPath
           .length > 0,
@@ -10167,11 +10224,18 @@ app.post('/paid-gated/redeem', async (req, res) => {
       });
     }
 
-    const phase5RuntimeResult =
-      evaluatePhase5AgentRuntimeAuthorization({
+    const phase5RuntimeNowSec =
+      Math.floor(Date.now() / 1000);
+
+    const phase5RuntimeInput:
+      Phase5AgentRuntimeAuthorizationInput = {
         nonce,
         envelope: authorizationProof,
-        nowSec: Math.floor(Date.now() / 1000),
+        nowSec: phase5RuntimeNowSec,
+
+        allowSatisfiedChallengeRetry:
+          phase5DelegationLifecycleEnforcementActive,
+
         canonical: canonicalChallenge,
         contract: getPaidGatedContract(),
         cryptographicDelegation: {
@@ -10180,7 +10244,50 @@ app.post('/paid-gated/redeem', async (req, res) => {
           buyerVerificationKey:
             phase5CryptographicBuyerVerificationKey,
         },
-      });
+      };
+
+    let phase5RuntimeResult:
+      Phase5AgentRuntimeAuthorizationResult
+      | null = null;
+
+    let phase5PolicyPersistenceHandledAtomically =
+      false;
+
+    let phase5LifecycleAudit = {
+      lifecycleEvaluated: false,
+
+      lifecycleReason:
+        null as string | null,
+
+      credentialCurrentlyValid: false,
+
+      revocationChecked: false,
+
+      revocationReason:
+        null as string | null,
+
+      delegationRevoked: false,
+
+      boundedUseChecked: false,
+      boundedUseConsumed: false,
+
+      usageClaimReason:
+        null as string | null,
+
+      usageClaimCreated: false,
+      usageClaimIdempotent: false,
+
+      usageCount:
+        null as number | null,
+
+      maxUses:
+        null as number | null,
+
+      useNumber:
+        null as number | null,
+
+      policyStateMutated: false,
+    };
 
     let phase5PolicyPersistence:
       | {
@@ -10193,6 +10300,393 @@ app.post('/paid-gated/redeem', async (req, res) => {
       | null = null;
 
     if (
+      !phase5DelegationLifecycleEnforcementActive
+    ) {
+      phase5RuntimeResult =
+        evaluatePhase5AgentRuntimeAuthorization(
+          phase5RuntimeInput,
+        );
+    } else {
+      try {
+        const preflight =
+          evaluatePhase5AgentRuntimeCryptographicPreflight(
+            phase5RuntimeInput,
+          );
+
+        if (!preflight.ok) {
+          phase5RuntimeResult =
+            preflight.result;
+        } else if (
+          preflight.delegationDocument === null ||
+          preflight.proofVerification === null ||
+          preflight.cryptographicBinding === null
+        ) {
+          phase5LifecycleAudit = {
+            ...phase5LifecycleAudit,
+
+            lifecycleReason:
+              'invalid_lifecycle_input',
+          };
+
+          phase5RuntimeResult =
+            buildPhase5AgentRuntimeLifecycleFailure({
+              input:
+                phase5RuntimeInput,
+
+              preflight,
+
+              reason:
+                'invalid_lifecycle_input',
+
+              lifecycleSignals: {
+                currentAuthorizationEstablished:
+                  false,
+
+                validityEvaluatedAgainstClock:
+                  false,
+
+                revocationChecked:
+                  false,
+
+                boundedUseConsumed:
+                  false,
+              },
+            });
+        } else {
+          const lifecycle =
+            evaluatePhase5AgentDelegationLifecycle({
+              delegationDocument:
+                preflight.delegationDocument,
+
+              proofVerification:
+                preflight.proofVerification,
+
+              cryptographicBinding:
+                preflight.cryptographicBinding,
+
+              nowSec:
+                phase5RuntimeNowSec,
+            });
+
+          phase5LifecycleAudit = {
+            ...phase5LifecycleAudit,
+
+            lifecycleEvaluated:
+              lifecycle.lifecycleEvaluated,
+
+            lifecycleReason:
+              lifecycle.reason,
+
+            credentialCurrentlyValid:
+              lifecycle
+                .credentialCurrentlyValid,
+
+            maxUses:
+              lifecycle.maxUses,
+          };
+
+          if (
+            !lifecycle.ok ||
+            lifecycle.lifecycleContract === null
+          ) {
+            phase5RuntimeResult =
+              buildPhase5AgentRuntimeLifecycleFailure({
+                input:
+                  phase5RuntimeInput,
+
+                preflight,
+
+                reason:
+                  phase5RuntimeLifecycleFailureReason(
+                    lifecycle.reason,
+                  ),
+
+                lifecycleSignals: {
+                  currentAuthorizationEstablished:
+                    false,
+
+                  validityEvaluatedAgainstClock:
+                    lifecycle
+                      .validityEvaluatedAgainstClock,
+
+                  revocationChecked:
+                    false,
+
+                  boundedUseConsumed:
+                    false,
+                },
+              });
+          } else {
+            const revocation =
+              await checkPhase5AgentDelegationRevocation(
+                lifecycle.lifecycleContract,
+              );
+
+            phase5LifecycleAudit = {
+              ...phase5LifecycleAudit,
+
+              revocationChecked:
+                revocation.revocationChecked,
+
+              revocationReason:
+                revocation.reason,
+
+              delegationRevoked:
+                revocation.delegationRevoked,
+            };
+
+            if (!revocation.ok) {
+              phase5RuntimeResult =
+                buildPhase5AgentRuntimeLifecycleFailure({
+                  input:
+                    phase5RuntimeInput,
+
+                  preflight,
+
+                  reason:
+                    phase5RuntimeLifecycleFailureReason(
+                      revocation.reason,
+                    ),
+
+                  lifecycleSignals: {
+                    currentAuthorizationEstablished:
+                      false,
+
+                    validityEvaluatedAgainstClock:
+                      true,
+
+                    revocationChecked:
+                      revocation.revocationChecked,
+
+                    boundedUseConsumed:
+                      false,
+                  },
+                });
+            } else {
+              const policyResult =
+                completePhase5AgentRuntimePolicyEvaluation(
+                  phase5RuntimeInput,
+                  preflight,
+                );
+
+              if (!policyResult.ok) {
+                phase5RuntimeResult =
+                  applyPhase5AgentRuntimeLifecycleSignals(
+                    policyResult,
+                    {
+                      currentAuthorizationEstablished:
+                        false,
+
+                      validityEvaluatedAgainstClock:
+                        true,
+
+                      revocationChecked:
+                        true,
+
+                      boundedUseConsumed:
+                        false,
+                    },
+                  );
+              } else {
+                const claim =
+                  await claimPhase5AgentDelegationUseAndPersistPolicySatisfied({
+                    ...lifecycle.lifecycleContract,
+
+                    nonce,
+
+                    actor:
+                      'gateway',
+
+                    reasonCode:
+                      'phase5_delegation_lifecycle_satisfied',
+
+                    reasonMessage:
+                      'Phase 5 cryptographic delegation, lifecycle, revocation, and bounded-use requirements satisfied.',
+                  });
+
+                phase5LifecycleAudit = {
+                  ...phase5LifecycleAudit,
+
+                  revocationChecked:
+                    claim.revocationChecked,
+
+                  revocationReason:
+                    claim.delegationRevoked
+                      ? 'delegation_revoked'
+                      : 'not_revoked',
+
+                  delegationRevoked:
+                    claim.delegationRevoked,
+
+                  boundedUseChecked:
+                    claim.boundedUseChecked,
+
+                  boundedUseConsumed:
+                    claim.boundedUseConsumed,
+
+                  usageClaimReason:
+                    claim.reason,
+
+                  usageClaimCreated:
+                    claim.usageClaimCreated,
+
+                  usageClaimIdempotent:
+                    claim.usageClaimIdempotent,
+
+                  usageCount:
+                    claim.usageCount,
+
+                  maxUses:
+                    claim.maxUses,
+
+                  useNumber:
+                    claim.useNumber,
+
+                  policyStateMutated:
+                    claim.policyStateMutated,
+                };
+
+                if (!claim.ok) {
+                  phase5RuntimeResult =
+                    buildPhase5AgentRuntimeLifecycleFailure({
+                      input:
+                        phase5RuntimeInput,
+
+                      preflight,
+
+                      reason:
+                        phase5RuntimeLifecycleFailureReason(
+                          claim.reason,
+                        ),
+
+                      policyResult,
+
+                      lifecycleSignals: {
+                        currentAuthorizationEstablished:
+                          false,
+
+                        validityEvaluatedAgainstClock:
+                          true,
+
+                        revocationChecked:
+                          claim.revocationChecked,
+
+                        boundedUseConsumed:
+                          false,
+                      },
+                    });
+                } else {
+                  phase5RuntimeResult =
+                    applyPhase5AgentRuntimeLifecycleSignals(
+                      policyResult,
+                      {
+                        currentAuthorizationEstablished:
+                          true,
+
+                        validityEvaluatedAgainstClock:
+                          true,
+
+                        revocationChecked:
+                          true,
+
+                        boundedUseConsumed:
+                          claim.boundedUseConsumed,
+                      },
+                    );
+
+                  phase5PolicyPersistenceHandledAtomically =
+                    true;
+
+                  phase5PolicyPersistence = {
+                    ok: true,
+
+                    updated:
+                      claim.policyStateMutated,
+
+                    reason:
+                      claim.reason,
+
+                    challengeId:
+                      claim.challengeId ??
+                      undefined,
+
+                    currentState:
+                      claim.challengeState ??
+                      'POLICY_SATISFIED',
+                  };
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error(
+          'Failed to enforce Phase 5 delegation lifecycle:',
+          err,
+        );
+
+        return res.status(503).json({
+          ok: false,
+          nonce,
+          code:
+            'phase5_delegation_lifecycle_store_error',
+          reason:
+            'phase5_delegation_lifecycle_store_error',
+          message:
+            'Phase 5 delegation lifecycle state could not be verified or claimed.',
+          policyStatus:
+            'POLICY_NOT_EVALUATED',
+          phase5: {
+            mode: PHASE5_AGENT_RUNTIME_MODE,
+            runtimeEnabled: true,
+            cryptographicDelegationRuntimeEnabled:
+              phase5CryptographicDelegationRuntimeEnabled,
+            delegationLifecycleEnforcementEnabled:
+              phase5DelegationLifecycleEnforcementEnabled,
+            delegationLifecycleEnforcementActive:
+              phase5DelegationLifecycleEnforcementActive,
+            policyStateMutated: false,
+            currentAuthorizationEstablished:
+              false,
+            validityEvaluatedAgainstClock:
+              false,
+            revocationChecked: false,
+            boundedUseConsumed: false,
+            agentRegistryLookupAttempted:
+              false,
+            productionActivation: false,
+          },
+        });
+      }
+    }
+
+    if (phase5RuntimeResult === null) {
+      return res.status(500).json({
+        ok: false,
+        nonce,
+        code:
+          'phase5_runtime_result_missing',
+        reason:
+          'phase5_runtime_result_missing',
+        message:
+          'Phase 5 authorization evaluation did not produce a result.',
+        policyStatus:
+          'POLICY_NOT_EVALUATED',
+        phase5: {
+          mode: PHASE5_AGENT_RUNTIME_MODE,
+          runtimeEnabled: true,
+          policyStateMutated: false,
+          currentAuthorizationEstablished:
+            false,
+          agentRegistryLookupAttempted:
+            false,
+          productionActivation: false,
+        },
+      });
+    }
+
+    if (
+      !phase5PolicyPersistenceHandledAtomically &&
       phase5RuntimeResult
         .shouldPersistPolicyOutcome !== null
     ) {
@@ -10363,6 +10857,56 @@ app.post('/paid-gated/redeem', async (req, res) => {
         phase5RuntimeResult.revocationChecked,
       boundedUseConsumed:
         phase5RuntimeResult.boundedUseConsumed,
+
+      lifecycleEnforcementEnabled:
+        phase5DelegationLifecycleEnforcementEnabled,
+
+      lifecycleEnforcementActive:
+        phase5DelegationLifecycleEnforcementActive,
+
+      lifecycleEvaluated:
+        phase5LifecycleAudit.lifecycleEvaluated,
+
+      lifecycleReason:
+        phase5LifecycleAudit.lifecycleReason,
+
+      credentialCurrentlyValid:
+        phase5LifecycleAudit
+          .credentialCurrentlyValid,
+
+      revocationReason:
+        phase5LifecycleAudit.revocationReason,
+
+      delegationRevoked:
+        phase5LifecycleAudit.delegationRevoked,
+
+      boundedUseChecked:
+        phase5LifecycleAudit.boundedUseChecked,
+
+      usageClaimReason:
+        phase5LifecycleAudit.usageClaimReason,
+
+      usageClaimCreated:
+        phase5LifecycleAudit
+          .usageClaimCreated,
+
+      usageClaimIdempotent:
+        phase5LifecycleAudit
+          .usageClaimIdempotent,
+
+      delegationUseCount:
+        phase5LifecycleAudit.usageCount,
+
+      delegationMaxUses:
+        phase5LifecycleAudit.maxUses,
+
+      delegationUseNumber:
+        phase5LifecycleAudit.useNumber,
+
+      lifecyclePolicyStateMutated:
+        phase5LifecycleAudit
+          .policyStateMutated,
+
       agentRegistryLookupAttempted:
         phase5RuntimeResult
           .agentRegistryLookupAttempted,
@@ -10405,6 +10949,10 @@ app.post('/paid-gated/redeem', async (req, res) => {
           cryptographicDelegationRuntimeActive:
             phase5AgentDelegatedRuntimeEnabled &&
             phase5CryptographicDelegationRuntimeEnabled,
+          delegationLifecycleEnforcementEnabled:
+            phase5DelegationLifecycleEnforcementEnabled,
+          delegationLifecycleEnforcementActive:
+            phase5DelegationLifecycleEnforcementActive,
           buyerVerificationKeyLoaded:
             phase5CryptographicBuyerVerificationKey !==
             null,
@@ -10444,6 +10992,50 @@ app.post('/paid-gated/redeem', async (req, res) => {
             phase5RuntimeResult.revocationChecked,
           boundedUseConsumed:
             phase5RuntimeResult.boundedUseConsumed,
+
+          lifecycleEvaluated:
+            phase5LifecycleAudit.lifecycleEvaluated,
+
+          lifecycleReason:
+            phase5LifecycleAudit.lifecycleReason,
+
+          credentialCurrentlyValid:
+            phase5LifecycleAudit
+              .credentialCurrentlyValid,
+
+          revocationReason:
+            phase5LifecycleAudit.revocationReason,
+
+          delegationRevoked:
+            phase5LifecycleAudit.delegationRevoked,
+
+          boundedUseChecked:
+            phase5LifecycleAudit.boundedUseChecked,
+
+          usageClaimReason:
+            phase5LifecycleAudit.usageClaimReason,
+
+          usageClaimCreated:
+            phase5LifecycleAudit
+              .usageClaimCreated,
+
+          usageClaimIdempotent:
+            phase5LifecycleAudit
+              .usageClaimIdempotent,
+
+          delegationUseCount:
+            phase5LifecycleAudit.usageCount,
+
+          delegationMaxUses:
+            phase5LifecycleAudit.maxUses,
+
+          delegationUseNumber:
+            phase5LifecycleAudit.useNumber,
+
+          lifecyclePolicyStateMutated:
+            phase5LifecycleAudit
+              .policyStateMutated,
+
           agentRegistryLookupAttempted:
             phase5RuntimeResult
               .agentRegistryLookupAttempted,

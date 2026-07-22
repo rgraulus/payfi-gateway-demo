@@ -186,7 +186,10 @@
     "phase5:buyer-to-agent-delegation-credential-contract-test": "ts-node --transpile-only scripts/ci_phase5_buyer_to_agent_delegation_credential_contract.ts",
     "phase5:buyer-delegation-signature-verifier-seam-test": "ts-node --transpile-only scripts/ci_phase5_buyer_delegation_signature_verifier_seam.ts",
     "phase5:agent-proof-of-possession-verifier-seam-test": "ts-node --transpile-only scripts/ci_phase5_agent_proof_of_possession_verifier_seam.ts",
-    "phase5:agent-cryptographic-runtime-composition-test": "ts-node --transpile-only scripts/ci_phase5_agent_cryptographic_runtime_composition.ts"
+    "phase5:agent-cryptographic-runtime-composition-test": "ts-node --transpile-only scripts/ci_phase5_agent_cryptographic_runtime_composition.ts",
+    "phase5:agent-delegation-lifecycle-test": "ts-node --transpile-only scripts/ci_phase5_agent_delegation_lifecycle.ts",
+    "phase5:final-acceptance-test": "ts-node --transpile-only scripts/ci_phase5_final_acceptance.ts",
+    "phase5:agent-delegation-lifecycle-e2e": "bash scripts/demo_x402_v2_agent_delegated_lifecycle_e2e.sh"
   },
   "repository": {
     "type": "git",

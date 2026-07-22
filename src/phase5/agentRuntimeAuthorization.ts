@@ -53,8 +53,25 @@ export const PHASE5_AGENT_RUNTIME_POLICY_REQUIREMENT = {
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 } as const;
 
+export type Phase5AgentRuntimeLifecycleFailureReason =
+  | "invalid_lifecycle_input"
+  | "invalid_lifecycle_contract"
+  | "lifecycle_contract_mismatch"
+  | "delegation_not_yet_valid"
+  | "delegation_expired"
+  | "delegation_revoked"
+  | "revocation_record_mismatch"
+  | "delegation_use_exhausted"
+  | "usage_contract_mismatch"
+  | "claim_conflict"
+  | "claim_state_inconsistent"
+  | "challenge_missing"
+  | "challenge_state_conflict"
+  | "invalid_lifecycle_claim";
+
 export type Phase5AgentRuntimeAuthorizationReason =
   | Phase5AgentPolicyEvaluationReason
+  | Phase5AgentRuntimeLifecycleFailureReason
   | AgentProofOfPossessionReasonCode
   | Phase5AgentCryptographicBindingReason
   | "canonical_challenge_state_invalid"
@@ -67,6 +84,20 @@ export type Phase5AgentRuntimePersistenceOutcome =
   | "satisfied"
   | "failed"
   | null;
+
+export type Phase5AgentRuntimeLifecycleSignals = {
+  readonly currentAuthorizationEstablished:
+    boolean;
+
+  readonly validityEvaluatedAgainstClock:
+    boolean;
+
+  readonly revocationChecked:
+    boolean;
+
+  readonly boundedUseConsumed:
+    boolean;
+};
 
 export type Phase5AgentRuntimeAuthorizationResult = {
   readonly ok: boolean;
@@ -163,16 +194,16 @@ export type Phase5AgentRuntimeAuthorizationResult = {
     false;
 
   readonly currentAuthorizationEstablished:
-    false;
+    boolean;
 
   readonly validityEvaluatedAgainstClock:
-    false;
+    boolean;
 
   readonly revocationChecked:
-    false;
+    boolean;
 
   readonly boundedUseConsumed:
-    false;
+    boolean;
 
   readonly challengeReplayStateMutated:
     false;
@@ -192,6 +223,16 @@ export type Phase5AgentRuntimeAuthorizationInput = {
   readonly nonce: string;
   readonly envelope: unknown;
   readonly nowSec: number;
+  /**
+   * Allows a cryptographically verified, lifecycle-controlled
+   * retry to reach the atomic existing-claim check after the
+   * canonical challenge is already POLICY_SATISFIED.
+   *
+   * Omitted or false for every ordinary authorization path.
+   */
+  readonly allowSatisfiedChallengeRetry?:
+    boolean;
+
   readonly canonical:
     CanonicalChallengeBindingRecord;
   readonly contract: LoadedContractDefinition;
@@ -445,6 +486,10 @@ function buildResult(args: {
   authorizationReason?:
     string | null;
 
+  lifecycleSignals?:
+    Phase5AgentRuntimeLifecycleSignals
+    | null;
+
   proofVerification?:
     AgentProofOfPossessionVerificationResult
     | null;
@@ -461,6 +506,9 @@ function buildResult(args: {
 
   const cryptographicBinding =
     args.cryptographicBinding ?? null;
+
+  const lifecycleSignals =
+    args.lifecycleSignals ?? null;
 
   const allowed =
     args.reason === "policy_satisfied";
@@ -637,16 +685,24 @@ function buildResult(args: {
       false,
 
     currentAuthorizationEstablished:
-      false,
+      lifecycleSignals
+        ?.currentAuthorizationEstablished ===
+      true,
 
     validityEvaluatedAgainstClock:
-      false,
+      lifecycleSignals
+        ?.validityEvaluatedAgainstClock ===
+      true,
 
     revocationChecked:
-      false,
+      lifecycleSignals
+        ?.revocationChecked ===
+      true,
 
     boundedUseConsumed:
-      false,
+      lifecycleSignals
+        ?.boundedUseConsumed ===
+      true,
 
     challengeReplayStateMutated:
       false,
@@ -694,7 +750,16 @@ function canonicalStateMismatchFields(
     fields.push("canonical.nonce");
   }
 
-  if (canonical.status !== "ISSUED") {
+  const canonicalStatusAccepted =
+    canonical.status === "ISSUED" ||
+    (
+      input.allowSatisfiedChallengeRetry ===
+        true &&
+      canonical.status ===
+        "POLICY_SATISFIED"
+    );
+
+  if (!canonicalStatusAccepted) {
     fields.push("canonical.status");
   }
 
@@ -1014,66 +1079,111 @@ function controlledPolicyMismatchFields(
   return fields;
 }
 
-export function evaluatePhase5AgentRuntimeAuthorization(
-  input: Phase5AgentRuntimeAuthorizationInput,
-): Phase5AgentRuntimeAuthorizationResult {
+export type Phase5AgentRuntimeCryptographicPreflightResult =
+  | {
+      readonly ok: false;
+
+      readonly result:
+        Phase5AgentRuntimeAuthorizationResult;
+    }
+  | {
+      readonly ok: true;
+
+      readonly expectedChallengeHash:
+        string;
+
+      readonly expectedContext:
+        Phase5AgentDelegationBindingContext;
+
+      readonly proofVerification:
+        AgentProofOfPossessionVerificationResult
+        | null;
+
+      readonly cryptographicBinding:
+        Phase5AgentCryptographicBindingResult
+        | null;
+
+      readonly delegationDocument:
+        unknown | null;
+    };
+
+export function evaluatePhase5AgentRuntimeCryptographicPreflight(
+  input:
+    Phase5AgentRuntimeAuthorizationInput,
+): Phase5AgentRuntimeCryptographicPreflightResult {
   const stateFields =
     canonicalStateMismatchFields(input);
 
   if (stateFields.length > 0) {
-    return buildResult({
-      envelope: input.envelope,
-      reason: "canonical_challenge_state_invalid",
-      httpStatus: 409,
-      shouldPersistPolicyOutcome: null,
-      canonicalChallengeAccepted: false,
-      contractBindingAccepted: false,
-      canonicalMismatchFields: stateFields,
-      challengeIssuedAtSec:
-        input.canonical.issuedAtSec,
-      challengeExpiresAtSec:
-        input.canonical.expiresAtSec,
-    });
+    return {
+      ok: false,
+
+      result: buildResult({
+        envelope: input.envelope,
+        reason:
+          "canonical_challenge_state_invalid",
+        httpStatus: 409,
+        shouldPersistPolicyOutcome: null,
+        canonicalChallengeAccepted: false,
+        contractBindingAccepted: false,
+        canonicalMismatchFields:
+          stateFields,
+        challengeIssuedAtSec:
+          input.canonical.issuedAtSec,
+        challengeExpiresAtSec:
+          input.canonical.expiresAtSec,
+      }),
+    };
   }
 
   const contractFields =
     contractMismatchFields(input);
 
   if (contractFields.length > 0) {
-    return buildResult({
-      envelope: input.envelope,
-      reason: "canonical_contract_mismatch",
-      httpStatus: 409,
-      shouldPersistPolicyOutcome: null,
-      canonicalChallengeAccepted: true,
-      contractBindingAccepted: false,
-      canonicalMismatchFields: contractFields,
-      challengeIssuedAtSec:
-        input.canonical.issuedAtSec,
-      challengeExpiresAtSec:
-        input.canonical.expiresAtSec,
-    });
+    return {
+      ok: false,
+
+      result: buildResult({
+        envelope: input.envelope,
+        reason:
+          "canonical_contract_mismatch",
+        httpStatus: 409,
+        shouldPersistPolicyOutcome: null,
+        canonicalChallengeAccepted: true,
+        contractBindingAccepted: false,
+        canonicalMismatchFields:
+          contractFields,
+        challengeIssuedAtSec:
+          input.canonical.issuedAtSec,
+        challengeExpiresAtSec:
+          input.canonical.expiresAtSec,
+      }),
+    };
   }
 
   const policyFields =
     controlledPolicyMismatchFields(input);
 
   if (policyFields.length > 0) {
-    return buildResult({
-      envelope: input.envelope,
-      reason:
-        "unsupported_contract_policy",
-      httpStatus: 409,
-      shouldPersistPolicyOutcome: null,
-      canonicalChallengeAccepted: true,
-      contractBindingAccepted: false,
-      canonicalMismatchFields:
-        policyFields,
-      challengeIssuedAtSec:
-        input.canonical.issuedAtSec,
-      challengeExpiresAtSec:
-        input.canonical.expiresAtSec,
-    });
+    return {
+      ok: false,
+
+      result: buildResult({
+        envelope: input.envelope,
+        reason:
+          "unsupported_contract_policy",
+        httpStatus: 409,
+        shouldPersistPolicyOutcome: null,
+        canonicalChallengeAccepted: true,
+        contractBindingAccepted: false,
+        canonicalMismatchFields:
+          policyFields,
+        challengeIssuedAtSec:
+          input.canonical.issuedAtSec,
+        challengeExpiresAtSec:
+          input.canonical.expiresAtSec,
+      }),
+    };
   }
 
   let expectedChallengeHash: string;
@@ -1081,72 +1191,98 @@ export function evaluatePhase5AgentRuntimeAuthorization(
   try {
     const expectedChallenge =
       buildX402ZkpChallenge({
-        merchantId: input.canonical.merchantId,
+        merchantId:
+          input.canonical.merchantId,
+
         resource: {
           method:
             input.contract.resource.method,
+
           path:
             input.contract.resource.path,
         },
+
         contract: {
           contractId:
             input.canonical.contractId,
+
           contractVersion:
             input.canonical.contractVersion,
+
           isFrozen:
             input.contract.isFrozen,
         },
+
         network:
           input.canonical.network,
+
         chain_id:
           input.contract.chain_id,
+
         caip2ChainId: null,
+
         asset: {
           type:
             input.contract.asset.type,
+
           tokenId:
             input.contract.asset.tokenId,
+
           decimals:
             input.contract.asset.decimals,
         },
+
         amount:
           input.canonical.amount,
+
         amountMinor:
           amountToRawUnits(
             input.canonical.amount,
             input.contract.asset.decimals,
           ),
+
         payTo:
           input.canonical.payTo,
+
         nonce:
           input.canonical.nonce,
+
         issuedAt:
           input.canonical.issuedAtSec,
+
         expiresAt:
           input.canonical.expiresAtSec,
+
         policy:
           PHASE5_AGENT_RUNTIME_POLICY_REQUIREMENT,
+
         businessTerms: null,
         buyer: null,
         agent: null,
       });
 
     expectedChallengeHash =
-      hashX402ZkpChallenge(expectedChallenge);
+      hashX402ZkpChallenge(
+        expectedChallenge,
+      );
   } catch {
-    return buildResult({
-      envelope: input.envelope,
-      reason:
-        "canonical_challenge_construction_failed",
-      httpStatus: 409,
-      shouldPersistPolicyOutcome: null,
-      canonicalChallengeAccepted: false,
-      contractBindingAccepted: true,
-      challengeIssuedAtSec:
-        input.canonical.issuedAtSec,
-      challengeExpiresAtSec:
-        input.canonical.expiresAtSec,
-    });
+    return {
+      ok: false,
+
+      result: buildResult({
+        envelope: input.envelope,
+        reason:
+          "canonical_challenge_construction_failed",
+        httpStatus: 409,
+        shouldPersistPolicyOutcome: null,
+        canonicalChallengeAccepted: false,
+        contractBindingAccepted: true,
+        challengeIssuedAtSec:
+          input.canonical.issuedAtSec,
+        challengeExpiresAtSec:
+          input.canonical.expiresAtSec,
+      }),
+    };
   }
 
   const expectedContext =
@@ -1163,6 +1299,9 @@ export function evaluatePhase5AgentRuntimeAuthorization(
     Phase5AgentCryptographicBindingResult
     | null = null;
 
+  let delegationDocument:
+    unknown | null = null;
+
   if (
     input.cryptographicDelegation
       ?.enabled === true
@@ -1174,41 +1313,45 @@ export function evaluatePhase5AgentRuntimeAuthorization(
       );
 
     if (!structuralAuthorization.ok) {
-      return buildResult({
-        envelope:
-          input.envelope,
+      return {
+        ok: false,
 
-        reason:
-          "authorization_binding_rejected",
+        result: buildResult({
+          envelope:
+            input.envelope,
 
-        httpStatus:
-          cryptographicHttpStatus(
+          reason:
+            "authorization_binding_rejected",
+
+          httpStatus:
+            cryptographicHttpStatus(
+              structuralAuthorization.reason,
+            ),
+
+          shouldPersistPolicyOutcome:
+            "failed",
+
+          canonicalChallengeAccepted:
+            true,
+
+          contractBindingAccepted:
+            true,
+
+          expectedChallengeHash,
+
+          challengeIssuedAtSec:
+            input.canonical.issuedAtSec,
+
+          challengeExpiresAtSec:
+            input.canonical.expiresAtSec,
+
+          authorizationAccepted:
+            false,
+
+          authorizationReason:
             structuralAuthorization.reason,
-          ),
-
-        shouldPersistPolicyOutcome:
-          "failed",
-
-        canonicalChallengeAccepted:
-          true,
-
-        contractBindingAccepted:
-          true,
-
-        expectedChallengeHash,
-
-        challengeIssuedAtSec:
-          input.canonical.issuedAtSec,
-
-        challengeExpiresAtSec:
-          input.canonical.expiresAtSec,
-
-        authorizationAccepted:
-          false,
-
-        authorizationReason:
-          structuralAuthorization.reason,
-      });
+        }),
+      };
     }
 
     const bundle =
@@ -1217,40 +1360,46 @@ export function evaluatePhase5AgentRuntimeAuthorization(
       );
 
     if (bundle === null) {
-      return buildResult({
-        envelope:
-          input.envelope,
+      return {
+        ok: false,
 
-        reason:
-          "missing_cryptographic_delegation_bundle",
+        result: buildResult({
+          envelope:
+            input.envelope,
 
-        httpStatus:
-          403,
+          reason:
+            "missing_cryptographic_delegation_bundle",
 
-        shouldPersistPolicyOutcome:
-          "failed",
+          httpStatus: 403,
 
-        canonicalChallengeAccepted:
-          true,
+          shouldPersistPolicyOutcome:
+            "failed",
 
-        contractBindingAccepted:
-          true,
+          canonicalChallengeAccepted:
+            true,
 
-        expectedChallengeHash,
+          contractBindingAccepted:
+            true,
 
-        challengeIssuedAtSec:
-          input.canonical.issuedAtSec,
+          expectedChallengeHash,
 
-        challengeExpiresAtSec:
-          input.canonical.expiresAtSec,
+          challengeIssuedAtSec:
+            input.canonical.issuedAtSec,
 
-        authorizationAccepted:
-          false,
+          challengeExpiresAtSec:
+            input.canonical.expiresAtSec,
 
-        authorizationReason:
-          "missing_cryptographic_delegation_bundle",
-      });
+          authorizationAccepted:
+            false,
+
+          authorizationReason:
+            "missing_cryptographic_delegation_bundle",
+        }),
+      };
     }
+
+    delegationDocument =
+      bundle.delegationDocument;
 
     proofVerification =
       verifyAgentProofOfPossession({
@@ -1281,43 +1430,47 @@ export function evaluatePhase5AgentRuntimeAuthorization(
       });
 
     if (!proofVerification.ok) {
-      return buildResult({
-        envelope:
-          input.envelope,
+      return {
+        ok: false,
 
-        reason:
-          proofVerification.reason,
+        result: buildResult({
+          envelope:
+            input.envelope,
 
-        httpStatus:
-          cryptographicHttpStatus(
+          reason:
             proofVerification.reason,
-          ),
 
-        shouldPersistPolicyOutcome:
-          "failed",
+          httpStatus:
+            cryptographicHttpStatus(
+              proofVerification.reason,
+            ),
 
-        canonicalChallengeAccepted:
-          true,
+          shouldPersistPolicyOutcome:
+            "failed",
 
-        contractBindingAccepted:
-          true,
+          canonicalChallengeAccepted:
+            true,
 
-        expectedChallengeHash,
+          contractBindingAccepted:
+            true,
 
-        challengeIssuedAtSec:
-          input.canonical.issuedAtSec,
+          expectedChallengeHash,
 
-        challengeExpiresAtSec:
-          input.canonical.expiresAtSec,
+          challengeIssuedAtSec:
+            input.canonical.issuedAtSec,
 
-        authorizationAccepted:
-          false,
+          challengeExpiresAtSec:
+            input.canonical.expiresAtSec,
 
-        authorizationReason:
-          proofVerification.reason,
+          authorizationAccepted:
+            false,
 
-        proofVerification,
-      });
+          authorizationReason:
+            proofVerification.reason,
+
+          proofVerification,
+        }),
+      };
     }
 
     cryptographicBinding =
@@ -1340,70 +1493,103 @@ export function evaluatePhase5AgentRuntimeAuthorization(
       });
 
     if (!cryptographicBinding.ok) {
-      return buildResult({
-        envelope:
-          input.envelope,
+      return {
+        ok: false,
 
-        reason:
-          cryptographicBinding.reason,
+        result: buildResult({
+          envelope:
+            input.envelope,
 
-        httpStatus:
-          cryptographicHttpStatus(
+          reason:
             cryptographicBinding.reason,
-          ),
 
-        shouldPersistPolicyOutcome:
-          "failed",
+          httpStatus:
+            cryptographicHttpStatus(
+              cryptographicBinding.reason,
+            ),
 
-        canonicalChallengeAccepted:
-          true,
+          shouldPersistPolicyOutcome:
+            "failed",
 
-        contractBindingAccepted:
-          true,
+          canonicalChallengeAccepted:
+            true,
 
-        expectedChallengeHash,
+          contractBindingAccepted:
+            true,
 
-        challengeIssuedAtSec:
-          input.canonical.issuedAtSec,
+          expectedChallengeHash,
 
-        challengeExpiresAtSec:
-          input.canonical.expiresAtSec,
+          challengeIssuedAtSec:
+            input.canonical.issuedAtSec,
 
-        authorizationAccepted:
-          false,
+          challengeExpiresAtSec:
+            input.canonical.expiresAtSec,
 
-        authorizationReason:
-          cryptographicBinding.reason,
+          authorizationAccepted:
+            false,
 
-        proofVerification,
+          authorizationReason:
+            cryptographicBinding.reason,
 
-        cryptographicBinding,
-      });
+          proofVerification,
+
+          cryptographicBinding,
+        }),
+      };
     }
+  }
+
+  return {
+    ok: true,
+
+    expectedChallengeHash,
+    expectedContext,
+
+    proofVerification,
+    cryptographicBinding,
+
+    delegationDocument,
+  };
+}
+
+export function completePhase5AgentRuntimePolicyEvaluation(
+  input:
+    Phase5AgentRuntimeAuthorizationInput,
+
+  preflight:
+    Phase5AgentRuntimeCryptographicPreflightResult,
+): Phase5AgentRuntimeAuthorizationResult {
+  if (!preflight.ok) {
+    return preflight.result;
   }
 
   const policy =
     evaluatePhase5AgentPolicy(
       input.envelope,
-      expectedContext,
+      preflight.expectedContext,
     );
 
   if (!policy.ok) {
     return buildResult({
       envelope: input.envelope,
       reason: policy.reason,
-      httpStatus: policyHttpStatus(policy),
-      shouldPersistPolicyOutcome: "failed",
+      httpStatus:
+        policyHttpStatus(policy),
+      shouldPersistPolicyOutcome:
+        "failed",
       canonicalChallengeAccepted: true,
       contractBindingAccepted: true,
-      expectedChallengeHash,
+      expectedChallengeHash:
+        preflight.expectedChallengeHash,
       challengeIssuedAtSec:
         input.canonical.issuedAtSec,
       challengeExpiresAtSec:
         input.canonical.expiresAtSec,
       policyEvaluation: policy,
-      proofVerification,
-      cryptographicBinding,
+      proofVerification:
+        preflight.proofVerification,
+      cryptographicBinding:
+        preflight.cryptographicBinding,
     });
   }
 
@@ -1411,16 +1597,154 @@ export function evaluatePhase5AgentRuntimeAuthorization(
     envelope: input.envelope,
     reason: "policy_satisfied",
     httpStatus: 200,
-    shouldPersistPolicyOutcome: "satisfied",
+    shouldPersistPolicyOutcome:
+      "satisfied",
     canonicalChallengeAccepted: true,
     contractBindingAccepted: true,
-    expectedChallengeHash,
+    expectedChallengeHash:
+      preflight.expectedChallengeHash,
     challengeIssuedAtSec:
       input.canonical.issuedAtSec,
     challengeExpiresAtSec:
       input.canonical.expiresAtSec,
     policyEvaluation: policy,
-    proofVerification,
-    cryptographicBinding,
+    proofVerification:
+      preflight.proofVerification,
+    cryptographicBinding:
+      preflight.cryptographicBinding,
   });
+}
+
+function lifecycleFailureHttpStatus(
+  reason:
+    Phase5AgentRuntimeLifecycleFailureReason,
+): 403 | 409 {
+  switch (reason) {
+    case "lifecycle_contract_mismatch":
+    case "revocation_record_mismatch":
+    case "usage_contract_mismatch":
+    case "claim_conflict":
+    case "claim_state_inconsistent":
+    case "challenge_missing":
+    case "challenge_state_conflict":
+      return 409;
+
+    default:
+      return 403;
+  }
+}
+
+export function applyPhase5AgentRuntimeLifecycleSignals(
+  result:
+    Phase5AgentRuntimeAuthorizationResult,
+
+  lifecycleSignals:
+    Phase5AgentRuntimeLifecycleSignals,
+): Phase5AgentRuntimeAuthorizationResult {
+  return {
+    ...result,
+
+    currentAuthorizationEstablished:
+      lifecycleSignals
+        .currentAuthorizationEstablished,
+
+    validityEvaluatedAgainstClock:
+      lifecycleSignals
+        .validityEvaluatedAgainstClock,
+
+    revocationChecked:
+      lifecycleSignals
+        .revocationChecked,
+
+    boundedUseConsumed:
+      lifecycleSignals
+        .boundedUseConsumed,
+  };
+}
+
+export function buildPhase5AgentRuntimeLifecycleFailure(
+  args: {
+    readonly input:
+      Phase5AgentRuntimeAuthorizationInput;
+
+    readonly preflight:
+      Extract<
+        Phase5AgentRuntimeCryptographicPreflightResult,
+        {
+          readonly ok: true;
+        }
+      >;
+
+    readonly reason:
+      Phase5AgentRuntimeLifecycleFailureReason;
+
+    readonly lifecycleSignals:
+      Phase5AgentRuntimeLifecycleSignals;
+
+    readonly policyResult?:
+      Phase5AgentRuntimeAuthorizationResult
+      | null;
+  },
+): Phase5AgentRuntimeAuthorizationResult {
+  const policyResult =
+    args.policyResult ?? null;
+
+  return buildResult({
+    envelope:
+      args.input.envelope,
+
+    reason:
+      args.reason,
+
+    httpStatus:
+      lifecycleFailureHttpStatus(
+        args.reason,
+      ),
+
+    shouldPersistPolicyOutcome:
+      "failed",
+
+    canonicalChallengeAccepted:
+      true,
+
+    contractBindingAccepted:
+      true,
+
+    expectedChallengeHash:
+      args.preflight.expectedChallengeHash,
+
+    challengeIssuedAtSec:
+      args.input.canonical.issuedAtSec,
+
+    challengeExpiresAtSec:
+      args.input.canonical.expiresAtSec,
+
+    policyEvaluation:
+      policyResult?.policyEvaluation ??
+      null,
+
+    lifecycleSignals:
+      args.lifecycleSignals,
+
+    proofVerification:
+      args.preflight.proofVerification,
+
+    cryptographicBinding:
+      args.preflight.cryptographicBinding,
+  });
+}
+
+export function evaluatePhase5AgentRuntimeAuthorization(
+  input:
+    Phase5AgentRuntimeAuthorizationInput,
+): Phase5AgentRuntimeAuthorizationResult {
+  const preflight =
+    evaluatePhase5AgentRuntimeCryptographicPreflight(
+      input,
+    );
+
+  return completePhase5AgentRuntimePolicyEvaluation(
+    input,
+    preflight,
+  );
 }
