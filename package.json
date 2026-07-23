@@ -190,7 +190,8 @@
     "phase5:agent-delegation-lifecycle-test": "ts-node --transpile-only scripts/ci_phase5_agent_delegation_lifecycle.ts",
     "phase5:final-acceptance-test": "ts-node --transpile-only scripts/ci_phase5_final_acceptance.ts",
     "phase5:agent-delegation-lifecycle-e2e": "bash scripts/demo_x402_v2_agent_delegated_lifecycle_e2e.sh",
-    "phase6:agent-registry-trust-contract-test": "ts-node --transpile-only scripts/ci_phase6_agent_registry_trust_contract.ts"
+    "phase6:agent-registry-trust-contract-test": "ts-node --transpile-only scripts/ci_phase6_agent_registry_trust_contract.ts",
+    "phase6:agent-registry-resolver-seam-test": "ts-node --transpile-only scripts/ci_phase6_agent_registry_resolver_seam.ts"
   },
   "repository": {
     "type": "git",
