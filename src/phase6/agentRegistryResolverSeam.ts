@@ -1,7 +1,8 @@
 /**
  * Phase 6 controlled Agent Registry resolver seam.
  *
- * PR #299 is fixture-only and test-only:
+ * PR #299 introduced the fixture-only controlled resolver seam.
+ * PR #300 widens that seam for the read-only Concordium CIS-8004 plugin:
  * - consumes the frozen PR #298 contracts;
  * - injects a deterministic fixture resolver;
  * - validates every resolver result at runtime;
@@ -38,6 +39,17 @@ export const AGENT_REGISTRY_RESOLVER_UNAVAILABLE_TYPE =
 
 export const AGENT_REGISTRY_RESOLVER_MODE =
   "fixture_only" as const;
+
+export const AGENT_REGISTRY_CONCORDIUM_CIS8004_RESOLVER_MODE =
+  "concordium_cis8004" as const;
+
+export const AGENT_REGISTRY_RESOLVER_MODES = [
+  AGENT_REGISTRY_RESOLVER_MODE,
+  AGENT_REGISTRY_CONCORDIUM_CIS8004_RESOLVER_MODE,
+] as const;
+
+export type AgentRegistryResolverModeV1 =
+  (typeof AGENT_REGISTRY_RESOLVER_MODES)[number];
 
 export const AGENT_REGISTRY_RESOLVER_SEAM_STATUSES = [
   "not_required",
@@ -104,7 +116,7 @@ export interface AgentRegistryResolverV1 {
     typeof AGENT_REGISTRY_CONTRACT_VERSION;
 
   readonly mode:
-    typeof AGENT_REGISTRY_RESOLVER_MODE;
+    AgentRegistryResolverModeV1;
 
   resolve(
     request: AgentRegistryResolverRequestV1,
@@ -230,7 +242,7 @@ export type AgentRegistryResolverSeamResultV1 = {
     AgentRegistryResolverSeamStatusV1;
 
   readonly mode:
-    typeof AGENT_REGISTRY_RESOLVER_MODE;
+    AgentRegistryResolverModeV1;
 
   readonly reason:
     AgentRegistryResolverSeamReasonV1;
@@ -265,8 +277,11 @@ export type AgentRegistryResolverSeamResultV1 = {
   readonly fixtureResolverInvoked:
     boolean;
 
+  readonly concordiumResolverInvoked:
+    boolean;
+
   readonly registryNetworkCalled:
-    false;
+    boolean;
 
   readonly gatewayRuntimeCalled:
     false;
@@ -305,7 +320,7 @@ export type AgentRegistryResolverSeamResultV1 = {
     false;
 
   readonly agentRegistryLookupAttempted:
-    false;
+    boolean;
 
   readonly productionActivation:
     false;
@@ -315,6 +330,9 @@ type UnknownRecord =
   Record<string, unknown>;
 
 type BuildResolverSeamResultOptions = {
+  readonly mode?:
+    AgentRegistryResolverModeV1;
+
   readonly requirementValidationReason:
     AgentRegistryContractValidationReasonV1;
 
@@ -342,8 +360,6 @@ type BuildResolverSeamResultOptions = {
   readonly resolverInvoked?:
     boolean;
 
-  readonly fixtureResolverInvoked?:
-    boolean;
 };
 
 function asRecord(
@@ -379,7 +395,7 @@ function hasOnlyKeys(
   );
 }
 
-function isFixtureResolver(
+function isAgentRegistryResolver(
   value: unknown,
 ): value is AgentRegistryResolverV1 {
   const record =
@@ -392,8 +408,10 @@ function isFixtureResolver(
       AGENT_REGISTRY_RESOLVER_KIND &&
     record.version ===
       AGENT_REGISTRY_CONTRACT_VERSION &&
-    record.mode ===
-      AGENT_REGISTRY_RESOLVER_MODE &&
+    AGENT_REGISTRY_RESOLVER_MODES.includes(
+      record.mode as
+        AgentRegistryResolverModeV1,
+    ) &&
     typeof record.resolve ===
       "function"
   );
@@ -540,12 +558,29 @@ function buildResolverSeamResult(
     status ===
       "resolved";
 
+  const mode =
+    options.mode ??
+    AGENT_REGISTRY_RESOLVER_MODE;
+
+  const resolverInvoked =
+    options.resolverInvoked ??
+    false;
+
+  const fixtureResolverInvoked =
+    resolverInvoked &&
+    mode ===
+      AGENT_REGISTRY_RESOLVER_MODE;
+
+  const concordiumResolverInvoked =
+    resolverInvoked &&
+    mode ===
+      AGENT_REGISTRY_CONCORDIUM_CIS8004_RESOLVER_MODE;
+
   return {
     ok,
     status,
 
-    mode:
-      AGENT_REGISTRY_RESOLVER_MODE,
+    mode,
 
     reason,
 
@@ -580,16 +615,14 @@ function buildResolverSeamResult(
       options.registryTrustSatisfied ??
       null,
 
-    resolverInvoked:
-      options.resolverInvoked ??
-      false,
+    resolverInvoked,
 
-    fixtureResolverInvoked:
-      options.fixtureResolverInvoked ??
-      false,
+    fixtureResolverInvoked,
+
+    concordiumResolverInvoked,
 
     registryNetworkCalled:
-      false,
+      concordiumResolverInvoked,
 
     gatewayRuntimeCalled:
       false,
@@ -628,7 +661,7 @@ function buildResolverSeamResult(
       false,
 
     agentRegistryLookupAttempted:
-      false,
+      concordiumResolverInvoked,
 
     productionActivation:
       false,
@@ -643,7 +676,7 @@ function buildResolverSeamResult(
  * 2. bypass when registry trust is not required;
  * 3. require and validate the canonical registry reference;
  * 4. enforce the trusted-registry allowlist;
- * 5. invoke only a fixture-only injected resolver;
+ * 5. invoke only a validated fixture or Concordium CIS-8004 resolver;
  * 6. handle unavailable and thrown resolver behavior;
  * 7. validate the unknown resolver result using PR #298;
  * 8. bind the result to the requested registry identity;
@@ -654,6 +687,36 @@ export async function resolveAgentRegistryTrustForGatewayV1(
   input:
     ResolveAgentRegistryTrustForGatewayInputV1,
 ): Promise<AgentRegistryResolverSeamResultV1> {
+  const resolver =
+    isAgentRegistryResolver(
+      input.resolver,
+    )
+      ? input.resolver
+      : null;
+
+  const resolverMode =
+    resolver?.mode ??
+    AGENT_REGISTRY_RESOLVER_MODE;
+
+  const buildResult = (
+    status:
+      AgentRegistryResolverSeamStatusV1,
+    reason:
+      AgentRegistryResolverSeamReasonV1,
+    options:
+      BuildResolverSeamResultOptions,
+  ): AgentRegistryResolverSeamResultV1 =>
+    buildResolverSeamResult(
+      status,
+      reason,
+      {
+        ...options,
+
+        mode:
+          resolverMode,
+      },
+    );
+
   const requirementValidation =
     validateAgentRegistryRequirementV1(
       input.requirement,
@@ -664,7 +727,7 @@ export async function resolveAgentRegistryTrustForGatewayV1(
     requirementValidation.value ===
       null
   ) {
-    return buildResolverSeamResult(
+    return buildResult(
       "rejected",
       mapRequirementFailure(
         requirementValidation
@@ -682,7 +745,7 @@ export async function resolveAgentRegistryTrustForGatewayV1(
     requirementValidation.value;
 
   if (!requirement.required) {
-    return buildResolverSeamResult(
+    return buildResult(
       "not_required",
       "not_required",
       {
@@ -701,7 +764,7 @@ export async function resolveAgentRegistryTrustForGatewayV1(
     input.reference ===
       null
   ) {
-    return buildResolverSeamResult(
+    return buildResult(
       "rejected",
       "missing_registry_reference",
       {
@@ -724,7 +787,7 @@ export async function resolveAgentRegistryTrustForGatewayV1(
     referenceValidation.value ===
       null
   ) {
-    return buildResolverSeamResult(
+    return buildResult(
       "rejected",
       mapReferenceFailure(
         referenceValidation
@@ -757,7 +820,7 @@ export async function resolveAgentRegistryTrustForGatewayV1(
     matchedTrustedRegistry ===
       null
   ) {
-    return buildResolverSeamResult(
+    return buildResult(
       "rejected",
       "untrusted_registry_contract",
       {
@@ -776,11 +839,10 @@ export async function resolveAgentRegistryTrustForGatewayV1(
   }
 
   if (
-    !isFixtureResolver(
-      input.resolver,
-    )
+    resolver ===
+      null
   ) {
-    return buildResolverSeamResult(
+    return buildResult(
       "unavailable",
       "agent_registry_resolver_unavailable",
       {
@@ -798,9 +860,6 @@ export async function resolveAgentRegistryTrustForGatewayV1(
       },
     );
   }
-
-  const resolver =
-    input.resolver;
 
   const request:
     AgentRegistryResolverRequestV1 = {
@@ -823,7 +882,7 @@ export async function resolveAgentRegistryTrustForGatewayV1(
         request,
       );
   } catch {
-    return buildResolverSeamResult(
+    return buildResult(
       "unavailable",
       "resolver_exception",
       {
@@ -842,8 +901,6 @@ export async function resolveAgentRegistryTrustForGatewayV1(
         resolverInvoked:
           true,
 
-        fixtureResolverInvoked:
-          true,
       },
     );
   }
@@ -853,7 +910,7 @@ export async function resolveAgentRegistryTrustForGatewayV1(
       resolverOutput,
     )
   ) {
-    return buildResolverSeamResult(
+    return buildResult(
       "unavailable",
       "agent_registry_resolver_unavailable",
       {
@@ -872,8 +929,6 @@ export async function resolveAgentRegistryTrustForGatewayV1(
         resolverInvoked:
           true,
 
-        fixtureResolverInvoked:
-          true,
       },
     );
   }
@@ -888,7 +943,7 @@ export async function resolveAgentRegistryTrustForGatewayV1(
     trustResultValidation.value ===
       null
   ) {
-    return buildResolverSeamResult(
+    return buildResult(
       "invalid_result",
       "agent_registry_result_invalid",
       {
@@ -911,8 +966,6 @@ export async function resolveAgentRegistryTrustForGatewayV1(
         resolverInvoked:
           true,
 
-        fixtureResolverInvoked:
-          true,
       },
     );
   }
@@ -926,7 +979,7 @@ export async function resolveAgentRegistryTrustForGatewayV1(
       reference,
     )
   ) {
-    return buildResolverSeamResult(
+    return buildResult(
       "rejected",
       "agent_registry_contract_mismatch",
       {
@@ -949,8 +1002,6 @@ export async function resolveAgentRegistryTrustForGatewayV1(
         resolverInvoked:
           true,
 
-        fixtureResolverInvoked:
-          true,
       },
     );
   }
@@ -961,7 +1012,7 @@ export async function resolveAgentRegistryTrustForGatewayV1(
       reference,
     )
   ) {
-    return buildResolverSeamResult(
+    return buildResult(
       "rejected",
       "agent_registry_identity_mismatch",
       {
@@ -984,8 +1035,6 @@ export async function resolveAgentRegistryTrustForGatewayV1(
         resolverInvoked:
           true,
 
-        fixtureResolverInvoked:
-          true,
       },
     );
   }
@@ -999,7 +1048,7 @@ export async function resolveAgentRegistryTrustForGatewayV1(
       matchedTrustedRegistry
         .moduleReference
   ) {
-    return buildResolverSeamResult(
+    return buildResult(
       "rejected",
       "agent_registry_contract_mismatch",
       {
@@ -1022,13 +1071,11 @@ export async function resolveAgentRegistryTrustForGatewayV1(
         resolverInvoked:
           true,
 
-        fixtureResolverInvoked:
-          true,
       },
     );
   }
 
-  return buildResolverSeamResult(
+  return buildResult(
     "resolved",
     trustResult.reason,
     {
@@ -1055,8 +1102,6 @@ export async function resolveAgentRegistryTrustForGatewayV1(
       resolverInvoked:
         true,
 
-      fixtureResolverInvoked:
-        true,
     },
   );
 }
