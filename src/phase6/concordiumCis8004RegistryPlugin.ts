@@ -143,6 +143,25 @@ export type ConcordiumCis8004FinalizedSnapshotV1 = {
   readonly finalized: true;
 };
 
+export type ConcordiumCis8ExternalKeyIdV1 = {
+  readonly namespace: string;
+
+  readonly keyType: string;
+
+  readonly publicKeyHex: string;
+};
+
+export type ConcordiumCis8004ExternalReferenceV1 = {
+  readonly contractAddress:
+    AgentRegistryContractCoordinateV1;
+
+  readonly kind:
+    "CIS-8";
+
+  readonly externalKeyId:
+    ConcordiumCis8ExternalKeyIdV1;
+};
+
 export type ConcordiumCis8004AgentRecordV1 = {
   readonly tokenId: string;
 
@@ -152,7 +171,8 @@ export type ConcordiumCis8004AgentRecordV1 = {
 
   readonly metadataHash: string | null;
 
-  readonly externalReference: string | null;
+  readonly externalReference:
+    ConcordiumCis8004ExternalReferenceV1 | null;
 
   readonly agentWallet: string | null;
 
@@ -275,6 +295,26 @@ const AGENT_OF_RECORD_KEYS = [
   "revoked_at",
   "revocation_reason",
   "on_chain_metadata",
+] as const;
+
+const CIS8004_EXTERNAL_REFERENCE_KEYS = [
+  "contract_address",
+  "kind",
+] as const;
+
+const CIS8004_EXTERNAL_REFERENCE_CONTRACT_KEYS = [
+  "index",
+  "subindex",
+] as const;
+
+const CIS8004_EXTERNAL_REFERENCE_KIND_KEYS = [
+  "Cis8",
+] as const;
+
+const CIS8_EXTERNAL_KEY_ID_KEYS = [
+  "key_type",
+  "namespace",
+  "public_key",
 ] as const;
 
 function asRecord(
@@ -881,6 +921,308 @@ function parseOptionalIsoTimestamp(
     undefined;
 }
 
+
+function parseCis8UnsignedDecimal(
+  value: unknown,
+): string | null {
+  if (
+    typeof value ===
+      "bigint"
+  ) {
+    return value >=
+      0n
+      ? value.toString(
+          10,
+        )
+      : null;
+  }
+
+  if (
+    typeof value ===
+      "number"
+  ) {
+    return (
+      Number.isSafeInteger(
+        value,
+      ) &&
+      value >=
+        0
+    )
+      ? String(
+          value,
+        )
+      : null;
+  }
+
+  return (
+    typeof value ===
+      "string" &&
+    /^(0|[1-9]\d*)$/.test(
+      value,
+    )
+  )
+    ? value
+    : null;
+}
+
+function parseCis8Byte(
+  value: unknown,
+): number | null {
+  if (
+    typeof value ===
+      "bigint"
+  ) {
+    return (
+      value >=
+        0n &&
+      value <=
+        255n
+    )
+      ? Number(
+          value,
+        )
+      : null;
+  }
+
+  if (
+    typeof value ===
+      "number"
+  ) {
+    return (
+      Number.isInteger(
+        value,
+      ) &&
+      value >=
+        0 &&
+      value <=
+        255
+    )
+      ? value
+      : null;
+  }
+
+  if (
+    typeof value ===
+      "string" &&
+    /^(0|[1-9]\d*)$/.test(
+      value,
+    )
+  ) {
+    const parsed =
+      Number(
+        value,
+      );
+
+    return (
+      Number.isSafeInteger(
+        parsed,
+      ) &&
+      parsed >=
+        0 &&
+      parsed <=
+        255
+    )
+      ? parsed
+      : null;
+  }
+
+  return null;
+}
+
+function parseCis8PublicKeyHex(
+  value: unknown,
+): string | null {
+  if (
+    !Array.isArray(
+      value,
+    ) ||
+    value.length ===
+      0 ||
+    value.length >
+      4096
+  ) {
+    return null;
+  }
+
+  const bytes:
+    number[] = [];
+
+  for (
+    const candidate of value
+  ) {
+    const byte =
+      parseCis8Byte(
+        candidate,
+      );
+
+    if (
+      byte ===
+        null
+    ) {
+      return null;
+    }
+
+    bytes.push(
+      byte,
+    );
+  }
+
+  return Buffer
+    .from(
+      bytes,
+    )
+    .toString(
+      "hex",
+    );
+}
+
+function normalizeDecodedCis8004ExternalReference(
+  value: unknown,
+): ConcordiumCis8004ExternalReferenceV1 | null {
+  const reference =
+    asRecord(
+      value,
+    );
+
+  if (
+    reference ===
+      null ||
+    !hasExactKeys(
+      reference,
+      CIS8004_EXTERNAL_REFERENCE_KEYS,
+    )
+  ) {
+    return null;
+  }
+
+  const contractAddress =
+    asRecord(
+      reference.contract_address,
+    );
+
+  const kind =
+    asRecord(
+      reference.kind,
+    );
+
+  if (
+    contractAddress ===
+      null ||
+    !hasExactKeys(
+      contractAddress,
+      CIS8004_EXTERNAL_REFERENCE_CONTRACT_KEYS,
+    ) ||
+    kind ===
+      null ||
+    !hasExactKeys(
+      kind,
+      CIS8004_EXTERNAL_REFERENCE_KIND_KEYS,
+    ) ||
+    !Array.isArray(
+      kind.Cis8,
+    ) ||
+    kind.Cis8.length !==
+      1
+  ) {
+    return null;
+  }
+
+  const externalKeyId =
+    asRecord(
+      kind.Cis8[0],
+    );
+
+  if (
+    externalKeyId ===
+      null ||
+    !hasExactKeys(
+      externalKeyId,
+      CIS8_EXTERNAL_KEY_ID_KEYS,
+    )
+  ) {
+    return null;
+  }
+
+  const namespace =
+    externalKeyId.namespace;
+
+  const keyType =
+    externalKeyId.key_type;
+
+  if (
+    !isCompactString(
+      namespace,
+      2048,
+    ) ||
+    !isCompactString(
+      keyType,
+      2048,
+    )
+  ) {
+    return null;
+  }
+
+  const contractIndex =
+    parseCis8UnsignedDecimal(
+      contractAddress.index,
+    );
+
+  const contractSubindexDecimal =
+    parseCis8UnsignedDecimal(
+      contractAddress.subindex,
+    );
+
+  const contractSubindex =
+    contractSubindexDecimal ===
+      null
+      ? null
+      : Number(
+          contractSubindexDecimal,
+        );
+
+  const publicKeyHex =
+    parseCis8PublicKeyHex(
+      externalKeyId.public_key,
+    );
+
+  if (
+    contractIndex ===
+      null ||
+    contractSubindex ===
+      null ||
+    !Number.isSafeInteger(
+      contractSubindex,
+    ) ||
+    contractSubindex <
+      0 ||
+    publicKeyHex ===
+      null
+  ) {
+    return null;
+  }
+
+  return {
+    contractAddress: {
+      index:
+        contractIndex,
+
+      subindex:
+        contractSubindex,
+    },
+
+    kind:
+      "CIS-8",
+
+    externalKeyId: {
+      namespace,
+
+      keyType,
+
+      publicKeyHex,
+    },
+  };
+}
+
 function normalizeDecodedAgentOfResult(
   value: unknown,
 ): ConcordiumCis8004AgentRecordV1 | null {
@@ -940,13 +1282,34 @@ function normalizeDecodedAgentOfResult(
       4096,
     );
 
-  const externalReference =
-    parseOptionalString(
-      parseConcordiumOption(
-        record.external_reference,
-      ),
-      4096,
+  const externalReferenceOption =
+    parseConcordiumOption(
+      record.external_reference,
     );
+
+  let externalReference:
+    ConcordiumCis8004ExternalReferenceV1 |
+    null |
+    undefined;
+
+  if (
+    !externalReferenceOption.ok
+  ) {
+    externalReference =
+      undefined;
+  } else if (
+    externalReferenceOption.value ===
+      null
+  ) {
+    externalReference =
+      null;
+  } else {
+    externalReference =
+      normalizeDecodedCis8004ExternalReference(
+        externalReferenceOption.value,
+      ) ??
+      undefined;
+  }
 
   const agentWallet =
     parseOptionalCompactString(
@@ -1137,6 +1500,109 @@ function isNullableLowerHex64(
   );
 }
 
+
+function isCis8004ExternalReference(
+  value: unknown,
+): value is ConcordiumCis8004ExternalReferenceV1 {
+  const reference =
+    asRecord(
+      value,
+    );
+
+  if (
+    reference ===
+      null ||
+    !hasExactKeys(
+      reference,
+      [
+        "contractAddress",
+        "kind",
+        "externalKeyId",
+      ],
+    ) ||
+    reference.kind !==
+      "CIS-8"
+  ) {
+    return false;
+  }
+
+  const contractAddress =
+    asRecord(
+      reference.contractAddress,
+    );
+
+  const externalKeyId =
+    asRecord(
+      reference.externalKeyId,
+    );
+
+  return (
+    contractAddress !==
+      null &&
+    hasExactKeys(
+      contractAddress,
+      [
+        "index",
+        "subindex",
+      ],
+    ) &&
+    typeof contractAddress.index ===
+      "string" &&
+    /^(0|[1-9]\d*)$/.test(
+      contractAddress.index,
+    ) &&
+    typeof contractAddress.subindex ===
+      "number" &&
+    Number.isSafeInteger(
+      contractAddress.subindex,
+    ) &&
+    contractAddress.subindex >=
+      0 &&
+    externalKeyId !==
+      null &&
+    hasExactKeys(
+      externalKeyId,
+      [
+        "namespace",
+        "keyType",
+        "publicKeyHex",
+      ],
+    ) &&
+    isCompactString(
+      externalKeyId.namespace,
+      2048,
+    ) &&
+    isCompactString(
+      externalKeyId.keyType,
+      2048,
+    ) &&
+    typeof externalKeyId.publicKeyHex ===
+      "string" &&
+    externalKeyId.publicKeyHex.length >
+      0 &&
+    externalKeyId.publicKeyHex.length %
+      2 ===
+      0 &&
+    externalKeyId.publicKeyHex.length <=
+      8192 &&
+    /^[0-9a-f]+$/.test(
+      externalKeyId.publicKeyHex,
+    )
+  );
+}
+
+function isNullableCis8004ExternalReference(
+  value: unknown,
+): value is ConcordiumCis8004ExternalReferenceV1 | null {
+  return (
+    value ===
+      null ||
+    isCis8004ExternalReference(
+      value,
+    )
+  );
+}
+
 function isAgentRecord(
   value: unknown,
 ): value is ConcordiumCis8004AgentRecordV1 {
@@ -1164,9 +1630,8 @@ function isAgentRecord(
     !isNullableLowerHex64(
       record.metadataHash,
     ) ||
-    !isNullableString(
+    !isNullableCis8004ExternalReference(
       record.externalReference,
-      4096,
     ) ||
     !isNullableCompactString(
       record.agentWallet,
