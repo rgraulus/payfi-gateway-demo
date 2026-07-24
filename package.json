@@ -194,6 +194,7 @@
     "phase6:agent-registry-resolver-seam-test": "ts-node --transpile-only scripts/ci_phase6_agent_registry_resolver_seam.ts",
     "phase6:concordium-cis8004-registry-plugin-test": "ts-node --transpile-only scripts/ci_phase6_concordium_cis8004_registry_plugin.ts",
     "phase6:agent-registry-identity-key-binding-test": "ts-node --transpile-only scripts/ci_phase6_agent_registry_identity_key_binding.ts",
+    "phase6:agent-registry-card-capability-freshness-test": "ts-node --transpile-only scripts/ci_phase6_agent_registry_card_capability_freshness.ts",
     "phase6:concordium-cis8004-registry-plugin-live-smoke": "ts-node --transpile-only scripts/ci_phase6_concordium_cis8004_registry_plugin.ts --live-smoke"
   },
   "repository": {
