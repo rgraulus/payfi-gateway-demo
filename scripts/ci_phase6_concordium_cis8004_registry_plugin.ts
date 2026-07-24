@@ -24,6 +24,8 @@ import {
   ConcordiumGrpcCis8004ReadTransportV1,
   normalizeConcordiumCis8004DecodedAgentOfResultForTestV1,
   type ConcordiumCis8004AgentRecordV1,
+  type ConcordiumCis8004ExternalReferenceV1,
+  type ConcordiumCis8ExternalKeyIdV1,
   type ConcordiumCis8004FinalizedSnapshotV1,
   type ConcordiumCis8004ReadRequestV1,
   type ConcordiumCis8004ReadResultV1,
@@ -50,6 +52,44 @@ const REGISTRY_CONTRACT:
 
     subindex:
       0,
+  };
+
+const CIS8_CONTRACT:
+  AgentRegistryContractCoordinateV1 = {
+    index:
+      "12801",
+
+    subindex:
+      0,
+  };
+
+const CIS8_PUBLIC_KEY_HEX =
+  "11".repeat(
+    32,
+  );
+
+const CIS8_EXTERNAL_KEY_ID:
+  ConcordiumCis8ExternalKeyIdV1 = {
+    namespace:
+      "xcf:phase5",
+
+    keyType:
+      "ed25519",
+
+    publicKeyHex:
+      CIS8_PUBLIC_KEY_HEX,
+  };
+
+const CIS8_EXTERNAL_REFERENCE:
+  ConcordiumCis8004ExternalReferenceV1 = {
+    contractAddress:
+      CIS8_CONTRACT,
+
+    kind:
+      "CIS-8",
+
+    externalKeyId:
+      CIS8_EXTERNAL_KEY_ID,
   };
 
 const OTHER_REGISTRY_CONTRACT:
@@ -193,7 +233,7 @@ const ACTIVE_RECORD:
       AGENT_CARD_HASH,
 
     externalReference:
-      "external:pr300:agent-0",
+      CIS8_EXTERNAL_REFERENCE,
 
     agentWallet:
       AGENT_WALLET,
@@ -738,6 +778,18 @@ async function liveSmoke():
         ),
     );
 
+  const sdkExternalKeyBytes =
+    Array.from(
+      Buffer.from(
+        CIS8_PUBLIC_KEY_HEX,
+        "hex",
+      ),
+      (byte) =>
+        BigInt(
+          byte,
+        ),
+    );
+
   const sdkDecodedRecord =
     normalizeConcordiumCis8004DecodedAgentOfResultForTestV1({
       Some: [
@@ -761,7 +813,34 @@ async function liveSmoke():
           },
 
           external_reference: {
-            None: [],
+            Some: [
+              {
+                contract_address: {
+                  index:
+                    CIS8_CONTRACT.index,
+
+                  subindex:
+                    String(
+                      CIS8_CONTRACT.subindex,
+                    ),
+                },
+
+                kind: {
+                  Cis8: [
+                    {
+                      key_type:
+                        CIS8_EXTERNAL_KEY_ID.keyType,
+
+                      namespace:
+                        CIS8_EXTERNAL_KEY_ID.namespace,
+
+                      public_key:
+                        sdkExternalKeyBytes,
+                    },
+                  ],
+                },
+              },
+            ],
           },
 
           agent_wallet: {
@@ -794,6 +873,21 @@ async function liveSmoke():
     sdkDecodedRecord?.metadataHash,
     AGENT_CARD_HASH,
     "SDK bigint metadata-hash bytes normalize to lowercase hex",
+  );
+
+  assert.deepEqual(
+    sdkDecodedRecord?.externalReference,
+    CIS8_EXTERNAL_REFERENCE,
+    "SDK structured CIS-8 external reference normalizes exactly",
+  );
+
+  assert.equal(
+    sdkDecodedRecord
+      ?.externalReference
+      ?.externalKeyId
+      .publicKeyHex,
+    CIS8_PUBLIC_KEY_HEX,
+    "SDK CIS-8 public-key bytes normalize to canonical lowercase hex",
   );
 
   const active =
