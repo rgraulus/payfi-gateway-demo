@@ -825,7 +825,9 @@ function rejectRequirement(
 ): AgentRegistryContractValidationResult<
   AgentRegistryRequirementV1
 > {
-  return buildValidationResult(
+  return buildValidationResult<
+    AgentRegistryRequirementV1
+  >(
     "requirement",
     validationReason,
     null,
@@ -838,7 +840,9 @@ function rejectReference(
 ): AgentRegistryContractValidationResult<
   AgentRegistryReferenceV1
 > {
-  return buildValidationResult(
+  return buildValidationResult<
+    AgentRegistryReferenceV1
+  >(
     "reference",
     validationReason,
     null,
@@ -851,7 +855,9 @@ function rejectTrustResult(
 ): AgentRegistryContractValidationResult<
   AgentRegistryTrustResultV1
 > {
-  return buildValidationResult(
+  return buildValidationResult<
+    AgentRegistryTrustResultV1
+  >(
     "trust_result",
     validationReason,
     null,
