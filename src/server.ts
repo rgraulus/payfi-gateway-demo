@@ -140,6 +140,20 @@ import {
   claimPhase5AgentDelegationUseAndPersistPolicySatisfied,
 } from './db/phase5AgentDelegationLifecycleStore';
 import {
+  composeAgentRegistryConditionalGatingV1,
+} from './phase6/agentRegistryConditionalGatingComposition';
+import {
+  persistPhase6AgentRegistryAuthorizationAuditV1,
+} from './db/phase6AgentRegistryAuthorizationAuditStore';
+import {
+  AGENT_REGISTRY_CONTRACT_VERSION,
+  AGENT_REGISTRY_REQUIREMENT_TYPE,
+  AGENT_REGISTRY_STANDARD,
+} from './phase6/agentRegistryTrustContract';
+import {
+  CONCORDIUM_CIS8004_TESTNET_TRUSTED_REGISTRY_CONFIG,
+} from './phase6/concordiumCis8004RegistryPlugin';
+import {
   BUYER_DELEGATION_SIGNATURE_VERIFIER_MODE,
   type BuyerDelegationVerificationKey,
 } from './phase5/buyerDelegationSignatureVerifier';
@@ -311,6 +325,115 @@ function phase5RuntimeLifecycleFailureReason(
       return 'invalid_lifecycle_claim';
   }
 }
+
+// Phase 6 controlled Agent Registry conditional-gating composition.
+// OFF by default and subordinate to the complete Phase 5 cryptographic,
+// lifecycle, and revocation path. This authorizes no payment or release.
+const phase6AgentRegistryConditionalGatingEnabled =
+  String(
+    process.env
+      .PHASE6_AGENT_REGISTRY_CONDITIONAL_GATING_ENABLED ??
+      '',
+  ).toLowerCase() === 'true';
+
+const phase6AgentRegistryConditionalGatingActive =
+  phase6AgentRegistryConditionalGatingEnabled &&
+  phase5DelegationLifecycleEnforcementActive;
+
+const phase6AgentRegistryRequiredCapabilities =
+  Object.freeze([
+    'x402.payment.authorize',
+    'resource.premium.read',
+  ]);
+
+const phase6AgentRegistryRequirement =
+  Object.freeze({
+    type:
+      AGENT_REGISTRY_REQUIREMENT_TYPE,
+
+    version:
+      AGENT_REGISTRY_CONTRACT_VERSION,
+
+    required: true,
+
+    registryStandard:
+      AGENT_REGISTRY_STANDARD,
+
+    trustedRegistries:
+      Object.freeze([
+        Object.freeze({
+          network:
+            CONCORDIUM_CIS8004_TESTNET_TRUSTED_REGISTRY_CONFIG
+              .network,
+
+          contract:
+            Object.freeze({
+              index:
+                CONCORDIUM_CIS8004_TESTNET_TRUSTED_REGISTRY_CONFIG
+                  .contract
+                  .index,
+
+              subindex:
+                CONCORDIUM_CIS8004_TESTNET_TRUSTED_REGISTRY_CONFIG
+                  .contract
+                  .subindex,
+            }),
+
+          moduleReference:
+            CONCORDIUM_CIS8004_TESTNET_TRUSTED_REGISTRY_CONFIG
+              .moduleReference,
+        }),
+      ]),
+
+    requiredStatus:
+      'Active',
+
+    requireAgentCardIntegrity:
+      true,
+
+    requiredCapabilities:
+      phase6AgentRegistryRequiredCapabilities,
+
+    requireOwnerAccountBinding:
+      true,
+
+    requireVerifiedOwnerIdentity:
+      true,
+
+    externalKeyPolicy:
+      'required',
+
+    maxEvidenceAgeSeconds:
+      300,
+
+    revalidateBeforeReleaseIfOlderThanSeconds:
+      120,
+  });
+
+const phase6AgentRegistryCapabilityRules =
+  Object.freeze([
+    Object.freeze({
+      capabilityId:
+        'x402.payment.authorize',
+
+      source:
+        'x402_support',
+
+      expected:
+        true,
+    }),
+
+    Object.freeze({
+      capabilityId:
+        'resource.premium.read',
+
+      source:
+        'oasf_skill',
+
+      skill:
+        'resource.premium.read',
+    }),
+  ]);
 
 // Controlled public buyer-verification-key file.
 // The request envelope cannot supply or override this key.
@@ -10128,6 +10251,8 @@ app.post('/paid-gated/redeem', async (req, res) => {
   const body = req.body ?? {};
   const nonce = typeof body.nonce === 'string' ? body.nonce : '';
   const authorizationProof = (body as any).authorizationProof ?? null;
+  const agentRegistryReference =
+    (body as any).agentRegistryReference ?? null;
 
   if (
     isPhase5AgentDelegatedAuthorizationEnvelope(
@@ -10299,6 +10424,22 @@ app.post('/paid-gated/redeem', async (req, res) => {
         }
       | null = null;
 
+    let phase6RegistryAuthorization:
+      Awaited<
+        ReturnType<
+          typeof composeAgentRegistryConditionalGatingV1
+        >
+      >
+      | null = null;
+
+    let phase6RegistryAudit:
+      Awaited<
+        ReturnType<
+          typeof persistPhase6AgentRegistryAuthorizationAuditV1
+        >
+      >
+      | null = null;
+
     if (
       !phase5DelegationLifecycleEnforcementActive
     ) {
@@ -10463,6 +10604,249 @@ app.post('/paid-gated/redeem', async (req, res) => {
                   },
                 });
             } else {
+              if (
+                phase6AgentRegistryConditionalGatingActive
+              ) {
+                try {
+                  phase6RegistryAuthorization =
+                    await composeAgentRegistryConditionalGatingV1({
+                      phase5Preflight:
+                        preflight,
+
+                      requirement:
+                        phase6AgentRegistryRequirement,
+
+                      reference:
+                        agentRegistryReference,
+
+                      capabilityRules:
+                        phase6AgentRegistryCapabilityRules,
+
+                      now:
+                        new Date(
+                          phase5RuntimeNowSec *
+                            1000,
+                        ).toISOString(),
+                    });
+
+                  const paidGatedContractForPhase6 =
+                    getPaidGatedContract();
+
+                  const phase6MerchantId =
+                    paidGatedContractForPhase6
+                      .merchantId
+                      .trim();
+
+                  const phase6ChallengeId =
+                    typeof (canonicalChallenge as any)
+                      .challengeId ===
+                      'string' &&
+                    (canonicalChallenge as any)
+                      .challengeId
+                      .trim()
+                      .length >
+                      0
+                      ? (canonicalChallenge as any)
+                          .challengeId
+                          .trim()
+                      : nonce;
+
+                  if (phase6MerchantId.length === 0) {
+                    return res.status(500).json({
+                      ok: false,
+                      nonce,
+                      code:
+                        'phase6_registry_audit_context_invalid',
+                      reason:
+                        'phase6_registry_audit_context_invalid',
+                      message:
+                        'Gateway-authored Phase 6 audit context is invalid.',
+                      policyStatus:
+                        'POLICY_NOT_EVALUATED',
+                      phase6: {
+                        enabled: true,
+                        active: true,
+                        status:
+                          phase6RegistryAuthorization
+                            .status,
+                        reason:
+                          phase6RegistryAuthorization
+                            .reason,
+                        auditPersisted: false,
+                        buyerPolicyEvaluated:
+                          false,
+                        boundedUseConsumed:
+                          false,
+                        paymentAttempted:
+                          false,
+                        resourceReleased:
+                          false,
+                        productionActivation:
+                          false,
+                      },
+                    });
+                  }
+
+                  phase6RegistryAudit =
+                    await persistPhase6AgentRegistryAuthorizationAuditV1({
+                      challengeId:
+                        phase6ChallengeId,
+
+                      nonce,
+
+                      merchantId:
+                        phase6MerchantId,
+
+                      authorization:
+                        phase6RegistryAuthorization,
+                    });
+
+                  if (
+                    !phase6RegistryAudit.ok ||
+                    !phase6RegistryAudit
+                      .auditPersisted
+                  ) {
+                    return res.status(503).json({
+                      ok: false,
+                      nonce,
+                      code:
+                        'phase6_registry_audit_persistence_failed',
+                      reason:
+                        phase6RegistryAudit.reason,
+                      message:
+                        'Phase 6 Agent Registry authorization audit could not be persisted.',
+                      policyStatus:
+                        'POLICY_NOT_EVALUATED',
+                      phase6: {
+                        enabled: true,
+                        active: true,
+                        status:
+                          phase6RegistryAuthorization
+                            .status,
+                        reason:
+                          phase6RegistryAuthorization
+                            .reason,
+                        auditPersisted: false,
+                        buyerPolicyEvaluated:
+                          false,
+                        boundedUseConsumed:
+                          false,
+                        paymentAttempted:
+                          false,
+                        resourceReleased:
+                          false,
+                        productionActivation:
+                          false,
+                      },
+                    });
+                  }
+
+                  if (
+                    !phase6RegistryAuthorization.ok ||
+                    phase6RegistryAuthorization
+                      .status !==
+                      'allowed' ||
+                    phase6RegistryAuthorization
+                      .paymentEligibilityHandoff ===
+                      null
+                  ) {
+                    const phase6HttpStatus =
+                      phase6RegistryAuthorization
+                        .status ===
+                        'revalidation_required'
+                        ? 409
+                        : 403;
+
+                    return res
+                      .status(phase6HttpStatus)
+                      .json({
+                        ok: false,
+                        nonce,
+                        code:
+                          phase6RegistryAuthorization
+                            .reason,
+                        reason:
+                          phase6RegistryAuthorization
+                            .reason,
+                        message:
+                          phase6RegistryAuthorization
+                            .status ===
+                            'revalidation_required'
+                            ? 'Fresh Agent Registry evidence is required before buyer-policy evaluation.'
+                            : 'Agent Registry authorization was denied before buyer-policy evaluation.',
+                        policyStatus:
+                          'POLICY_NOT_EVALUATED',
+                        phase6: {
+                          enabled: true,
+                          active: true,
+                          status:
+                            phase6RegistryAuthorization
+                              .status,
+                          reason:
+                            phase6RegistryAuthorization
+                              .reason,
+                          auditPersisted: true,
+                          agentRegistryLookupAttempted:
+                            phase6RegistryAuthorization
+                              .agentRegistryLookupAttempted,
+                          registryNetworkCalled:
+                            phase6RegistryAuthorization
+                              .registryNetworkCalled,
+                          cis8LookupAttempted:
+                            phase6RegistryAuthorization
+                              .cis8LookupAttempted,
+                          agentCardFetchAttempted:
+                            phase6RegistryAuthorization
+                              .agentCardFetchAttempted,
+                          buyerPolicyEvaluated:
+                            false,
+                          boundedUseConsumed:
+                            false,
+                          paymentAttempted:
+                            false,
+                          resourceReleased:
+                            false,
+                          productionActivation:
+                            false,
+                        },
+                      });
+                  }
+                } catch (err) {
+                  console.error(
+                    'Failed to compose Phase 6 Agent Registry authorization:',
+                    err,
+                  );
+
+                  return res.status(503).json({
+                    ok: false,
+                    nonce,
+                    code:
+                      'phase6_registry_composition_error',
+                    reason:
+                      'phase6_registry_composition_error',
+                    message:
+                      'Phase 6 Agent Registry authorization could not be completed.',
+                    policyStatus:
+                      'POLICY_NOT_EVALUATED',
+                    phase6: {
+                      enabled: true,
+                      active: true,
+                      auditPersisted: false,
+                      buyerPolicyEvaluated:
+                        false,
+                      boundedUseConsumed:
+                        false,
+                      paymentAttempted:
+                        false,
+                      resourceReleased:
+                        false,
+                      productionActivation:
+                        false,
+                    },
+                  });
+                }
+              }
+
               const policyResult =
                 completePhase5AgentRuntimePolicyEvaluation(
                   phase5RuntimeInput,
@@ -11042,6 +11426,62 @@ app.post('/paid-gated/redeem', async (req, res) => {
           productionActivation:
             phase5RuntimeResult.productionActivation,
         },
+        ...(
+          phase6RegistryAuthorization ===
+            null
+            ? {}
+            : {
+              phase6: {
+                enabled:
+                  phase6AgentRegistryConditionalGatingEnabled,
+
+                active:
+                  phase6AgentRegistryConditionalGatingActive,
+
+                mode:
+                  phase6RegistryAuthorization
+                    .mode,
+
+                status:
+                  phase6RegistryAuthorization
+                    .status,
+
+                reason:
+                  phase6RegistryAuthorization
+                    .reason,
+
+                auditPersisted:
+                  phase6RegistryAudit
+                    ?.auditPersisted ===
+                  true,
+
+                paymentEligibilityHandoffPresent:
+                  phase6RegistryAuthorization
+                    .paymentEligibilityHandoff !==
+                  null,
+
+                agentRegistryLookupAttempted:
+                  phase6RegistryAuthorization
+                    .agentRegistryLookupAttempted,
+
+                registryNetworkCalled:
+                  phase6RegistryAuthorization
+                    .registryNetworkCalled,
+
+                cis8LookupAttempted:
+                  phase6RegistryAuthorization
+                    .cis8LookupAttempted,
+
+                agentCardFetchAttempted:
+                  phase6RegistryAuthorization
+                    .agentCardFetchAttempted,
+
+                paymentAttempted: false,
+                resourceReleased: false,
+                productionActivation: false,
+              },
+            }
+        ),
         ...(x402Debug
           ? {
               debug: {
