@@ -572,6 +572,65 @@ function sameContractCoordinate(
   );
 }
 
+/**
+ * Compare normalized Agent Registry trust freshness with the finalized
+ * CIS-8004 read snapshot from which that freshness was derived.
+ *
+ * AgentRegistryTrustResultV1.freshness intentionally contains normalized
+ * hash, height, and observation-time evidence but does not duplicate the
+ * transport-level literal `finalized: true` assertion. The finalized
+ * assertion remains mandatory on the originating registry snapshot.
+ */
+function sameTrustFreshnessSnapshot(
+  freshness: unknown,
+  snapshot: unknown,
+): boolean {
+  const freshnessRecord =
+    asRecord(
+      freshness,
+    );
+
+  const snapshotRecord =
+    asRecord(
+      snapshot,
+    );
+
+  return (
+    freshnessRecord !==
+      null &&
+    snapshotRecord !==
+      null &&
+    isLowerHex(
+      freshnessRecord.finalizedBlockHash,
+      32,
+    ) &&
+    freshnessRecord.finalizedBlockHash ===
+      snapshotRecord.finalizedBlockHash &&
+    typeof freshnessRecord.finalizedBlockHeight ===
+      "number" &&
+    Number.isSafeInteger(
+      freshnessRecord.finalizedBlockHeight,
+    ) &&
+    freshnessRecord.finalizedBlockHeight >=
+      0 &&
+    freshnessRecord.finalizedBlockHeight ===
+      snapshotRecord.finalizedBlockHeight &&
+    normalizeIsoTimestamp(
+      freshnessRecord.observedAt,
+    ) !==
+      null &&
+    normalizeIsoTimestamp(
+      freshnessRecord.observedAt,
+    ) ===
+      normalizeIsoTimestamp(
+        snapshotRecord.observedAt,
+      ) &&
+    snapshotRecord.finalized ===
+      true
+  );
+}
+
+
 function sameSnapshot(
   left: unknown,
   right: unknown,
@@ -1952,7 +2011,7 @@ export async function bindAgentRegistryIdentityToPhase5ActingKeyV1(
   }
 
   if (
-    !sameSnapshot(
+    !sameTrustFreshnessSnapshot(
       trustFreshness,
       registryRead.snapshot,
     )

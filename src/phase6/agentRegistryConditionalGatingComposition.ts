@@ -130,7 +130,7 @@ export type Phase6PaymentEligibilityHandoffV1 = {
         readonly agentTokenId: string;
         readonly tokenAddress: string;
         readonly ownerAccount: string;
-        readonly ownerIdentityAssurance: "verified";
+        readonly ownerIdentityAssurance: "not_evaluated";
         readonly finalizedBlockHeight: number;
         readonly finalizedBlockHash: string;
         readonly observedAt: string;
@@ -247,7 +247,7 @@ function strictConditionalGatingRequirement(requirement: AgentRegistryRequiremen
         requirement.requireOwnerAccountBinding ===
             true &&
         requirement.requireVerifiedOwnerIdentity ===
-            true &&
+            false &&
         requirement.externalKeyPolicy ===
             "required" &&
         requirement.requireAgentCardIntegrity ===
@@ -394,6 +394,18 @@ function sanitizedEvidence(resolver: AgentRegistryResolverSeamResultV1 | null, b
         },
     };
 }
+function acceptedFreshnessSourceLagProfile(freshness: Phase6AgentRegistrySanitizedEvidenceV1["freshness"]): boolean {
+    return ((freshness.source ===
+        "direct_chain" &&
+        freshness.indexerLagBlocks ===
+            null) ||
+        ((freshness.source ===
+            "fixture" ||
+            freshness.source ===
+                "auditable_resolver") &&
+            freshness.indexerLagBlocks ===
+                0));
+}
 function paymentEligibilityHandoff(preflight: AcceptedPhase5Preflight, decidedAt: string, evidence: Phase6AgentRegistrySanitizedEvidenceV1): Phase6PaymentEligibilityHandoffV1 | null {
     const registry = evidence.registryIdentity;
     const ownerAccount = evidence.accountability.ownerAccount;
@@ -413,7 +425,7 @@ function paymentEligibilityHandoff(preflight: AcceptedPhase5Preflight, decidedAt
         evidence.accountability.ownerAccountBound !==
             true ||
         ownerIdentityAssurance !==
-            "verified" ||
+            "not_evaluated" ||
         evidence.accountability.registryStatus !==
             "Active" ||
         binding.required !==
@@ -448,8 +460,9 @@ function paymentEligibilityHandoff(preflight: AcceptedPhase5Preflight, decidedAt
             null ||
         freshness.observedAt ===
             null ||
-        freshness.indexerLagBlocks !==
-            0 ||
+        !acceptedFreshnessSourceLagProfile(
+            freshness,
+        ) ||
         freshness.evidenceAgeSeconds ===
             null) {
         return null;

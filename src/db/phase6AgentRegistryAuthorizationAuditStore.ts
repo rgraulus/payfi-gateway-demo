@@ -144,7 +144,8 @@ export const PHASE6_AGENT_REGISTRY_AUTHORIZATION_AUDIT_INSERT_SQL = `
     payment_attempted,
     receipt_issued,
     resource_released,
-    production_activation
+    production_activation,
+    freshness_source
   )
   VALUES (
     $1,
@@ -194,7 +195,8 @@ export const PHASE6_AGENT_REGISTRY_AUTHORIZATION_AUDIT_INSERT_SQL = `
     $45,
     $46,
     $47,
-    $48
+    $48,
+    $49
   )
   RETURNING
     audit_id::text AS audit_id,
@@ -443,6 +445,9 @@ function validSanitizedEvidence(
     ) &&
     typeof capabilities.policySatisfied ===
       'boolean' &&
+    nullableBoundedText(
+      freshness.source,
+    ) &&
     nullableNonNegativeSafeInteger(
       freshness.finalizedBlockHeight,
     ) &&
@@ -498,6 +503,30 @@ function sideEffectsRemainClosed(
   );
 }
 
+function allowedFreshnessSourceLagProfile(
+  freshness:
+    Phase6AgentRegistryConditionalGatingResultV1[
+      'evidence'
+    ][
+      'freshness'
+    ],
+): boolean {
+  return (
+    (
+      freshness.source === 'direct_chain' &&
+      freshness.indexerLagBlocks === null
+    ) ||
+    (
+      (
+        freshness.source === 'fixture' ||
+        freshness.source ===
+          'auditable_resolver'
+      ) &&
+      freshness.indexerLagBlocks === 0
+    )
+  );
+}
+
 function allowedEvidenceComplete(
   authorization:
     Phase6AgentRegistryConditionalGatingResultV1,
@@ -521,7 +550,7 @@ function allowedEvidenceComplete(
     accountability.ownerAccountBound ===
       true &&
     accountability.ownerIdentityAssurance ===
-      'verified' &&
+      'not_evaluated' &&
     freshness.finalizedBlockHeight !==
       null &&
     freshness.finalizedBlockHash !==
@@ -529,7 +558,9 @@ function allowedEvidenceComplete(
     freshness.observedAt !== null &&
     freshness.evidenceAgeSeconds !==
       null &&
-    freshness.indexerLagBlocks === 0 &&
+    allowedFreshnessSourceLagProfile(
+      freshness,
+    ) &&
     card.expectedHash !== null &&
     card.actualHash !== null &&
     card.expectedHash === card.actualHash &&
@@ -609,7 +640,7 @@ function positiveHandoffMatchesSanitizedEvidence(
     handoff.registry.ownerAccount ===
       accountability.ownerAccount &&
     handoff.registry.ownerIdentityAssurance ===
-      'verified' &&
+      'not_evaluated' &&
     handoff.registry.ownerIdentityAssurance ===
       accountability.ownerIdentityAssurance &&
 
@@ -897,6 +928,8 @@ function prepareAuditInsert(
         authorization.receiptIssued,
         authorization.resourceReleased,
         authorization.productionActivation,
+
+        evidence.freshness.source,
       ],
     };
   } catch {
