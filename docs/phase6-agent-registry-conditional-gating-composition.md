@@ -143,7 +143,7 @@ The composition requires:
 - a coherent active registry record;
 - the expected Agent Token identity;
 - owner-account binding;
-- verified owner-identity assurance;
+- explicit owner-identity assurance state `not_evaluated`, without claiming verified real-world identity;
 - acting-agent key binding;
 - Agent Card integrity;
 - exact required capabilities;
@@ -151,6 +151,35 @@ The composition requires:
 - zero actual direct-chain indexer lag for payment eligibility.
 
 A registry lookup result is not trusted merely because it was returned by a resolver. The normalized result must pass the Gateway’s contract, identity, snapshot, module, binding, capability, and freshness checks.
+
+## Owner-Account Profile Correction
+
+The production-shaped Concordium CIS-8004 plugin records the on-chain owner
+account and sets `ownerAccountBound: true`, but intentionally reports
+`ownerIdentityAssurance: "not_evaluated"` because no separate natural-person,
+business, or regulatory identity verifier is present.
+
+PR #304 integration exposed that the original PR #303 positive handoff, audit
+store, and database constraint required `"verified"` even though no
+production-shaped component could truthfully produce that fact.
+
+The bounded correction requires:
+
+- an active registry record;
+- a present and bound owner account;
+- the exact assurance state `"not_evaluated"`;
+- verified Phase 5 acting-key continuity through CIS-8;
+- Agent Card integrity;
+- exact Gateway-authored capabilities;
+- finalized, fresh evidence with zero direct-chain indexer lag.
+
+This profile does not claim a verified natural person or business. A future
+policy requiring verified owner identity must add separate identity-assurance
+evidence and fail closed until that evidence exists.
+
+Migration `004_phase6_owner_account_binding_authorization_audit.sql` replaces
+only the allowed-row audit constraint. Migration `003` remains immutable and
+all existing append-only audit rows are preserved.
 
 ## Acting-Agent Key Binding
 

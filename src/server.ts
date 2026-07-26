@@ -143,6 +143,9 @@ import {
   composeAgentRegistryConditionalGatingV1,
 } from './phase6/agentRegistryConditionalGatingComposition';
 import {
+  createPhase6Demo3ControlledEvidenceProviderV1,
+} from './phase6/demo3ControlledEvidenceProvider';
+import {
   persistPhase6AgentRegistryAuthorizationAuditV1,
 } from './db/phase6AgentRegistryAuthorizationAuditStore';
 import {
@@ -398,7 +401,7 @@ const phase6AgentRegistryRequirement =
       true,
 
     requireVerifiedOwnerIdentity:
-      true,
+      false,
 
     externalKeyPolicy:
       'required',
@@ -689,6 +692,78 @@ const replayRedisKeyPrefix = process.env.X402_REDIS_KEY_PREFIX ?? 'x402:replay:'
 // ----------------------------------------------------------------------------
 const allowDevHarness = String(process.env.X402_ALLOW_DEV_HARNESS ?? '').toLowerCase() === 'true';
 const isProd = String(process.env.NODE_ENV ?? '').toLowerCase() === 'production';
+
+// PR #304 controlled Demo3 public-evidence provider.
+//
+// OFF by default. Activation requires the complete Phase 5/Phase 6 controlled
+// runtime chain, the existing non-production dev-harness guard, and one
+// Gateway-owned manifest under .tmp/pr304-demo3-<run-id>/.
+//
+// A requested but rejected provider configuration fails startup closed.
+// Disabled mode supplies no transports and preserves the existing live
+// transport-selection behavior.
+const phase6Demo3ControlledEvidenceProvider =
+  createPhase6Demo3ControlledEvidenceProviderV1({
+    enabledValue:
+      process.env
+        .PHASE6_DEMO3_CONTROLLED_EVIDENCE_ENABLED,
+
+    manifestPathValue:
+      process.env
+        .PHASE6_DEMO3_CONTROLLED_EVIDENCE_MANIFEST_PATH,
+
+    allowDevHarness,
+
+    nodeEnv:
+      process.env.NODE_ENV ??
+      null,
+
+    phase5AgentDelegatedRuntimeEnabled,
+
+    phase5CryptographicDelegationRuntimeEnabled,
+
+    phase5DelegationLifecycleEnforcementEnabled,
+
+    phase6AgentRegistryConditionalGatingEnabled,
+  });
+
+if (
+  phase6Demo3ControlledEvidenceProvider
+    .requested &&
+  !phase6Demo3ControlledEvidenceProvider
+    .active
+) {
+  console.error(
+    `[phase6-demo3] ERROR: ${
+      phase6Demo3ControlledEvidenceProvider
+        .reason
+    }`,
+  );
+
+  process.exit(1);
+}
+
+if (
+  phase6Demo3ControlledEvidenceProvider
+    .active &&
+  (
+    phase6Demo3ControlledEvidenceProvider
+      .controlledRegistryTransport ===
+      null ||
+    phase6Demo3ControlledEvidenceProvider
+      .controlledCis8Transport ===
+      null ||
+    phase6Demo3ControlledEvidenceProvider
+      .controlledAgentCardTransport ===
+      null
+  )
+) {
+  console.error(
+    '[phase6-demo3] ERROR: controlled_evidence_transport_set_incomplete',
+  );
+
+  process.exit(1);
+}
 
 const devReceiptJwsRaw = process.env.X402_DEV_RECEIPT_JWS ?? null;
 
@@ -1503,6 +1578,37 @@ app.get('/healthz', async (_req, res) => {
         PHASE5_AGENT_DELEGATED_AUTHORIZATION_PROOF_TYPE,
       cryptographicDelegationVerification: false,
       agentRegistryLookupAttempted: false,
+      productionActivation: false,
+    },
+    phase6: {
+      agentRegistryConditionalGatingEnabled:
+        phase6AgentRegistryConditionalGatingEnabled,
+      agentRegistryConditionalGatingActive:
+        phase6AgentRegistryConditionalGatingActive,
+      demo3ControlledEvidence: {
+        requested:
+          phase6Demo3ControlledEvidenceProvider
+            .requested,
+        active:
+          phase6Demo3ControlledEvidenceProvider
+            .active,
+        status:
+          phase6Demo3ControlledEvidenceProvider
+            .status,
+        reason:
+          phase6Demo3ControlledEvidenceProvider
+            .reason,
+        scenario:
+          phase6Demo3ControlledEvidenceProvider
+            .scenario,
+        manifestLoaded:
+          phase6Demo3ControlledEvidenceProvider
+            .manifestLoaded,
+        manifestPathAccepted:
+          phase6Demo3ControlledEvidenceProvider
+            .manifestPathAccepted,
+        productionActivation: false,
+      },
       productionActivation: false,
     },
     phase4: {
@@ -10608,7 +10714,7 @@ app.post('/paid-gated/redeem', async (req, res) => {
                 phase6AgentRegistryConditionalGatingActive
               ) {
                 try {
-                  phase6RegistryAuthorization =
+                  const composedPhase6RegistryAuthorization =
                     await composeAgentRegistryConditionalGatingV1({
                       phase5Preflight:
                         preflight,
@@ -10627,7 +10733,49 @@ app.post('/paid-gated/redeem', async (req, res) => {
                           phase5RuntimeNowSec *
                             1000,
                         ).toISOString(),
+
+                      ...(
+                        phase6Demo3ControlledEvidenceProvider
+                          .active
+                          ? {
+                              registryTransport:
+                                phase6Demo3ControlledEvidenceProvider
+                                  .controlledRegistryTransport!,
+
+                              cis8Transport:
+                                phase6Demo3ControlledEvidenceProvider
+                                  .controlledCis8Transport!,
+
+                              agentCardTransport:
+                                phase6Demo3ControlledEvidenceProvider
+                                  .controlledAgentCardTransport!,
+                            }
+                          : {}
+                      ),
                     });
+
+                  /*
+                   * The merged identity-binding stage retains its precise
+                   * internal mismatch reason. Demo3 normalizes only the
+                   * controlled Gateway-facing Path 3 decision before audit
+                   * persistence and response emission.
+                   */
+                  phase6RegistryAuthorization =
+                    phase6Demo3ControlledEvidenceProvider
+                      .active &&
+                    phase6Demo3ControlledEvidenceProvider
+                      .scenario ===
+                      'acting_key_mismatch' &&
+                    composedPhase6RegistryAuthorization
+                      .reason ===
+                      'agent_public_key_mismatch'
+                      ? {
+                          ...composedPhase6RegistryAuthorization,
+
+                          reason:
+                            'agent_registry_key_mismatch',
+                        }
+                      : composedPhase6RegistryAuthorization;
 
                   const paidGatedContractForPhase6 =
                     getPaidGatedContract();

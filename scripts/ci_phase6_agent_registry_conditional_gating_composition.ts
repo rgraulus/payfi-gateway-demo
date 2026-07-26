@@ -207,12 +207,12 @@ Record<string, unknown> {
         true,
 
       ownerIdentityAssurance:
-        "verified",
+        "not_evaluated",
     },
 
     freshness: {
       source:
-        "concordium_finalized",
+        "direct_chain",
 
       finalizedBlockHeight:
         FINALIZED_BLOCK_HEIGHT,
@@ -227,7 +227,7 @@ Record<string, unknown> {
         0,
 
       indexerLagBlocks:
-        0,
+        null,
     },
 
     agentCard: {
@@ -608,7 +608,7 @@ Record<string, unknown> {
 
     freshnessDecision: {
       source:
-        "concordium_finalized",
+        "direct_chain",
 
       observedAt:
         NOW,
@@ -623,10 +623,10 @@ Record<string, unknown> {
         300,
 
       indexerLagBlocks:
-        0,
+        null,
 
       maxIndexerLagBlocks:
-        0,
+        null,
 
       revalidationThresholdSeconds:
         120,
@@ -920,7 +920,7 @@ function validRequirement(
         true,
 
       requireVerifiedOwnerIdentity:
-        true,
+        false,
 
       externalKeyPolicy:
         "required",
@@ -1395,6 +1395,17 @@ Promise<void> {
     );
 
     assert.equal(
+      positive.result.evidence.freshness.source,
+      "direct_chain",
+    );
+
+    assert.equal(
+      positive.result.evidence.freshness
+        .indexerLagBlocks,
+      null,
+    );
+
+    assert.equal(
       positive.counters.resolver,
       1,
     );
@@ -1730,6 +1741,31 @@ Promise<void> {
       successExecutor.calls[0]?.text ??
         "",
       /\bUPDATE\b|\bDELETE\b/i,
+    );
+
+    assert.match(
+      successExecutor.calls[0]?.text ??
+        "",
+      /\bfreshness_source\b/,
+    );
+
+    const insertedValues =
+      successExecutor.calls[0]?.values ??
+      [];
+
+    assert.equal(
+      insertedValues.length,
+      49,
+    );
+
+    assert.equal(
+      insertedValues[19],
+      null,
+    );
+
+    assert.equal(
+      insertedValues[48],
+      "direct_chain",
     );
 
     const capturedValues =
