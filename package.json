@@ -201,7 +201,8 @@
     "phase6:demo3-final-acceptance-test": "ts-node --transpile-only scripts/ci_phase6_demo3_final_acceptance.ts",
     "phase6:demo3-viewer-experience-test": "ts-node --transpile-only scripts/ci_phase6_demo3_viewer_experience.ts",
     "demo:x402-v2-agent-registry-demo3-e2e": "bash scripts/demo_x402_v2_agent_registry_demo3_e2e.sh",
-    "demo:x402-v2-agent-registry-demo3-viewer": "bash scripts/demo_x402_v2_agent_registry_demo3_viewer.sh"
+    "demo:x402-v2-agent-registry-demo3-viewer": "bash scripts/demo_x402_v2_agent_registry_demo3_viewer.sh",
+    "phase6:demo4-d4-1b-profile-conformance-decision-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1b_profile_conformance_decision.ts"
   },
   "repository": {
     "type": "git",
