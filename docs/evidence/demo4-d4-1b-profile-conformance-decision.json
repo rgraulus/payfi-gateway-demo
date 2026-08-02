@@ -1,0 +1,150 @@
+{
+  "type": "xcf.demo4.d4-1b.profile-conformance-decision-evidence",
+  "version": "1",
+  "environment": "controlled_concordium_testnet",
+  "decision": {
+    "disposition": "SUPERSEDE_BEFORE_D4_1C",
+    "existingTransactionPreserved": true,
+    "existingEvidencePreserved": true,
+    "retainAsCanonicalProfile": false,
+    "attachExistingRegistrationToCis8004": false,
+    "immediateRevocationAuthorized": false,
+    "replacementProfileRequired": true,
+    "replacementProfileStatus": "UNRESOLVED_FAIL_CLOSED",
+    "d4_1cBlocked": true,
+    "demo4StopRequired": false,
+    "productionActivationAuthorized": false
+  },
+  "existingRegistration": {
+    "network": "ccd:4221332d34e1694168c2a0c0b3fd0f27",
+    "contract": {
+      "index": "12801",
+      "subindex": "0"
+    },
+    "contractName": "CIS-8",
+    "moduleReference": "5a01f4133c353c640120cd0303316bd18ebd9e120a909cd5ff639e92227e75da",
+    "ownerAccount": "4Wx1vpgAfpE6k9ksmtYaH6z4iQN61LFFRUgbbG6gDro1ziKNL7",
+    "transactionHash": "949a25947e645cca59a6a529859ba8fcbf160a0122d31406dc0eb45cc7d87093",
+    "finalizedBlockHash": "0506c203c157a2e676694e46a85e23f364409b90f3d615dcf034ba01f89a52cd",
+    "finalizedBlockHeight": "46287110",
+    "finalized": true,
+    "matchingRegistrationEventCount": 1,
+    "ownerOfKeyPostconditionSatisfied": true,
+    "zeroCcdAttached": true
+  },
+  "actingKey": {
+    "agentId": "agent:xcf:demo4:registered",
+    "agentKeyId": "agent-key:xcf:demo4:registered:ed25519-1",
+    "publicKeyHex": "e9d34013c5d042e38e8f8c43f0d7e2c326eafe70b40647319d39ade5ea8c18ad",
+    "publicKeyFingerprint": "sha256:5064708a2081db6539f9e4043a1635fa0ab1633c97a67f5ced705a2fc73ce619",
+    "publicKeyType": "ed25519",
+    "publicKeyByteLength": 32,
+    "provenanceClassification": "APPLICATION_LEVEL_XCF_AGENT_ACTING_KEY",
+    "keyBundleContract": "phase5.demoCryptographicKeyBundle.v1",
+    "keyBundleMode": "controlled_cryptographic_demo2",
+    "fetchAiExternalIdentityEvidenced": false,
+    "solanaExternalIdentityEvidenced": false,
+    "concordiumAccountKeyEvidenced": false,
+    "otherExternalBlockchainIdentityEvidenced": false
+  },
+  "submittedProfile": {
+    "canonicalDomain": "CIS-8/v1/canonical",
+    "externalNamespace": "xcf:phase5",
+    "externalKeyNamespace": "xcf:phase5",
+    "externalKeyType": "ed25519",
+    "proofScheme": "fetch-ai-ed25519",
+    "canonicalMessageByteLength": 193,
+    "canonicalMessageSha256": "sha256:09d6e43e745b3aa4c1e3749416d2f58ed89d0634b78180aaaeb3c216865dc377",
+    "proofByteLength": 64
+  },
+  "conformanceAssessment": {
+    "externalNamespace": {
+      "value": "xcf:phase5",
+      "result": "NONCONFORMANT_FOR_CANONICAL_DEMO4_CIS8_PROFILE",
+      "reason": "internal_xcf_project_lifecycle_identifier_not_evidenced_external_blockchain"
+    },
+    "externalKeyNamespace": {
+      "value": "xcf:phase5",
+      "result": "NONCONFORMANT_FOR_CANONICAL_DEMO4_CIS8_PROFILE",
+      "reason": "internal_xcf_project_lifecycle_identifier_not_evidenced_external_blockchain"
+    },
+    "externalKeyType": {
+      "value": "ed25519",
+      "result": "STRUCTURALLY_SUPPORTED_BUT_INSUFFICIENT",
+      "reason": "key_algorithm_does_not_establish_external_blockchain_provenance"
+    },
+    "proofScheme": {
+      "value": "fetch-ai-ed25519",
+      "result": "SUPPORTED_IDENTIFIER_WITH_UNSUPPORTED_PROVENANCE_BINDING",
+      "reason": "scheme_name_does_not_establish_fetch_ai_identity_or_chain_provenance"
+    },
+    "canonicalMessageStructure": {
+      "result": "STRUCTURALLY_PLAUSIBLE_BUT_NOT_DISPOSITIVE",
+      "officialBuilderComparisonRequiredForExistingProfile": false,
+      "reason": "semantic_namespace_and_provenance_eligibility_already_fail"
+    }
+  },
+  "automaticNamespaceSubstitution": {
+    "permitted": false,
+    "cosmosFetchhub4Justified": false,
+    "solanaMainnetJustified": false,
+    "concordiumTestnetJustified": false,
+    "otherCaip2NamespaceJustified": false
+  },
+  "replacementProfile": {
+    "selected": false,
+    "status": "UNRESOLVED_FAIL_CLOSED",
+    "mustIdentifyGenuineExternalBlockchain": true,
+    "mustUseAuthoritativeCaip2Identifier": true,
+    "mustEstablishExternalKeyProvenance": true,
+    "mustFreezeKeyType": true,
+    "mustFreezeProofScheme": true,
+    "mustUseOfficialOrApprovedCanonicalBuilder": true,
+    "mustApproveCustodyModel": true,
+    "mustPassIndependentReviewBeforeSensitiveWork": true
+  },
+  "d4_1a": {
+    "agentCardRemainsValid": true,
+    "cis8004PreparationMayProceedWithoutExistingExternalReference": true,
+    "existingXcfPhase5ReferenceMustNotBeAttached": true,
+    "d4_1cRemainsSeparateAndBlocked": true
+  },
+  "authoritativeReference": {
+    "repository": "Concordium/concordium.github.io",
+    "path": "source/mainnet/technical-reference/agent-registry/cis-8.rst",
+    "reviewedCommit": "ecad927df321126dbde4e996c475e0faea3cfda1",
+    "reviewedBlob": "3aedbbb7ac261f2547038ea09d966fdb53a8126c"
+  },
+  "repositoryAnchors": {
+    "d4_1bImplementationCommit": "c69d21d83dcad06dd48b2898f76d022aacd6b160",
+    "correctiveRebaselineCommit": "10576fec6141940d96d114136a4f00f72f0eb2b1",
+    "decisionDocumentPath": "docs/demo4-d4-1b-profile-conformance-decision.md",
+    "decisionDocumentSha256": "67d27fa58da9b653479a0b10278f587e21b1290c5ddd7c614c6326934ebf5699"
+  },
+  "safety": {
+    "privateKeyAccessed": false,
+    "ceremonyDirectoryAccessed": false,
+    "walletAccessed": false,
+    "newKeyGenerated": false,
+    "signingAttempted": false,
+    "signerCreated": false,
+    "canonicalBuilderExecuted": false,
+    "contractInvoked": false,
+    "transactionConstructed": false,
+    "transactionSubmitted": false,
+    "cis8Mutated": false,
+    "cis8004Mutated": false,
+    "externalReferenceUpdated": false,
+    "databaseMutated": false,
+    "gatewayRuntimeCalled": false,
+    "paymentAttempted": false,
+    "receiptRequested": false,
+    "receiptRedeemed": false,
+    "protectedResourceReleased": false,
+    "replayStateMutated": false,
+    "productionActivation": false,
+    "rawSignatureIncluded": false,
+    "privatePathIncluded": false,
+    "walletMaterialIncluded": false
+  }
+}
