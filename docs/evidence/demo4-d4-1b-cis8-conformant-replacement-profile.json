@@ -1,0 +1,118 @@
+{
+  "artifactPins": {
+    "ciSha256": "faa5682137cf6f31a579279daf66b7b4254c4e5e398c543535749aed438d5875",
+    "coreSha256": "833c38d553405e24fecf4a9243ad9136ddb1bc5a33b1be172482a9a017517c0a",
+    "decisionDocumentSha256": "67d27fa58da9b653479a0b10278f587e21b1290c5ddd7c614c6326934ebf5699",
+    "decisionEvidenceSha256": "ffbfffe0e3932a24e73cd45b12b1945e7e66f9caac0ac6e2879bdb446eafe8b2",
+    "historicalEvidenceSha256": "c572f030ba6f1d96d10675dd63738a3c5f2cd3a1bfff34989eea6e6e15424099"
+  },
+  "environment": "controlled_concordium_testnet_with_solana_devnet_external_identity",
+  "expectedParameterContract": {
+    "actualKeyGenerated": false,
+    "actualParameterStatus": "pending_gate3_key_and_signature",
+    "actualSignatureGenerated": false,
+    "canonicalMessage": {
+      "byteLength": 239,
+      "sha256": "cfed230d434a028f043d30423d94b92339ddb0094085d118a3d5941c9316f23a"
+    },
+    "deterministicVectorOnly": true,
+    "registrationParameter": {
+      "byteLength": 168,
+      "sha256": "547be748447fd7d34fed085fa7815a1f3125184caf5d331a45abdcc47d28e13f"
+    }
+  },
+  "flexibilityPolicy": {
+    "failClosedOnCaipSourceDrift": true,
+    "failClosedOnContractSchemaDrift": true,
+    "failClosedOnGenesisDrift": true,
+    "failClosedOnNormativeSourceDrift": true,
+    "renewedGate1ReviewRequiredForMaterialChange": true,
+    "renewedGate2VectorsRequiredForMaterialChange": true,
+    "renewedGate3PreflightRequiredForMaterialChange": true,
+    "runtimeProfileOverridesAllowed": false,
+    "versionedCanonicalBuilder": true,
+    "versionedContractCompatibilityAdapter": true,
+    "versionedNormativeAdapter": true,
+    "versionedParameterCodec": true,
+    "versionedProofAdapter": true
+  },
+  "gate": {
+    "name": "freeze_exact_replacement_profile_and_expected_parameter",
+    "nextGate": "offline_contract_tests_and_side_effect_free_dry_run",
+    "number": 1,
+    "status": "complete"
+  },
+  "historicalRegistration": {
+    "attachToCis8004": false,
+    "disposition": "SUPERSEDE_BEFORE_D4_1C",
+    "evidencePreserved": true,
+    "immediateRevocationAuthorized": false,
+    "publicKeyFingerprint": "sha256:5064708a2081db6539f9e4043a1635fa0ab1633c97a67f5ced705a2fc73ce619",
+    "retainedAsCanonicalProfile": false,
+    "retainedOnChain": true,
+    "transactionHash": "949a25947e645cca59a6a529859ba8fcbf160a0122d31406dc0eb45cc7d87093"
+  },
+  "replacementProfile": {
+    "actualParameterStatus": "pending_gate3_key_and_signature",
+    "canonicalBytestringLengthBytes": 2,
+    "canonicalDomain": "CIS-8/v1/canonical",
+    "canonicalIntegerEndianness": "little",
+    "canonicalStringLengthBytes": 2,
+    "cis8004MutationAllowed": false,
+    "cis8004TokenId": "287",
+    "concordiumNetwork": "ccd:4221332d34e1694168c2a0c0b3fd0f27",
+    "contract": {
+      "index": "12801",
+      "subindex": "0"
+    },
+    "contractName": "CIS-8",
+    "d4_1cAttachmentAllowed": false,
+    "externalBlockchain": "solana",
+    "externalKeyNamespace": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    "externalKeyType": "ed25519",
+    "externalNamespace": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    "externalNetwork": "devnet",
+    "historicalRegistrationRetained": true,
+    "metadataCount": 0,
+    "moduleReference": "5a01f4133c353c640120cd0303316bd18ebd9e120a909cd5ff639e92227e75da",
+    "oldRegistrationCanonical": false,
+    "ownerAccount": "4Wx1vpgAfpE6k9ksmtYaH6z4iQN61LFFRUgbbG6gDro1ziKNL7",
+    "ownerOfKeyEntrypoint": "ownerOfKey",
+    "profileId": "xcf.demo4.d4-1b.cis8.solana-devnet.conformant-replacement.v1",
+    "proofScheme": "solana-ed25519",
+    "publicKeyByteLength": 32,
+    "registerEntrypoint": "registerExternalKey",
+    "replacementKeyStatus": "not_generated_gate1",
+    "signatureByteLength": 64
+  },
+  "safety": {
+    "cis8004Token287Mutated": false,
+    "cis8Mutated": false,
+    "contractInvoked": false,
+    "d4_1cAttachmentPerformed": false,
+    "keyGenerated": false,
+    "paymentAttempted": false,
+    "privateKeyRead": false,
+    "productionActivation": false,
+    "sideEffectFree": true,
+    "signingAttempted": false,
+    "transactionConstructed": false,
+    "transactionSubmitted": false,
+    "walletRead": false
+  },
+  "sourcePins": {
+    "normativeHtmlSha256": "6216474e04464b33de77dd79df8d90d9fe231635aacd4ecf89507e1d2c74546b",
+    "normativeProfile": "cis8_draft_2026_05_25",
+    "normativeStatus": "Draft",
+    "normativeUrl": "https://proposals.concordium.com/CIS/cis-8.html",
+    "observedOn": "2026-08-03",
+    "requiresGate3DriftCheck": true,
+    "solanaCaipHtmlSha256": "5598020d520135b0b1d84ad89833785eb7f425b40620941e02d29b69165a12ad",
+    "solanaCaipUrl": "https://namespaces.chainagnostic.org/solana/caip2",
+    "solanaDevnetCaip2": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    "solanaDevnetGenesisHash": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+    "solanaDevnetRpc": "https://api.devnet.solana.com"
+  },
+  "type": "xcf.demo4.d4-1b.cis8-conformant-replacement-profile-evidence",
+  "version": "1"
+}

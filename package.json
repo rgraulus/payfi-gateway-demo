@@ -203,9 +203,17 @@
     "demo:x402-v2-agent-registry-demo3-e2e": "bash scripts/demo_x402_v2_agent_registry_demo3_e2e.sh",
     "demo:x402-v2-agent-registry-demo3-viewer": "bash scripts/demo_x402_v2_agent_registry_demo3_viewer.sh",
     "phase6:demo4-d4-1b-profile-conformance-decision-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1b_profile_conformance_decision.ts",
+    "phase6:demo4-d4-1b-cis8-conformant-replacement-profile-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1b_cis8_conformant_replacement_profile.ts",
+    "phase6:demo4-d4-1b-cis8-conformant-replacement-offline-contract-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1b_cis8_conformant_replacement_offline_contract.ts",
     "phase6:demo4-d4-1a-cis8004-registration-preflight-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1a_cis8004_registration_preflight.ts",
     "phase6:demo4-d4-1a-cis8004-registration-controlled-execution-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1a_cis8004_registration_controlled_execution.ts",
-    "phase6:demo4-d4-1a-cis8004-registration-controlled-execution": "ts-node --transpile-only scripts/demo_phase6_demo4_d4_1a_cis8004_registration_controlled_execution.ts"
+    "phase6:demo4-d4-1a-cis8004-registration-controlled-execution": "ts-node --transpile-only scripts/demo_phase6_demo4_d4_1a_cis8004_registration_controlled_execution.ts",
+    "phase6:demo4-d4-1b-cis8-conformant-replacement-preflight-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1b_cis8_conformant_replacement_preflight.ts",
+    "phase6:demo4-d4-1b-cis8-conformant-replacement-public-preflight-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1b_cis8_conformant_replacement_public_preflight.ts",
+    "phase6:demo4-d4-1b-cis8-conformant-replacement-private-preflight-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1b_cis8_conformant_replacement_private_preflight.ts",
+    "phase6:demo4-d4-1b-cis8-conformant-replacement-gate4-authorization-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1b_cis8_conformant_replacement_gate4_authorization.ts",
+    "phase6:demo4-d4-1b-cis8-conformant-replacement-execution-dry-run-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1b_cis8_conformant_replacement_execution_dry_run.ts",
+    "phase6:demo4-d4-1b-cis8-conformant-replacement-execution-preflight-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1b_cis8_conformant_replacement_execution_preflight.ts"
   },
   "repository": {
     "type": "git",

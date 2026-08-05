@@ -1,0 +1,207 @@
+{
+  "type": "xcf.demo4.d4-1b.cis8-conformant-replacement-preflight-implementation-checkpoint-evidence",
+  "version": "1",
+  "environment": "offline_deterministic_synthetic_and_public_runner_implementation_only",
+  "gate": {
+    "number": 3,
+    "name": "public_private_preflight_and_exactly_one_submission_authorization",
+    "previousGate": 2,
+    "status": "in_progress",
+    "checkpointStatus": "gate4_blocked_external_cis8_draft_deployment_compatibility_dependency",
+    "nextRequiredStep": "obtain_concordium_draft_compatible_testnet_target_or_authoritative_compatibility_guidance"
+  },
+  "artifactPins": {
+    "profileCoreSha256": "833c38d553405e24fecf4a9243ad9136ddb1bc5a33b1be172482a9a017517c0a",
+    "preflightCoreSha256": "43e9f1e652c4f853ce5174803c867ad01614dfcafcef3f4ede22691da25ee8de",
+    "gate1HarnessSha256": "faa5682137cf6f31a579279daf66b7b4254c4e5e398c543535749aed438d5875",
+    "gate2HarnessSha256": "03c2ba37704f656799f33a5cda9bc6327a52a399a2287bc347faadd09bc290e9",
+    "gate3HarnessSha256": "cfc7abe508ba1328f0df108c41dd382981aff55ad9349c3276541427e31f41a7",
+    "gate1EvidenceSha256": "5312fdb2bef4d702da5eb3bd0041bbe6eaffb11ccf1c5afa3a4095d8cf1f2ab4",
+    "gate2EvidenceSha256": "28c86a0bc09472c64a32ef460b7a7b31a0cf7469c9b0de423ae3c221ea9bd978",
+    "packageJsonSha256": "3883b1ccedd305a431048ab16d65d37c495382a2e5054915ed3c28d5c3258f15",
+    "publicPreflightRunnerSha256": "6af077292c9c6df591375df29fed380d52341edec748db040e0a0f3f018b7af8",
+    "publicPreflightHarnessSha256": "6cb12cfd7ca286a834bc9d344a13ac1478c0727ab97654c35265925d059a42e5"
+  },
+  "validation": {
+    "gate3Command": "phase6:demo4-d4-1b-cis8-conformant-replacement-preflight-test",
+    "gate3Tests": 45,
+    "gate3Passed": 45,
+    "gate3AcceptedCases": 4,
+    "gate3RejectionCases": 41,
+    "publicPreflightValidatorTested": true,
+    "privatePreflightEvidenceValidatorTested": true,
+    "exactlyOneSubmissionAuthorizationContractTested": true,
+    "staticSideEffectScanPassed": true,
+    "publicPreflightCommand": "phase6:demo4-d4-1b-cis8-conformant-replacement-public-preflight-test",
+    "publicPreflightTests": 9,
+    "publicPreflightPassed": 9,
+    "publicPreflightAcceptedCases": 7,
+    "publicPreflightRejectionCases": 2,
+    "publicPreflightRunnerImplemented": true,
+    "publicPreflightFailClosedTested": true,
+    "livePublicPreflightExecuted": true
+  },
+  "actualGate3State": {
+    "normativeSourceDriftRecheckedLive": true,
+    "solanaCaipSourceDriftRecheckedLive": true,
+    "solanaDevnetGenesisRecheckedLive": true,
+    "finalizedConcordiumContractInspected": true,
+    "ownerOfKeyStatusObservedLive": true,
+    "replacementKeyGenerated": true,
+    "privateKeyRead": true,
+    "walletRead": false,
+    "actualSignatureGenerated": true,
+    "actualSignatureLocallyVerified": true,
+    "actualRegistrationParameterProduced": true,
+    "explicitRealGate4AuthorizationConfirmed": true
+  },
+  "boundedHandoffContract": {
+    "syntheticContractTested": true,
+    "gate3TransactionExecutionAuthorized": false,
+    "gate4SubmissionLimit": 1,
+    "submissionAttemptsBeforeRequired": 0,
+    "automaticRetryAuthorized": false,
+    "zeroCcdRequired": true,
+    "cis8004TokenId": "287",
+    "cis8004Token287MutationAuthorized": false,
+    "d4_1cAttachmentAuthorized": false,
+    "historicalRegistrationRevocationAuthorized": false
+  },
+  "protectedState": {
+    "cis8004TokenId": "287",
+    "cis8004TokenMutated": false,
+    "d4_1cAttachmentPerformed": false,
+    "historicalRegistrationRetained": true,
+    "historicalRegistrationRevoked": false
+  },
+  "safety": {
+    "syntheticFixturesOnly": true,
+    "keyGenerated": false,
+    "privateKeyRead": false,
+    "walletRead": false,
+    "signingAttempted": false,
+    "networkCalled": false,
+    "contractInvoked": false,
+    "transactionConstructed": false,
+    "transactionSubmitted": false,
+    "cis8Mutated": false,
+    "cis8004Mutated": false,
+    "d4_1cAttachmentPerformed": false,
+    "gatewayRuntimeCalled": false,
+    "paymentAttempted": false,
+    "productionActivation": false
+  },
+  "gate4AuthorizationState": {
+    "authorizationArtifactSha256": "92dd5c04ec0b55542418ac04655c4d17216578b4f515629d7d0f3b5d640140bc",
+    "status": "gate4_submission_authorized",
+    "authorizationScope": "exactly_one_controlled_testnet_submission",
+    "gate4SubmissionLimit": 1,
+    "submissionAttemptsBefore": 0,
+    "remainingSubmissionAttempts": 1,
+    "transactionExecutionAuthorized": false,
+    "automaticRetryAuthorized": false,
+    "zeroCcdRequired": true,
+    "transactionConstructed": false,
+    "transactionSigned": false,
+    "transactionSubmitted": false,
+    "authorizationInputCheckpointSha256": "24499449e9d6bf4aa38673dd2b09bc0883b928aa42da26c4b01c384997fe204a"
+  },
+  "deployedSchemaCompatibility": {
+    "status": "blocked",
+    "reason": "deployed_contract_legacy_u32_profile_differs_materially_from_cis8_draft_2026_05_25_u16",
+    "authoritativeSource": "https://proposals.concordium.com/CIS/cis-8.html",
+    "authoritativeDraftDate": "2026-05-25",
+    "contract": {
+      "index": "12801",
+      "subindex": "0"
+    },
+    "moduleReference": "5a01f4133c353c640120cd0303316bd18ebd9e120a909cd5ff639e92227e75da",
+    "sdkVersion": "12.0.2",
+    "diagnosticScriptSha256": "7100b607f278e3b2bbfb75cdeaf554ac2c758386979d83c1e85b12177359a91b",
+    "publicSyntheticDiagnostic": {
+      "finalizedBlockHash": "bed0a1c5af412c530753d5bc0948ad9fc4788bc43e85f2918935385c00404898",
+      "syntheticMaterialOnly": true,
+      "deterministicSerialization": {
+        "byteLength": 168,
+        "sha256": "6d9e05badca4ba852c1a81f41f95dab789334ffb91761c4286cbc50888340add"
+      },
+      "sdkSchemaSerialization": {
+        "byteLength": 180,
+        "sha256": "54c8c53965d542bc8d7ab826e3955296dc0cb964808ef771e15d3be8de5d5f8b"
+      },
+      "byteLengthDelta": 12,
+      "exactByteEquivalence": false
+    },
+    "executionPolicy": {
+      "executionPreflightBlocked": true,
+      "blockBeforePrivateKeyRead": true,
+      "invokeContractAllowed": false,
+      "transactionExecutionAuthorized": false,
+      "automaticRetryAuthorized": false,
+      "requiredResolution": "concordium_draft_compatible_testnet_target_or_authoritative_compatibility_guidance"
+    },
+    "submissionState": {
+      "submissionAttemptsBefore": 0,
+      "remainingSubmissionAttempts": 1,
+      "transactionConstructed": false,
+      "transactionSigned": false,
+      "transactionSubmitted": false,
+      "submissionAttemptConsumed": false
+    },
+    "compatibilityProfiles": {
+      "normativeTarget": {
+        "profile": "cis8_draft_2026_05_25_u16",
+        "stringLengthPrefixBytes": 2,
+        "bytestringLengthPrefixBytes": 2
+      },
+      "deployedTarget": {
+        "profile": "contract_12801_module_5a01_legacy_u32",
+        "stringLengthPrefixBytes": 4,
+        "bytestringLengthPrefixBytes": 4
+      },
+      "logicalInterfaceCompatible": true,
+      "parameterCodecCompatible": false,
+      "canonicalProofMessageCompatible": false
+    },
+    "canonicalMessageCompatibility": {
+      "samePublicInputs": true,
+      "draftU16": {
+        "byteLength": 239,
+        "sha256": "b0acea11559abd39d87a6d4a2c1ae106b346f1b3995fa59529cb7a2aadcf5d9c",
+        "matchesRecordedSignedCanonicalMessage": true
+      },
+      "deployedU32": {
+        "byteLength": 249,
+        "sha256": "0ddf866d95e84776c45fc2b0dd831e2e3ebe1fde74a18de7a689e4c47ea7e288"
+      },
+      "byteLengthDelta": 10,
+      "exactByteEquivalence": false,
+      "sameSigningMessage": false
+    },
+    "liveReadOnlyDryRunFinding": {
+      "performed": true,
+      "contractInvocationReached": true,
+      "contractInvocationSucceeded": false,
+      "recordedFailure": "register_external_key_dry_run_failed",
+      "exactRejectCodeCaptured": false,
+      "privateKeyReadDuringAuthorizedPreflight": true,
+      "signatureLocallyVerified": true,
+      "walletRead": false,
+      "transactionConstructed": false,
+      "transactionSigned": false,
+      "transactionSubmitted": false,
+      "submissionAttemptConsumed": false
+    },
+    "externalDependency": {
+      "status": "awaiting_concordium_input",
+      "scopeChanged": false,
+      "gate4StillRequiresExactlyOneControlledTestnetRegistration": true,
+      "automaticRetryAllowed": false,
+      "acceptableResolution": [
+        "concordium_draft_compatible_testnet_contract",
+        "reference_contract_source_or_reproducible_wasm",
+        "authoritative_compatibility_guidance_from_concordium"
+      ]
+    }
+  }
+}
