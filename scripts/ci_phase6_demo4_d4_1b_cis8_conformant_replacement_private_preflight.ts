@@ -21,6 +21,8 @@ import {
 } from "node:child_process";
 
 import {
+  DEMO4_D4_1B_REPLACEMENT_PROFILE,
+  DEMO4_D4_1B_REPLACEMENT_TEST_VECTOR,
   buildDemo4D41bReplacementCanonicalMessageV1,
 } from "../src/phase6/demo4Cis8ConformantReplacementProfile";
 
@@ -184,6 +186,13 @@ function syntheticPublicArtifact(
   evidence.replacementPublicKeyHex =
     publicKeyHex;
 
+  evidence.moduleReference =
+    DEMO4_D4_1B_REPLACEMENT_PROFILE.moduleReference;
+
+  evidence.expectedRegistrationParameterByteLength =
+    DEMO4_D4_1B_REPLACEMENT_TEST_VECTOR
+      .registrationParameterByteLength;
+
   evidence.canonicalMessageByteLength =
     canonical.value.byteLength;
 
@@ -286,7 +295,7 @@ test(
     assert.equal(
       result.facts
         .registrationParameterByteLength,
-      168,
+      180,
     );
 
     assert.match(

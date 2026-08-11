@@ -263,12 +263,12 @@ async function main(): Promise<void> {
 
     assert.equal(
       result.deterministicParameterByteLength,
-      168,
+      180,
     );
 
     assert.equal(
       result.sdkSerializedParameterByteLength,
-      168,
+      180,
     );
 
     assert.equal(

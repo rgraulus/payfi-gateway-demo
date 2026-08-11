@@ -97,7 +97,7 @@ function byteValues(
   );
 }
 
-function parameterForSchema(
+export function replacementRegistrationParameterForSchemaV1(
   value: unknown,
 ): unknown {
   const root = record(value);
@@ -283,10 +283,13 @@ function safeEnergy(
   );
 }
 
-export async function runReplacementRegistrationDryRunV1(
-  context: ReplacementDryRunContext,
+export function serializeReplacementRegistrationParameterV1(
+  context: Pick<
+    ReplacementDryRunContext,
+    "sdk" | "embeddedSchema"
+  >,
   registrationParameter: unknown,
-): Promise<ReplacementDryRunFacts> {
+) {
   const contractName =
     context.sdk.ContractName
       .fromStringUnchecked("CIS-8");
@@ -296,7 +299,7 @@ export async function runReplacementRegistrationDryRunV1(
       .fromString("registerExternalKey");
 
   const schemaParameter =
-    parameterForSchema(
+    replacementRegistrationParameterForSchemaV1(
       registrationParameter,
     );
 
@@ -355,6 +358,33 @@ export async function runReplacementRegistrationDryRunV1(
       `actual_sha256=${sdkSerializedSha256}`,
     );
   }
+
+  return Object.freeze({
+    parameter,
+    deterministicBytes,
+    sdkSerializedBytes,
+    deterministicSha256,
+    sdkSerializedSha256,
+  });
+}
+
+export async function runReplacementRegistrationDryRunV1(
+  context: ReplacementDryRunContext,
+  registrationParameter: unknown,
+): Promise<ReplacementDryRunFacts> {
+  const serialized =
+    serializeReplacementRegistrationParameterV1(
+      context,
+      registrationParameter,
+    );
+
+  const {
+    parameter,
+    deterministicBytes,
+    sdkSerializedBytes,
+    deterministicSha256,
+    sdkSerializedSha256,
+  } = serialized;
 
   const invocation =
     await context.client.invokeContract(

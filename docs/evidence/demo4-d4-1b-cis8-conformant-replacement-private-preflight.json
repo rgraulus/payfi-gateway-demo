@@ -12,11 +12,11 @@
       "solanaCaipHtmlSha256": "5598020d520135b0b1d84ad89833785eb7f425b40620941e02d29b69165a12ad",
       "solanaDevnetGenesisHash": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
       "finalized": true,
-      "finalizedBlockHeight": "46403851",
+      "finalizedBlockHeight": "46669906",
       "network": "ccd:4221332d34e1694168c2a0c0b3fd0f27",
       "contractIndex": "12801",
       "contractSubindex": "0",
-      "moduleReference": "5a01f4133c353c640120cd0303316bd18ebd9e120a909cd5ff639e92227e75da",
+      "moduleReference": "e003cc210627c96b817983a701734a3fb6a77ec25782dc792524259e77573d61",
       "contractName": "CIS-8",
       "schemaVersion": 3,
       "ownerAccount": "4Wx1vpgAfpE6k9ksmtYaH6z4iQN61LFFRUgbbG6gDro1ziKNL7",
@@ -32,9 +32,9 @@
       "eventSchemaPresent": true,
       "replacementPublicKeyHex": "a4abdcb4dc5d6d81bab06361ab860f819d820f6cadc33e8641cd6733f3baa5d3",
       "ownerOfKeyStatus": "unregistered",
-      "canonicalMessageByteLength": 239,
-      "canonicalMessageSha256": "b0acea11559abd39d87a6d4a2c1ae106b346f1b3995fa59529cb7a2aadcf5d9c",
-      "expectedRegistrationParameterByteLength": 168,
+      "canonicalMessageByteLength": 249,
+      "canonicalMessageSha256": "0ddf866d95e84776c45fc2b0dd831e2e3ebe1fde74a18de7a689e4c47ea7e288",
+      "expectedRegistrationParameterByteLength": 180,
       "privatePreflightRequired": true,
       "safety": {
         "sideEffectFree": true,
@@ -62,20 +62,20 @@
     "publicKeyMatchesPrivateKey": true,
     "signatureByteLength": 64,
     "signatureLocallyVerified": true,
-    "registrationParameterByteLength": 168,
-    "registrationParameterSha256": "c66eddb8af51d38d4dadcba1d2b353c8935637052b06531e247a3c8613f7fe97",
+    "registrationParameterByteLength": 180,
+    "registrationParameterSha256": "e00d66de097b671ae9fdec63779bd75907ecefa036299ef338b380e6996384d1",
     "privateKeyMaterialIncluded": false,
     "rawSignatureIncluded": false,
     "walletMaterialIncluded": false
   },
   "facts": {
     "publicKeyHex": "a4abdcb4dc5d6d81bab06361ab860f819d820f6cadc33e8641cd6733f3baa5d3",
-    "canonicalMessageByteLength": 239,
-    "canonicalMessageSha256": "b0acea11559abd39d87a6d4a2c1ae106b346f1b3995fa59529cb7a2aadcf5d9c",
+    "canonicalMessageByteLength": 249,
+    "canonicalMessageSha256": "0ddf866d95e84776c45fc2b0dd831e2e3ebe1fde74a18de7a689e4c47ea7e288",
     "signatureByteLength": 64,
     "signatureLocallyVerified": true,
-    "registrationParameterByteLength": 168,
-    "registrationParameterSha256": "c66eddb8af51d38d4dadcba1d2b353c8935637052b06531e247a3c8613f7fe97"
+    "registrationParameterByteLength": 180,
+    "registrationParameterSha256": "e00d66de097b671ae9fdec63779bd75907ecefa036299ef338b380e6996384d1"
   },
   "runtime": {
     "environmentRead": true,
@@ -104,10 +104,10 @@
     "productionActivation": false
   },
   "sourceHashes": {
-    "privatePreflightLogSha256": "6503835dc78b77478a4c6cef7baa49b3cff5920e86fcf9018ad4f9c10f5e98b3",
-    "publicPreflightEvidenceSha256": "03d74dd4c69cffbf75baf35fd2f0b69f03046353794a1a04b9ec2decf87bf9a9",
-    "privatePreflightRunnerSha256": "f878156c7d3dbe668df1fd50cdb375accca643e57b9a4c9eaa1bbacea460ebba",
-    "privatePreflightCiSha256": "fbfbc48d2427110a90de9d8cab1146ae7960c4ecce12cba7dc499b077b0d1221"
+    "privatePreflightLogSha256": "3aad9f8737e33a7040bd5089f2d99316197dbcafd014ea6f35f4e98ec6096430",
+    "publicPreflightEvidenceSha256": "540a1048e2d2a36c21414231d6a8da661245c2ad845b47b1dd02ae7ce747ed6e",
+    "privatePreflightRunnerSha256": "7bf20919957fdac13856d9b85a93be4e9601c0fb360f636ab297b5665ab26838",
+    "privatePreflightCiSha256": "5eda7104ac4cf94ab7448351149905880c7a7a731658a54b9d8eab2af07f7f27"
   },
   "nextRequiredStep": "update_gate3_checkpoint"
 }

@@ -5,8 +5,8 @@
   "gate": 3,
   "status": "accepted",
   "observation": {
-    "finalizedBlockHash": "ddc5b3fbec71862da5e8a68977c945f6785660b49ee6e35883d056b84640a01f",
-    "observedAt": "2026-08-04T17:19:37.842Z"
+    "finalizedBlockHash": "6869328de345bd7cfd500aec8a52b522d7ee50f808f5183d5f1b59ba373c72df",
+    "observedAt": "2026-08-10T21:10:55.824Z"
   },
   "evidence": {
     "type": "xcf.demo4.d4-1b.cis8-conformant-replacement-preflight",
@@ -15,11 +15,11 @@
     "solanaCaipHtmlSha256": "5598020d520135b0b1d84ad89833785eb7f425b40620941e02d29b69165a12ad",
     "solanaDevnetGenesisHash": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
     "finalized": true,
-    "finalizedBlockHeight": "46403851",
+    "finalizedBlockHeight": "46669906",
     "network": "ccd:4221332d34e1694168c2a0c0b3fd0f27",
     "contractIndex": "12801",
     "contractSubindex": "0",
-    "moduleReference": "5a01f4133c353c640120cd0303316bd18ebd9e120a909cd5ff639e92227e75da",
+    "moduleReference": "e003cc210627c96b817983a701734a3fb6a77ec25782dc792524259e77573d61",
     "contractName": "CIS-8",
     "schemaVersion": 3,
     "ownerAccount": "4Wx1vpgAfpE6k9ksmtYaH6z4iQN61LFFRUgbbG6gDro1ziKNL7",
@@ -35,9 +35,9 @@
     "eventSchemaPresent": true,
     "replacementPublicKeyHex": "a4abdcb4dc5d6d81bab06361ab860f819d820f6cadc33e8641cd6733f3baa5d3",
     "ownerOfKeyStatus": "unregistered",
-    "canonicalMessageByteLength": 239,
-    "canonicalMessageSha256": "b0acea11559abd39d87a6d4a2c1ae106b346f1b3995fa59529cb7a2aadcf5d9c",
-    "expectedRegistrationParameterByteLength": 168,
+    "canonicalMessageByteLength": 249,
+    "canonicalMessageSha256": "0ddf866d95e84776c45fc2b0dd831e2e3ebe1fde74a18de7a689e4c47ea7e288",
+    "expectedRegistrationParameterByteLength": 180,
     "privatePreflightRequired": true,
     "safety": {
       "sideEffectFree": true,

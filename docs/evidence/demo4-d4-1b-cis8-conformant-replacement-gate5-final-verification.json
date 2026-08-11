@@ -1,0 +1,114 @@
+{
+  "type": "xcf.demo4.d4-1b.cis8-conformant-replacement-gate5-final-verification",
+  "version": "1",
+  "status": "gate5_final_verification_confirmed",
+  "network": "ccd:4221332d34e1694168c2a0c0b3fd0f27",
+  "registry": {
+    "contract": {
+      "index": "12801",
+      "subindex": "0"
+    },
+    "moduleReference": "e003cc210627c96b817983a701734a3fb6a77ec25782dc792524259e77573d61",
+    "ownerOfKeyEntrypoint": "ownerOfKey"
+  },
+  "replacementProfile": {
+    "externalBlockchain": "solana",
+    "externalNetwork": "devnet",
+    "publicKeyHex": "a4abdcb4dc5d6d81bab06361ab860f819d820f6cadc33e8641cd6733f3baa5d3",
+    "owner": "4Wx1vpgAfpE6k9ksmtYaH6z4iQN61LFFRUgbbG6gDro1ziKNL7",
+    "canonicalMessageByteLength": 249,
+    "canonicalMessageSha256": "0ddf866d95e84776c45fc2b0dd831e2e3ebe1fde74a18de7a689e4c47ea7e288",
+    "registrationParameterByteLength": 180,
+    "registrationParameterSha256": "e00d66de097b671ae9fdec63779bd75907ecefa036299ef338b380e6996384d1"
+  },
+  "gate4FinalizedRegistration": {
+    "finalizedEvidencePath": "docs/evidence/demo4-d4-1b-cis8-conformant-replacement-finalized-evidence.json",
+    "finalizedEvidenceSha256": "03b7a9f810d1a27ef0dbc6dd1278053848029dd903b64d9d81e409dfb68bce9c",
+    "transactionHash": "24101c5247e753dcf2c0efae9e924ddefad6f2004e9a3814118caece5e2c2cb9",
+    "finalizedBlockHash": "b6f16b9f149a63acbd7db09e511f0048e8d910d8406c7219c4b0f06b5c4bdc7a",
+    "finalizedBlockHeight": "46671596",
+    "submissionAttemptsUsed": 1,
+    "submissionAttemptsRemaining": 0,
+    "exactlyOneSubmissionAttempted": true,
+    "automaticRetryAttempted": false
+  },
+  "gate5IndependentFinalizedRead": {
+    "finalized": true,
+    "finalizedBlockHash": "e27250d8ca263524dff2f5bfff3b30fe9606371c270f8e9bffcf887d5bd76839",
+    "finalizedBlockHeight": "46678224",
+    "atOrAfterGate4Finalization": true,
+    "moduleReference": "e003cc210627c96b817983a701734a3fb6a77ec25782dc792524259e77573d61",
+    "moduleReferenceMatch": true,
+    "publicKeyHex": "a4abdcb4dc5d6d81bab06361ab860f819d820f6cadc33e8641cd6733f3baa5d3",
+    "ownerOfKeyStatus": "registered",
+    "owner": "4Wx1vpgAfpE6k9ksmtYaH6z4iQN61LFFRUgbbG6gDro1ziKNL7",
+    "expectedOwnerMatch": true,
+    "readOnly": true
+  },
+  "permanentExecutionLock": {
+    "executeDispatchEnabled": false,
+    "liveNpmEntryPointPresent": false,
+    "controlledTestEntryPointPresent": true,
+    "ciPrimaryLockAssertionPresent": true,
+    "ciOperatorLockAssertionPresent": true,
+    "physicalTransactionSubmissionSurfaceRetained": 1,
+    "runnerSha256": "998f026def4d8ede7018bb92f3116750c9682417eb513157adb1bdc1c0accedb",
+    "controlledExecutionCiSha256": "d119fa26567af8eaea4a906052cfda9e90693276cddfa72ba7c8e2ae056c6d8d",
+    "packageJsonSha256": "3ce8d4bc981c5a423424500787438f1909570dd4491e102b203cd587669750fc"
+  },
+  "provenance": {
+    "privatePreflightEvidenceSha256": "682c138801edced7020526699faddb5c3f5a1938598108a81d1ffc3ad52355e4",
+    "executionPreflightRunnerOutputPath": "docs/evidence/demo4-d4-1b-cis8-conformant-replacement-execution-preflight-runner-output.json",
+    "executionPreflightRunnerOutputSha256": "b8730931e33fc0fe93e7d3b60b43817605ca06a2d8f873613b0703994bb1b366"
+  },
+  "safety": {
+    "gate5PrivateKeyRead": false,
+    "gate5WalletRead": false,
+    "gate5TransactionConstructed": false,
+    "gate5TransactionSigned": false,
+    "gate5TransactionSubmitted": false,
+    "gate5Cis8Mutated": false,
+    "cis8004Token287Mutated": false,
+    "d4_1cAttached": false,
+    "historicalRegistrationRevoked": false,
+    "paymentAttempted": false,
+    "settlementAttempted": false,
+    "receiptIssued": false,
+    "protectedResourceReleased": false,
+    "replayStateMutated": false,
+    "productionActivation": false,
+    "existingFinalizedEvidenceModified": false
+  },
+  "closure": {
+    "d4_1bOnChainProvisioningComplete": true,
+    "gate5TechnicalVerificationComplete": true,
+    "pr312FullRegressionPending": false,
+    "pr312GitClosurePending": true,
+    "d4_1cPerformed": false,
+    "nextRung": "D4-1C under separate PR, scope, and authorization",
+    "pr312FullRegressionComplete": true,
+    "durablePreflightPromotionComplete": true,
+    "controlledExecutionRegression": {
+      "tests": 19,
+      "passed": 19,
+      "failed": 0
+    },
+    "currentPr312BackupImplementationReferenceCount": 0,
+    "fullRegression": {
+      "selectedScripts": 10,
+      "passedScripts": 10,
+      "failedScripts": 0,
+      "initialGuardFailed": false,
+      "fullRegressionFailed": false,
+      "frozenSurfacesChanged": false,
+      "worktreeChangedByRegression": false,
+      "gate5EvidenceChangedByRegression": false,
+      "closureDocumentChangedByRegression": false,
+      "executeDispatchLocked": true,
+      "liveExecutionNpmEntryPointPresent": false,
+      "transactionSubmissionCommandRun": false,
+      "submissionAttemptsUsed": 1,
+      "submissionAttemptsRemaining": 0
+    }
+  }
+}

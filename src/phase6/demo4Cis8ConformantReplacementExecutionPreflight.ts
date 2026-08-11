@@ -318,13 +318,13 @@ export type Demo4D41bReplacementExecutionPreflightEvidenceBindingV1 = {
 
   readonly ownerOfKeyStatus: "unregistered";
 
-  readonly canonicalMessageByteLength: 239;
+  readonly canonicalMessageByteLength: 249;
   readonly canonicalMessageSha256: string;
 
   readonly signatureByteLength: 64;
   readonly signatureLocallyVerified: true;
 
-  readonly registrationParameterByteLength: 168;
+  readonly registrationParameterByteLength: 180;
   readonly registrationParameterSha256: string;
 
   readonly privateKeyMaterialIncluded: false;
@@ -472,7 +472,7 @@ export function bindDemo4D41bReplacementExecutionPreflightEvidenceV1(
     publicEvidence.ownerOfKeyStatus !==
       "unregistered" ||
     publicEvidence.canonicalMessageByteLength !==
-      239 ||
+      249 ||
     typeof publicEvidence.canonicalMessageSha256 !==
       "string" ||
     !/^[0-9a-f]{64}$/.test(
@@ -491,7 +491,7 @@ export function bindDemo4D41bReplacementExecutionPreflightEvidenceV1(
     privateEvidence.signatureLocallyVerified !==
       true ||
     privateEvidence.registrationParameterByteLength !==
-      168 ||
+      180 ||
     typeof privateEvidence
       .registrationParameterSha256 !== "string" ||
     !/^[0-9a-f]{64}$/.test(
@@ -510,13 +510,13 @@ export function bindDemo4D41bReplacementExecutionPreflightEvidenceV1(
 
   if (
     privateFacts.canonicalMessageByteLength !==
-      239 ||
+      249 ||
     privateFacts.canonicalMessageSha256 !==
       publicEvidence.canonicalMessageSha256 ||
     privateFacts.signatureByteLength !== 64 ||
     privateFacts.signatureLocallyVerified !== true ||
     privateFacts.registrationParameterByteLength !==
-      168 ||
+      180 ||
     privateFacts.registrationParameterSha256 !==
       privateEvidence.registrationParameterSha256
   ) {
@@ -577,14 +577,14 @@ export function bindDemo4D41bReplacementExecutionPreflightEvidenceV1(
 
       ownerOfKeyStatus: "unregistered",
 
-      canonicalMessageByteLength: 239,
+      canonicalMessageByteLength: 249,
       canonicalMessageSha256:
         publicEvidence.canonicalMessageSha256,
 
       signatureByteLength: 64,
       signatureLocallyVerified: true,
 
-      registrationParameterByteLength: 168,
+      registrationParameterByteLength: 180,
       registrationParameterSha256:
         privateEvidence
           .registrationParameterSha256,

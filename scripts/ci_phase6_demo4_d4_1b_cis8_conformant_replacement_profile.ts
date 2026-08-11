@@ -474,11 +474,11 @@ test("keeps the Gate 1 core statically side-effect-free", () => {
 
   assert.match(
     source,
-    /encodeU16|writeUInt16LE/,
+    /encodeU32Length|writeUInt32LE/,
   );
   assert.doesNotMatch(
     source,
-    /writeUInt32LE/,
+    /encodeU16|writeUInt16LE/,
   );
   assert.match(
     source,
@@ -523,7 +523,7 @@ console.log(JSON.stringify({
   rejectionCases,
   sourcePinsFrozen: true,
   solanaDevnetProfileFrozen: true,
-  twoByteLengthCodecFrozen: true,
+  fourByteLengthCodecFrozen: true,
   canonicalVectorVerified: true,
   parameterVectorVerified: true,
   historicalProfileRejected: true,

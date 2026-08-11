@@ -2,7 +2,7 @@
 
 ## Status
 
-**Gate 1 complete — exact replacement profile and expected parameter contract frozen.**
+**Gate 5 technical closure complete — D4-1B finalized registration verified and PR #312 execution permanently locked; Git closure remains pending.**
 
 This document defines the proposal-conformant CIS-8 replacement registration profile for Demo 4 D4-1B.
 
@@ -622,3 +622,155 @@ transaction may be constructed, signed, or submitted.
 PR #312 remains in progress under its unchanged five-gate scope. This is a
 green, intentional external-dependency parking checkpoint—not PR completion and
 not a validation or regression failure.
+
+## Gate 5 Closure — Finalized Replacement Registration and Permanent Execution Lock
+
+### Historical parking checkpoint superseded
+
+The preceding compatibility-parking checkpoint is retained above as a historical record of the fail-closed state that existed before authoritative compatibility guidance was received.
+
+That checkpoint was superseded by direct Concordium clarification that the intended CIS-8 framing uses four-byte/u32 little-endian length fields. PR #312 therefore rebaselined the replacement profile to that clarified framing before any live submission occurred.
+
+The resulting frozen replacement registration uses:
+
+* canonical-message byte length `249`;
+* canonical-message SHA-256 `0ddf866d95e84776c45fc2b0dd831e2e3ebe1fde74a18de7a689e4c47ea7e288`;
+* registration-parameter byte length `180`; and
+* registration-parameter SHA-256 `e00d66de097b671ae9fdec63779bd75907ecefa036299ef338b380e6996384d1`.
+
+### Gate 4 finalized registration
+
+The single authorized Gate 4 Concordium Testnet registration completed successfully.
+
+Finalized anchors:
+
+* transaction hash `24101c5247e753dcf2c0efae9e924ddefad6f2004e9a3814118caece5e2c2cb9`;
+* finalized block hash `b6f16b9f149a63acbd7db09e511f0048e8d910d8406c7219c4b0f06b5c4bdc7a`;
+* finalized block height `46671596`;
+* CIS-8 contract `<12801,0>`;
+* deployed module reference `e003cc210627c96b817983a701734a3fb6a77ec25782dc792524259e77573d61`;
+* replacement public key `a4abdcb4dc5d6d81bab06361ab860f819d820f6cadc33e8641cd6733f3baa5d3`;
+* owner `4Wx1vpgAfpE6k9ksmtYaH6z4iQN61LFFRUgbbG6gDro1ziKNL7`;
+* finalized `ownerOfKey` status `registered`; and
+* finalized controlled-execution evidence SHA-256 `03b7a9f810d1a27ef0dbc6dd1278053848029dd903b64d9d81e409dfb68bce9c`.
+
+Exactly one submission attempt was used. The submission allowance is exhausted (`1/1` used, `0` remaining), and no automatic retry occurred or is permitted.
+
+### Independent Gate 5 finalized-state verification
+
+Gate 5 performed a separate fresh, public, read-only Concordium Testnet verification after the Gate 4 transaction had finalized.
+
+The independent snapshot was:
+
+* finalized block hash `e27250d8ca263524dff2f5bfff3b30fe9606371c270f8e9bffcf887d5bd76839`;
+* finalized block height `46678224`; and
+* later than the Gate 4 finalization height `46671596`.
+
+At that fresh finalized snapshot:
+
+* `<12801,0>` still resolved to module `e003cc210627c96b817983a701734a3fb6a77ec25782dc792524259e77573d61`;
+* the replacement public key remained `registered`;
+* `ownerOfKey` returned the expected owner `4Wx1vpgAfpE6k9ksmtYaH6z4iQN61LFFRUgbbG6gDro1ziKNL7`; and
+* the read performed no wallet access, private-key access, signing, transaction construction, transaction submission, CIS-8 mutation, CIS-8004 mutation, payment action, or production activation.
+
+The sanitized Gate 5 verification artifact is:
+
+* `docs/evidence/demo4-d4-1b-cis8-conformant-replacement-gate5-final-verification.json`
+* SHA-256 `658d03009ab86475a241490d24b41a894a2e2b9c484088e0cf7a563997469bb2`.
+
+### Permanent PR #312 execution lock
+
+After the successful Gate 4 registration, the PR #312 live execution path was permanently locked as an XCF software safety control.
+
+The lock has two regression-enforced layers:
+
+* `EXECUTE_DISPATCH_ENABLED` is permanently `false`; and
+* the operator-facing live controlled-execution npm entry point has been removed.
+
+The controlled-execution test entry point remains available for regression coverage.
+
+Current closure-hardening verification also records:
+
+* controlled-execution regression suite: `19/19`;
+* durable execution-preflight runner output promoted to `docs/evidence/demo4-d4-1b-cis8-conformant-replacement-execution-preflight-runner-output.json` (SHA-256 `b8730931e33fc0fe93e7d3b60b43817605ca06a2d8f873613b0703994bb1b366`); and
+* current PR #312 implementation references to `.backups/pr312-*`: `0`.
+
+The implementation retains one physical transaction-submission call as historical implementation machinery, but the PR #312 execution dispatch is locked and the live npm operator surface is absent.
+
+The full Gate 5 regression matrix independently reconfirmed both lock layers after the finalized registration.
+
+This permanent execution lock is an XCF/PR #312 software fuse. It does not claim that the Concordium registry entry itself can never be changed by some separately authorized future transaction.
+
+### Full PR #312 Gate 5 regression
+
+The complete bounded PR #312 Gate 5 regression matrix has passed.
+
+Regression result:
+
+* selected CI-only package scripts: `10`;
+* passed scripts: `10`;
+* failed scripts: `0`;
+* initial guard failure: `false`;
+* full regression failure: `false`;
+* frozen surfaces changed: `false`;
+* worktree changed by regression: `false`;
+* Gate 5 evidence changed by regression: `false`;
+* closure document changed by regression: `false`;
+* execute dispatch locked: `true`;
+* live controlled-execution npm entry point present: `false`;
+* transaction-submission command run: `false`;
+* Gate 4 submission attempts used: `1`;
+* Gate 4 submission attempts remaining: `0`.
+
+The passing matrix covered:
+
+* controlled-execution authorization, finalized-evidence validation, and permanent-lock enforcement;
+* execution dry-run;
+* execution preflight;
+* Gate 4 authorization;
+* offline contract construction;
+* public/private preflight core validation;
+* controlled private-preflight regression;
+* frozen replacement profile and four-byte/u32 codec;
+* public-preflight fail-closed behavior; and
+* the historical D4-1B profile-conformance decision.
+
+The permanent controlled-execution harness passed `18/18` tests.
+
+No selected regression invoked the live execution entry point or consumed a transaction-submission attempt.
+
+`src/server.ts`, `config/contracts.json`, and `package-lock.json` remained unchanged.
+
+`git diff --check` passed.
+
+### D4-1B closure state
+
+D4-1B on-chain provisioning, independent Gate 5 verification, permanent execution locking, closure evidence, documentation, and full technical regression are complete.
+
+No D4-1C attachment has been performed.
+
+CIS-8004 token `287` was not mutated by D4-1B Gate 4 or Gate 5.
+
+No payment, settlement, receipt, protected-resource release, replay mutation, Gateway activation, or production activation occurred.
+
+No additional D4-1B registration submission is permitted.
+
+The Gate 4 submission allowance is permanently exhausted for this PR:
+
+* submissions authorized: `1`;
+* submissions used: `1`;
+* submissions remaining: `0`;
+* automatic retry permitted: `false`.
+
+PR #312 now has only repository/Git closure remaining:
+
+* complete bounded-diff review;
+* secret and unintended-file review;
+* explicit staging authorization;
+* staged-diff review;
+* explicit commit authorization;
+* explicit push authorization;
+* GitHub PR review/merge under the established manual workflow; and
+* post-merge branch cleanup under separate authorization.
+
+D4-1C remains a separate rung, PR, scope, and authorization sequence.

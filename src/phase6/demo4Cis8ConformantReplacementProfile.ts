@@ -44,14 +44,16 @@ export const DEMO4_D4_1B_REPLACEMENT_PROFILE = Object.freeze({
     subindex: "0",
   }),
   contractName: "CIS-8",
+  eventName: "ExternalKeyRegistered",
+  eventTag: 231,
   moduleReference:
-    "5a01f4133c353c640120cd0303316bd18ebd9e120a909cd5ff639e92227e75da",
+    "e003cc210627c96b817983a701734a3fb6a77ec25782dc792524259e77573d61",
   registerEntrypoint: "registerExternalKey",
   ownerOfKeyEntrypoint: "ownerOfKey",
   ownerAccount: "4Wx1vpgAfpE6k9ksmtYaH6z4iQN61LFFRUgbbG6gDro1ziKNL7",
   canonicalDomain: DEMO4_D4_1B_CIS8_CANONICAL_DOMAIN,
-  canonicalStringLengthBytes: 2,
-  canonicalBytestringLengthBytes: 2,
+  canonicalStringLengthBytes: 4,
+  canonicalBytestringLengthBytes: 4,
   canonicalIntegerEndianness: "little",
   cis8004TokenId: "287",
   cis8004MutationAllowed: false,
@@ -115,12 +117,12 @@ export const DEMO4_D4_1B_REPLACEMENT_TEST_VECTOR = Object.freeze({
   signatureBytesHex:
     "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f" +
     "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
-  canonicalMessageByteLength: 239,
+  canonicalMessageByteLength: 249,
   canonicalMessageSha256:
-    "cfed230d434a028f043d30423d94b92339ddb0094085d118a3d5941c9316f23a",
-  registrationParameterByteLength: 168,
+    "1b28cacb999b3b6ea10dda0e75ab9abbfff75c7d8e68c13e1c7a636a9726c12a",
+  registrationParameterByteLength: 180,
   registrationParameterSha256:
-    "547be748447fd7d34fed085fa7815a1f3125184caf5d331a45abdcc47d28e13f",
+    "9c07f32fd4912d58c0d7021b3dcfcdfc4b2161e180416ada9ad118e26b70931b",
 } as const);
 
 type UnknownRecord = Record<string, unknown>;
@@ -228,18 +230,18 @@ function sha256Hex(value: Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function encodeU16Length(value: number): Buffer | null {
-  if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff) {
+function encodeU32Length(value: number): Buffer | null {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff_ffff) {
     return null;
   }
-  const encoded = Buffer.alloc(2);
-  encoded.writeUInt16LE(value, 0);
+  const encoded = Buffer.alloc(4);
+  encoded.writeUInt32LE(value, 0);
   return encoded;
 }
 
 function encodeString(value: string): Buffer | null {
   const bytes = Buffer.from(value, "utf8");
-  const length = encodeU16Length(bytes.length);
+  const length = encodeU32Length(bytes.length);
   if (length === null) {
     return null;
   }
@@ -247,7 +249,7 @@ function encodeString(value: string): Buffer | null {
 }
 
 function encodeBytes(value: Uint8Array): Buffer | null {
-  const length = encodeU16Length(value.length);
+  const length = encodeU32Length(value.length);
   if (length === null) {
     return null;
   }
@@ -501,7 +503,7 @@ export function buildDemo4D41bReplacementExpectedParameterContractV1(
     DEMO4_D4_1B_REPLACEMENT_PROFILE.proofScheme,
   );
   const encodedSignature = encodeBytes(signature);
-  const metadataCount = encodeU16Length(0);
+  const metadataCount = encodeU32Length(0);
   if (
     externalKey === null ||
     proofScheme === null ||

@@ -249,7 +249,7 @@ test(
 );
 
 
-function readyCheckpointFromBlocked(
+function resolvedCheckpointClone(
   value: unknown,
 ): Record<string, any> {
   const checkpoint =
@@ -257,99 +257,26 @@ function readyCheckpointFromBlocked(
       JSON.stringify(value),
     ) as Record<string, any>;
 
-  function replaceUnique(
-    current: unknown,
-    target: string,
-    from: string,
-    to: string,
-  ): number {
-    if (Array.isArray(current)) {
-      return current.reduce(
-        (total, child) =>
-          total +
-          replaceUnique(
-            child,
-            target,
-            from,
-            to,
-          ),
-        0,
-      );
-    }
-
-    if (
-      typeof current !== "object" ||
-      current === null
-    ) {
-      return 0;
-    }
-
-    const record =
-      current as Record<string, unknown>;
-
-    let replacements = 0;
-
-    for (const [key, child] of
-      Object.entries(record)) {
-      if (
-        key === target &&
-        child === from
-      ) {
-        record[key] = to;
-        replacements += 1;
-      }
-
-      replacements +=
-        replaceUnique(
-          record[key],
-          target,
-          from,
-          to,
-        );
-    }
-
-    return replacements;
-  }
-
   assert.equal(
     checkpoint
       .deployedSchemaCompatibility
       ?.status,
-    "blocked",
+    "resolved",
   );
 
   assert.equal(
-    replaceUnique(
-      checkpoint,
-      "checkpointStatus",
-      "gate4_blocked_external_cis8_draft_deployment_" +
-        "compatibility_dependency",
-      "gate4_exactly_one_submission_" +
-        "authorized_execution_preflight_pending",
-    ),
-    1,
+    checkpoint
+      .deployedSchemaCompatibility
+      ?.externalDependency
+      ?.status,
+    "resolved",
   );
-
-  assert.equal(
-    replaceUnique(
-      checkpoint,
-      "nextRequiredStep",
-      "obtain_concordium_draft_compatible_testnet_target_" +
-        "or_authoritative_compatibility_guidance",
-      "controlled_gate4_execution_preflight_" +
-        "requires_separate_authorization",
-    ),
-    1,
-  );
-
-  delete checkpoint
-    .deployedSchemaCompatibility;
 
   return checkpoint;
 }
 
 test(
-  "rejects the blocked real checkpoint before execution preflight",
+  "rejects a synthetic historical blocked checkpoint before execution preflight",
   "rejection",
   () => {
     const authorizationPath = resolve(
@@ -372,18 +299,21 @@ test(
       );
 
     const checkpoint =
-      JSON.parse(
-        readFileSync(
-          checkpointPath,
-          "utf8",
+      resolvedCheckpointClone(
+        JSON.parse(
+          readFileSync(
+            checkpointPath,
+            "utf8",
+          ),
         ),
       );
 
     assert.equal(
       checkpoint
         .deployedSchemaCompatibility
-        .status,
-      "blocked",
+        .executionPolicy
+        .executionPreflightBlocked,
+      true,
     );
 
     assert.equal(
@@ -395,21 +325,25 @@ test(
     );
 
     assert.equal(
-      checkpoint.gate.checkpointStatus,
-      "gate4_blocked_external_cis8_draft_deployment_" +
-        "compatibility_dependency",
-    );
-
-    assert.equal(
-      checkpoint.gate.nextRequiredStep,
-      "obtain_concordium_draft_compatible_testnet_target_" +
-        "or_authoritative_compatibility_guidance",
+      checkpoint
+        .deployedSchemaCompatibility
+        .executionPolicy
+        .transactionExecutionAuthorized,
+      false,
     );
 
     assert.equal(
       checkpoint
         .deployedSchemaCompatibility
-        .canonicalMessageCompatibility
+        .supersededHistoricalResolutionContext
+        .previousStatus,
+      "blocked",
+    );
+
+    assert.equal(
+      checkpoint
+        .deployedSchemaCompatibility
+        .supersededHistoricalCanonicalMessageCompatibility
         .draftU16
         .byteLength,
       239,
@@ -418,7 +352,7 @@ test(
     assert.equal(
       checkpoint
         .deployedSchemaCompatibility
-        .canonicalMessageCompatibility
+        .supersededHistoricalCanonicalMessageCompatibility
         .deployedU32
         .byteLength,
       249,
@@ -427,80 +361,18 @@ test(
     assert.equal(
       checkpoint
         .deployedSchemaCompatibility
-        .canonicalMessageCompatibility
+        .supersededHistoricalCanonicalMessageCompatibility
         .sameSigningMessage,
       false,
     );
 
-    assert.equal(
-      checkpoint
-        .deployedSchemaCompatibility
-        .liveReadOnlyDryRunFinding
-        .contractInvocationReached,
-      true,
-    );
+    checkpoint.gate.checkpointStatus =
+      "gate4_blocked_external_cis8_draft_deployment_" +
+      "compatibility_dependency";
 
-    assert.equal(
-      checkpoint
-        .deployedSchemaCompatibility
-        .liveReadOnlyDryRunFinding
-        .contractInvocationSucceeded,
-      false,
-    );
-
-    assert.equal(
-      checkpoint
-        .deployedSchemaCompatibility
-        .liveReadOnlyDryRunFinding
-        .exactRejectCodeCaptured,
-      false,
-    );
-
-    assert.equal(
-      checkpoint
-        .deployedSchemaCompatibility
-        .externalDependency
-        .status,
-      "awaiting_concordium_input",
-    );
-
-    assert.equal(
-      checkpoint
-        .deployedSchemaCompatibility
-        .externalDependency
-        .scopeChanged,
-      false,
-    );
-
-    assert.equal(
-      checkpoint
-        .deployedSchemaCompatibility
-        .submissionState
-        .remainingSubmissionAttempts,
-      1,
-    );
-
-    assert.equal(
-      checkpoint
-        .deployedSchemaCompatibility
-        .submissionState
-        .transactionSubmitted,
-      false,
-    );
-
-    assert.equal(
-      checkpoint
-        .gate4AuthorizationState
-        .remainingSubmissionAttempts,
-      1,
-    );
-
-    assert.equal(
-      checkpoint
-        .gate4AuthorizationState
-        .transactionSubmitted,
-      false,
-    );
+    checkpoint.gate.nextRequiredStep =
+      "obtain_concordium_draft_compatible_testnet_target_" +
+      "or_authoritative_compatibility_guidance";
 
     const result =
       bindDemo4D41bReplacementExecutionPreflightArtifactsV1({
@@ -528,7 +400,7 @@ test(
 
     if (result.ok !== false) {
       throw new Error(
-        "blocked_real_checkpoint_accepted",
+        "historical_blocked_checkpoint_accepted",
       );
     }
 
@@ -540,7 +412,7 @@ test(
 );
 
 test(
-  "accepts a synthetic reconstruction of the former ready checkpoint",
+  "accepts a resolved ready checkpoint without compatibility diagnostics",
   "accepted",
   () => {
     const authorizationPath = resolve(
@@ -562,18 +434,18 @@ test(
         authorizationPath,
       );
 
-    const blockedCheckpoint =
-      JSON.parse(
-        readFileSync(
-          checkpointPath,
-          "utf8",
+    const readyCheckpoint =
+      resolvedCheckpointClone(
+        JSON.parse(
+          readFileSync(
+            checkpointPath,
+            "utf8",
+          ),
         ),
       );
 
-    const readyCheckpoint =
-      readyCheckpointFromBlocked(
-        blockedCheckpoint,
-      );
+    delete readyCheckpoint
+      .deployedSchemaCompatibility;
 
     const result =
       bindDemo4D41bReplacementExecutionPreflightArtifactsV1({
@@ -602,7 +474,7 @@ test(
 
     if (result.ok !== true) {
       throw new Error(
-        "synthetic_ready_checkpoint_rejected",
+        "resolved_ready_checkpoint_rejected",
       );
     }
 
@@ -614,6 +486,12 @@ test(
 
     assert.equal(
       result.value
+        .transactionExecutionAuthorized,
+      false,
+    );
+
+    assert.equal(
+      result.value
         .transactionSubmitted,
       false,
     );
@@ -621,7 +499,7 @@ test(
 );
 
 test(
-  "rejects a consumed synthetic ready checkpoint",
+  "rejects a consumed resolved ready checkpoint",
   "rejection",
   () => {
     const authorizationPath = resolve(
@@ -643,17 +521,14 @@ test(
         authorizationPath,
       );
 
-    const blockedCheckpoint =
-      JSON.parse(
-        readFileSync(
-          checkpointPath,
-          "utf8",
-        ),
-      );
-
     const readyCheckpoint =
-      readyCheckpointFromBlocked(
-        blockedCheckpoint,
+      resolvedCheckpointClone(
+        JSON.parse(
+          readFileSync(
+            checkpointPath,
+            "utf8",
+          ),
+        ),
       );
 
     readyCheckpoint
@@ -687,7 +562,7 @@ test(
 
     if (result.ok !== false) {
       throw new Error(
-        "consumed_synthetic_slot_accepted",
+        "consumed_resolved_slot_accepted",
       );
     }
 
@@ -697,7 +572,6 @@ test(
     );
   },
 );
-
 
 test(
   "accepts the real execution-preflight evidence chain",
@@ -787,12 +661,12 @@ test(
 
     assert.equal(
       result.value.canonicalMessageByteLength,
-      239,
+      249,
     );
 
     assert.equal(
       result.value.registrationParameterByteLength,
-      168,
+      180,
     );
 
     assert.equal(

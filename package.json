@@ -213,7 +213,8 @@
     "phase6:demo4-d4-1b-cis8-conformant-replacement-private-preflight-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1b_cis8_conformant_replacement_private_preflight.ts",
     "phase6:demo4-d4-1b-cis8-conformant-replacement-gate4-authorization-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1b_cis8_conformant_replacement_gate4_authorization.ts",
     "phase6:demo4-d4-1b-cis8-conformant-replacement-execution-dry-run-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1b_cis8_conformant_replacement_execution_dry_run.ts",
-    "phase6:demo4-d4-1b-cis8-conformant-replacement-execution-preflight-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1b_cis8_conformant_replacement_execution_preflight.ts"
+    "phase6:demo4-d4-1b-cis8-conformant-replacement-execution-preflight-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1b_cis8_conformant_replacement_execution_preflight.ts",
+    "phase6:demo4-d4-1b-cis8-conformant-replacement-controlled-execution-test": "ts-node --transpile-only scripts/ci_phase6_demo4_d4_1b_cis8_conformant_replacement_controlled_execution.ts"
   },
   "repository": {
     "type": "git",
