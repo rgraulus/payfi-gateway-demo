@@ -1,0 +1,76 @@
+{
+  "type": "xcf.demo4.d4-1b.cis8-conformant-replacement-controlled-execution-evidence",
+  "version": "1",
+  "status": "finalized_registration_confirmed",
+  "network": "ccd:4221332d34e1694168c2a0c0b3fd0f27",
+  "registry": {
+    "contract": {
+      "index": "12801",
+      "subindex": "0"
+    },
+    "contractName": "CIS-8",
+    "moduleReference": "e003cc210627c96b817983a701734a3fb6a77ec25782dc792524259e77573d61",
+    "registerEntrypoint": "registerExternalKey",
+    "ownerOfKeyEntrypoint": "ownerOfKey"
+  },
+  "ownerAccount": "4Wx1vpgAfpE6k9ksmtYaH6z4iQN61LFFRUgbbG6gDro1ziKNL7",
+  "provenance": {
+    "executionPreflightRunnerOutputSha256": "b8730931e33fc0fe93e7d3b60b43817605ca06a2d8f873613b0703994bb1b366",
+    "gate4AuthorizationArtifactSha256": "b7022b2b82faa736c05e1fce595e2466ed103d73996dca6cc8b1fbd68e028023",
+    "preflightCheckpointSha256": "e0dd8efbdcc074d40a79de68710b95f9da68c9870dc71774f53144a7fc5c2866"
+  },
+  "preState": {
+    "finalized": true,
+    "finalizedBlockHash": "88bfb93ffe22061b3ddd0304a55bdee066f1a66725f597bb43cfd0d5a31aa6ff",
+    "finalizedBlockHeight": "46671592",
+    "ownerOfKeyStatus": "unregistered"
+  },
+  "proof": {
+    "scheme": "solana-ed25519",
+    "canonicalMessageByteLength": 249,
+    "canonicalMessageSha256": "0ddf866d95e84776c45fc2b0dd831e2e3ebe1fde74a18de7a689e4c47ea7e288",
+    "signatureByteLength": 64,
+    "signatureLocallyVerified": true,
+    "registrationParameterByteLength": 180,
+    "registrationParameterSha256": "e00d66de097b671ae9fdec63779bd75907ecefa036299ef338b380e6996384d1",
+    "exactSdkByteEquivalence": true,
+    "dryRunUsedEnergy": "1663",
+    "transactionEnergyAllowance": "2663",
+    "zeroCcdAttached": true
+  },
+  "transaction": {
+    "hash": "24101c5247e753dcf2c0efae9e924ddefad6f2004e9a3814118caece5e2c2cb9",
+    "finalized": true,
+    "finalizedBlockHash": "b6f16b9f149a63acbd7db09e511f0048e8d910d8406c7219c4b0f06b5c4bdc7a",
+    "finalizedBlockHeight": "46671596",
+    "energyCost": "2057",
+    "costMicroCcd": "14480741",
+    "transactionType": "update"
+  },
+  "registrationEvent": {
+    "owner": "4Wx1vpgAfpE6k9ksmtYaH6z4iQN61LFFRUgbbG6gDro1ziKNL7",
+    "publicKeyHex": "a4abdcb4dc5d6d81bab06361ab860f819d820f6cadc33e8641cd6733f3baa5d3"
+  },
+  "ownershipPostcondition": {
+    "owner": "4Wx1vpgAfpE6k9ksmtYaH6z4iQN61LFFRUgbbG6gDro1ziKNL7",
+    "ownerOfKeyStatus": "registered",
+    "finalized": true,
+    "finalizedBlockHash": "b6f16b9f149a63acbd7db09e511f0048e8d910d8406c7219c4b0f06b5c4bdc7a",
+    "finalizedBlockHeight": "46671596"
+  },
+  "safety": {
+    "exactlyOneSubmissionAttempted": true,
+    "automaticRetryAttempted": false,
+    "zeroCcdAttached": true,
+    "cis8004Token287Mutated": false,
+    "d4_1cAttached": false,
+    "historicalRegistrationRevoked": false,
+    "gatewayRuntimeActivated": false,
+    "paymentAttempted": false,
+    "settlementAttempted": false,
+    "receiptIssued": false,
+    "protectedResourceReleased": false,
+    "replayStateMutated": false,
+    "productionActivation": false
+  }
+}

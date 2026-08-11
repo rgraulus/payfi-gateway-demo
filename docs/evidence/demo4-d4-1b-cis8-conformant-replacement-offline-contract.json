@@ -1,0 +1,66 @@
+{
+  "artifactPins": {
+    "coreSha256": "833c38d553405e24fecf4a9243ad9136ddb1bc5a33b1be172482a9a017517c0a",
+    "gate1EvidenceSha256": "5312fdb2bef4d702da5eb3bd0041bbe6eaffb11ccf1c5afa3a4095d8cf1f2ab4",
+    "gate1HarnessSha256": "faa5682137cf6f31a579279daf66b7b4254c4e5e398c543535749aed438d5875",
+    "gate2HarnessSha256": "03c2ba37704f656799f33a5cda9bc6327a52a399a2287bc347faadd09bc290e9",
+    "packageJsonSha256": "a73b77a2c1f225268143e52137aebba5c3687ef285d882b9600f2077f8a3f324"
+  },
+  "deterministicContract": {
+    "actualPublicKeyUsed": false,
+    "actualSignatureUsed": false,
+    "canonicalMessageByteLength": 239,
+    "canonicalMessageSha256": "cfed230d434a028f043d30423d94b92339ddb0094085d118a3d5941c9316f23a",
+    "registrationParameterByteLength": 168,
+    "registrationParameterSha256": "547be748447fd7d34fed085fa7815a1f3125184caf5d331a45abdcc47d28e13f"
+  },
+  "environment": "offline_deterministic_only",
+  "gate": {
+    "name": "offline_contract_tests_and_side_effect_free_dry_run",
+    "nextGate": "public_private_preflight_and_exactly_one_submission_authorization",
+    "number": 2,
+    "previousGate": 1,
+    "status": "complete"
+  },
+  "profileId": "xcf.demo4.d4-1b.cis8.solana-devnet.conformant-replacement.v1",
+  "protectedState": {
+    "cis8004TokenId": "287",
+    "cis8004TokenMutated": false,
+    "d4_1cAttachmentPerformed": false,
+    "historicalRegistrationCanonical": false,
+    "historicalRegistrationRetained": true
+  },
+  "safety": {
+    "cis8Mutated": false,
+    "contractInvoked": false,
+    "gatewayRuntimeCalled": false,
+    "keyGenerated": false,
+    "paymentAttempted": false,
+    "privateKeyRead": false,
+    "productionActivation": false,
+    "sideEffectFreeDryRun": true,
+    "signingAttempted": false,
+    "transactionConstructed": false,
+    "transactionSubmitted": false,
+    "walletRead": false
+  },
+  "type": "xcf.demo4.d4-1b.cis8-conformant-replacement-offline-contract-evidence",
+  "validation": {
+    "canonicalMessageVerified": true,
+    "deterministicRepeatabilityVerified": true,
+    "gate1Command": "phase6:demo4-d4-1b-cis8-conformant-replacement-profile-test",
+    "gate1Passed": 10,
+    "gate1RejectionCases": 19,
+    "gate1Tests": 10,
+    "gate2AcceptedCases": 10,
+    "gate2Command": "phase6:demo4-d4-1b-cis8-conformant-replacement-offline-contract-test",
+    "gate2Passed": 5,
+    "gate2RejectionCases": 3,
+    "gate2Tests": 5,
+    "inputIsolationVerified": true,
+    "malformedLookupRejected": true,
+    "ownerOfKeyParameterVerified": true,
+    "registrationParameterVerified": true
+  },
+  "version": "1"
+}

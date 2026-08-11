@@ -1,0 +1,43 @@
+{
+  "type": "xcf.demo4.d4-1b.cis8-conformant-replacement-gate4-authorization",
+  "version": "1",
+  "gate": 4,
+  "status": "authorized",
+  "authorizationScope": "exactly_one_controlled_testnet_submission",
+  "authorization": {
+    "status": "gate4_submission_authorized",
+    "transactionExecutionAuthorized": false,
+    "gate4SubmissionLimit": 1,
+    "submissionAttemptsBefore": 0,
+    "remainingSubmissionAttempts": 1,
+    "automaticRetryAuthorized": false,
+    "zeroCcdRequired": true,
+    "cis8004Token287MutationAuthorized": false,
+    "d4_1cAttachmentAuthorized": false,
+    "historicalRegistrationRevocationAuthorized": false
+  },
+  "sourceHashes": {
+    "privatePreflightEvidenceSha256": "682c138801edced7020526699faddb5c3f5a1938598108a81d1ffc3ad52355e4",
+    "gate3CheckpointSha256": "6533dfabe93e1af1d0f75801fe565ff56d9d353abc6aa704fb8ce38519696247"
+  },
+  "runtime": {
+    "environmentRead": true,
+    "filesystemRead": true,
+    "filesystemWrite": true,
+    "privateKeyRead": false,
+    "walletRead": false,
+    "signingAttempted": false,
+    "networkCalled": false,
+    "contractInvoked": false,
+    "transactionConstructed": false,
+    "transactionSigned": false,
+    "transactionSubmitted": false,
+    "cis8Mutated": false,
+    "cis8004Mutated": false,
+    "d4_1cAttachmentPerformed": false,
+    "historicalRegistrationRevoked": false,
+    "automaticRetryAuthorized": false,
+    "productionActivation": false
+  },
+  "nextRequiredStep": "controlled_gate4_execution_preflight_requires_separate_authorization"
+}
