@@ -3427,7 +3427,7 @@ function pluginExternalReferenceMatchesCandidateV1(
   );
 }
 
-function reverseLookupTokenIdV1(
+export function reverseLookupTokenIdV1(
   value:
     unknown,
 ): string {
@@ -3435,6 +3435,47 @@ function reverseLookupTokenIdV1(
     asRecord(
       value,
     );
+
+  const optionValueRecord =
+    (
+      option !==
+        null &&
+      Array.isArray(
+        option.Some,
+      ) &&
+      option.Some.length ===
+        1
+    )
+      ? asRecord(
+          option.Some[0],
+        )
+      : null;
+
+  if (
+    optionValueRecord !==
+      null &&
+    "token_id" in
+      optionValueRecord
+  ) {
+    try {
+      const normalizedAgent =
+        normalizeConcordiumCis8004DecodedAgentOfResultForTestV1(
+          value,
+        );
+
+      if (
+        normalizedAgent !==
+          null
+      ) {
+        return normalizedAgent
+          .tokenId;
+      }
+    } catch {
+      throw new Error(
+        "reverse_lookup_token_id_unrecognized",
+      );
+    }
+  }
 
   const decoded =
     (

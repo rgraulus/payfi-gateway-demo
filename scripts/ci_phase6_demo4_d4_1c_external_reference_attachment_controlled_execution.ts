@@ -39,6 +39,7 @@ import {
   buildDemo4D41cExternalReferenceSchemaValueForTestV1,
   demo4D41cTransactionEnergyAllowanceFromDryRunV1,
   normalizeDemo4D41cEmbeddedSchemaBytesForTestV1,
+  reverseLookupTokenIdV1,
   runDemo4D41cSingleSubmissionForTestV1,
 } from "./demo_phase6_demo4_d4_1c_external_reference_attachment_controlled_execution";
 
@@ -406,6 +407,186 @@ function validSyntheticLivePreExecutionObservation() {
     },
   };
 }
+
+function testObservedPositiveReverseLookupAgentRecordShape():
+void {
+  const profile =
+    DEMO4_D4_1C_CONTROLLED_EXECUTION_PROFILE;
+
+  const owner =
+    profile
+      .cis8004
+      .ownerAccount;
+
+  const observedPositiveReverseLookup = {
+    Some: [
+      {
+        token_id:
+          "1f01000000000000",
+
+        owner_account:
+          owner,
+
+        agent_uri: {
+          Some: [
+            profile
+              .cis8004
+              .agentCard
+              .uri,
+          ],
+        },
+
+        metadata_hash: {
+          Some: [
+            Array.from(
+              Buffer.from(
+                profile
+                  .cis8004
+                  .agentCard
+                  .sha256,
+                "hex",
+              ),
+              (
+                byte,
+              ) =>
+                BigInt(
+                  byte,
+                ),
+            ),
+          ],
+        },
+
+        external_reference: {
+          Some: [
+            {
+              contract_address: {
+                index:
+                  BigInt(
+                    profile
+                      .cis8
+                      .contract
+                      .index,
+                  ),
+
+                subindex:
+                  BigInt(
+                    profile
+                      .cis8
+                      .contract
+                      .subindex,
+                  ),
+              },
+
+              kind: {
+                Cis8: [
+                  {
+                    namespace:
+                      profile
+                        .cis8
+                        .externalKey
+                        .namespace,
+
+                    key_type:
+                      profile
+                        .cis8
+                        .externalKey
+                        .keyType,
+
+                    public_key:
+                      Array.from(
+                        Buffer.from(
+                          profile
+                            .cis8
+                            .externalKey
+                            .publicKeyHex,
+                          "hex",
+                        ),
+                        (
+                          byte,
+                        ) =>
+                          BigInt(
+                            byte,
+                          ),
+                      ),
+                  },
+                ],
+              },
+            },
+          ],
+        },
+
+        agent_wallet: {
+          Some: [
+            owner,
+          ],
+        },
+
+        status: {
+          Active: [],
+        },
+
+        registered_at:
+          "2026-08-03T15:36:09.045+00:00",
+
+        revoked_at: {
+          None: [],
+        },
+
+        revocation_reason: {
+          None: [],
+        },
+
+        on_chain_metadata: [],
+      },
+    ],
+  };
+
+  assert.equal(
+    reverseLookupTokenIdV1(
+      observedPositiveReverseLookup,
+    ),
+    "287",
+    "observed_agentByExternalReference_Some_AgentRecord_must_resolve_token_287",
+  );
+
+  assert.equal(
+    reverseLookupTokenIdV1({
+      Some: [
+        287n,
+      ],
+    }),
+    "287",
+    "legacy_some_bigint_fallback_preserved",
+  );
+
+  assert.equal(
+    reverseLookupTokenIdV1(
+      287n,
+    ),
+    "287",
+    "legacy_bigint_fallback_preserved",
+  );
+
+  assert.equal(
+    reverseLookupTokenIdV1(
+      "287",
+    ),
+    "287",
+    "legacy_decimal_string_fallback_preserved",
+  );
+
+  assert.equal(
+    reverseLookupTokenIdV1(
+      Buffer.from(
+        "1f01000000000000",
+        "hex",
+      ),
+    ),
+    "287",
+    "legacy_eight_byte_little_endian_fallback_preserved",
+  );
+}
+
 
 function testEmbeddedSchemaByteNormalization():
 void {
@@ -1851,6 +2032,8 @@ Promise<void> {
   testStrictExternalReferenceContractAddressSchemaValue();
 
   testEmbeddedSchemaByteNormalization();
+
+  testObservedPositiveReverseLookupAgentRecordShape();
 
   const plan =
     buildDemo4D41cControlledExecutionPlanV1();
