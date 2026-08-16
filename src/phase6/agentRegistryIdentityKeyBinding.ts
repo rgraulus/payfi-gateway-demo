@@ -513,6 +513,64 @@ function normalizeIsoTimestamp(
   value: unknown,
 ): string | null {
   if (
+    value instanceof
+      Date
+  ) {
+    return Number.isNaN(
+      value.getTime(),
+    )
+      ? null
+      : value.toISOString();
+  }
+
+  if (
+    typeof value ===
+      "object" &&
+    value !==
+      null
+  ) {
+    const candidate =
+      value as {
+        toISOString?: () => unknown;
+        toJSON?: () => unknown;
+      };
+
+    try {
+      if (
+        typeof candidate.toISOString ===
+          "function"
+      ) {
+        return normalizeIsoTimestamp(
+          candidate.toISOString(),
+        );
+      }
+    } catch {
+      // Try the remaining timestamp representations.
+    }
+
+    try {
+      if (
+        typeof candidate.toJSON ===
+          "function"
+      ) {
+        return normalizeIsoTimestamp(
+          candidate.toJSON(),
+        );
+      }
+    } catch {
+      // Try string conversion below.
+    }
+
+    try {
+      return normalizeIsoTimestamp(
+        String(value),
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  if (
     !isCompactString(
       value,
       256,
