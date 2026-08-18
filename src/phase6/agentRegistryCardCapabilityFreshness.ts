@@ -1484,7 +1484,7 @@ function evaluateFreshness(
   if (
     freshness.evidenceAgeSeconds ===
       null ||
-    freshness.evidenceAgeSeconds !==
+    freshness.evidenceAgeSeconds >
       calculatedAge
   ) {
     return {

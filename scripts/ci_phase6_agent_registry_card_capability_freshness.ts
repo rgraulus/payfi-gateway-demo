@@ -674,6 +674,82 @@ async function runFreshnessCases(
     "PR302_B2B_REVALIDATION_THRESHOLD_PASSES=true",
   );
 
+  /*
+   * Direct-chain freshness is captured before later verification stages.
+   * Normal processing delay may therefore make the recalculated current
+   * age greater than the age supplied at capture time. That monotonic
+   * increase is valid; a supplied age ahead of current recalculation is not.
+   */
+  const elapsedAfterCaptureInput =
+    makeInput(
+      cardBytes,
+      {
+        registryTrustResult:
+          makeRegistryTrustResult(
+            cardHash,
+            {
+              freshness:
+                makeFreshness({
+                  observedAt:
+                    "2026-07-24T11:59:54.000Z",
+
+                  evidenceAgeSeconds:
+                    0,
+                }),
+            },
+          ),
+      },
+    );
+
+  const elapsedAfterCaptureTransport =
+    elapsedAfterCaptureInput.transport as
+      DeterministicAgentCardFetchTransportV1;
+
+  const elapsedAfterCapture =
+    await verifyAgentRegistryCardCapabilityFreshnessV1(
+      elapsedAfterCaptureInput,
+    );
+
+  assert.equal(
+    elapsedAfterCapture.ok,
+    true,
+  );
+
+  assert.equal(
+    elapsedAfterCapture.reason,
+    "accepted",
+  );
+
+  assert.equal(
+    elapsedAfterCapture
+      .freshnessDecision
+      .suppliedEvidenceAgeSeconds,
+    0,
+  );
+
+  assert.equal(
+    elapsedAfterCapture
+      .freshnessDecision
+      .calculatedEvidenceAgeSeconds,
+    6,
+  );
+
+  assert.equal(
+    elapsedAfterCapture
+      .freshnessDecision
+      .fresh,
+    true,
+  );
+
+  assert.equal(
+    elapsedAfterCaptureTransport.calls.length,
+    1,
+  );
+
+  console.log(
+    "PR318_FRESHNESS_ELAPSED_AFTER_CAPTURE_ACCEPTED=true",
+  );
+
   const revalidationInput =
     makeInput(
       cardBytes,

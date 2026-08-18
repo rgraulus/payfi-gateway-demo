@@ -109,7 +109,7 @@ export const CONCORDIUM_CIS8004_TESTNET_TRUSTED_REGISTRY_CONFIG:
       }),
 
     moduleReference:
-      "2e4fd18a59868e9dbadc03bfab505d307b3f3f5ce9c704e6284d2a626a8e3e41",
+      "33e6e42b9d6610acc6c556aaba003cbc4d0de3c6089eab434ef9f7024b72d833",
 
     contractName:
       "CIS-8004",
