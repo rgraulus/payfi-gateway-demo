@@ -159,7 +159,7 @@ export const CONCORDIUM_CIS8_TESTNET_TRUSTED_CONFIG:
       }),
 
     moduleReference:
-      "5a01f4133c353c640120cd0303316bd18ebd9e120a909cd5ff639e92227e75da",
+      "e003cc210627c96b817983a701734a3fb6a77ec25782dc792524259e77573d61",
 
     contractName:
       "CIS-8",

@@ -143,6 +143,9 @@ import {
   composeAgentRegistryConditionalGatingV1,
 } from './phase6/agentRegistryConditionalGatingComposition';
 import {
+  HttpsAgentCardFetchTransportV1,
+} from './phase6/agentRegistryCardCapabilityFreshness';
+import {
   createPhase6Demo3ControlledEvidenceProviderV1,
 } from './phase6/demo3ControlledEvidenceProvider';
 import {
@@ -702,6 +705,9 @@ const isProd = String(process.env.NODE_ENV ?? '').toLowerCase() === 'production'
 // A requested but rejected provider configuration fails startup closed.
 // Disabled mode supplies no transports and preserves the existing live
 // transport-selection behavior.
+const phase6LiveAgentCardTransport =
+  new HttpsAgentCardFetchTransportV1();
+
 const phase6Demo3ControlledEvidenceProvider =
   createPhase6Demo3ControlledEvidenceProviderV1({
     enabledValue:
@@ -2260,6 +2266,8 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     if (resourcePathname !== '/paid-gated') {
       return { ok: true };
     }
+
+    await persistIssuedChallengeIfNeeded();
 
     const readiness = await getGatedAuthorizationReadiness();
 
@@ -10750,7 +10758,10 @@ app.post('/paid-gated/redeem', async (req, res) => {
                                 phase6Demo3ControlledEvidenceProvider
                                   .controlledAgentCardTransport!,
                             }
-                          : {}
+                          : {
+                              agentCardTransport:
+                                phase6LiveAgentCardTransport,
+                            }
                       ),
                     });
 

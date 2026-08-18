@@ -72,122 +72,778 @@ function reqStr(args: Args, k: string): string {
   return v;
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  if (args.help) usage(0);
+export type PltTransferPreflightInputV1 = {
+  readonly walletPath: string;
+  readonly to: string;
+  readonly tokenId: string;
+  readonly amount: string;
+  readonly grpcHost?: string;
+  readonly grpcPort?: number;
+  readonly memo?: string;
+};
 
-  const walletPath = reqStr(args, "wallet");
-  const toAddr = reqStr(args, "to");
-  const tokenIdStr = reqStr(args, "tokenId");
-  const amountStr = reqStr(args, "amount");
+export type PltTransferPreparedV1 = {
+  readonly walletPath: string;
+  readonly to: string;
+  readonly tokenId: string;
+  readonly amount: string;
+  readonly grpcHost: string;
+  readonly grpcPort: number;
+  readonly senderAddress: string;
+  readonly decimals: number;
+  readonly walletReadCount: 1;
+  readonly tokenNetworkReads: 1;
+  readonly accountInfoNetworkReads: 1;
+  readonly payerTokenBalanceRaw: string;
+  readonly requiredAmountRaw: string;
+  readonly balanceSufficient: true;
+  readonly transactionConstructed: false;
+  readonly transactionSubmitted: false;
 
-  const grpcHost = (args.grpcHost as string) || "grpc.testnet.concordium.com";
-  const grpcPort = Number((args.grpcPort as string) || "20000");
+  /*
+   * Opaque in-memory execution material.
+   *
+   * It is deliberately never serialized or printed. Keeping this material
+   * in-memory allows preflight + one-shot invocation to share the single
+   * wallet-file read when executed in one controlled process.
+   */
+  readonly runtime: {
+    readonly webSdk: any;
+    readonly pltSdk: any;
+    readonly client: any;
+    readonly walletExport: any;
+    readonly sender: any;
+    readonly token: any;
+    readonly amountValue: any;
+    readonly recipient: any;
+    readonly memo: unknown;
+  };
+};
 
-  const wait =
-    args["no-wait"] === true ? false : true; // default wait=true
-  const memoStr = typeof args.memo === "string" ? (args.memo as string) : undefined;
+export type PltTransferBalanceReadinessV1 = {
+  readonly ok: boolean;
 
-  if (!existsSync(walletPath)) {
-    console.error(`ERROR: wallet file not found: ${walletPath}`);
-    process.exit(2);
+  readonly reason:
+    | "plt_payer_balance_ready"
+    | "plt_payer_balance_decimals_mismatch"
+    | "plt_payer_balance_insufficient";
+
+  readonly payerTokenBalanceRaw: string;
+  readonly requiredAmountRaw: string;
+  readonly decimals: number;
+};
+
+export function assessPltTransferBalanceReadinessV1(
+  input: {
+    readonly payerTokenBalanceRaw: bigint;
+    readonly payerTokenBalanceDecimals: number;
+    readonly requiredAmountRaw: bigint;
+    readonly requiredAmountDecimals: number;
+  },
+): PltTransferBalanceReadinessV1 {
+  if (
+    input.payerTokenBalanceDecimals !==
+      input.requiredAmountDecimals
+  ) {
+    return {
+      ok:
+        false,
+
+      reason:
+        "plt_payer_balance_decimals_mismatch",
+
+      payerTokenBalanceRaw:
+        input.payerTokenBalanceRaw.toString(),
+
+      requiredAmountRaw:
+        input.requiredAmountRaw.toString(),
+
+      decimals:
+        input.requiredAmountDecimals,
+    };
   }
 
-  // ---- Dynamic ESM imports (fix for TS1479 in ts-node CommonJS) ----
-  const webSdk = await import("@concordium/web-sdk");
-  const pltSdk = await import("@concordium/web-sdk/plt");
-  const nodeSdk = await import("@concordium/web-sdk/nodejs");
-  const grpc = await import("@grpc/grpc-js");
+  if (
+    input.payerTokenBalanceRaw <
+      input.requiredAmountRaw
+  ) {
+    return {
+      ok:
+        false,
+
+      reason:
+        "plt_payer_balance_insufficient",
+
+      payerTokenBalanceRaw:
+        input.payerTokenBalanceRaw.toString(),
+
+      requiredAmountRaw:
+        input.requiredAmountRaw.toString(),
+
+      decimals:
+        input.requiredAmountDecimals,
+    };
+  }
+
+  return {
+    ok:
+      true,
+
+    reason:
+      "plt_payer_balance_ready",
+
+    payerTokenBalanceRaw:
+      input.payerTokenBalanceRaw.toString(),
+
+    requiredAmountRaw:
+      input.requiredAmountRaw.toString(),
+
+    decimals:
+      input.requiredAmountDecimals,
+  };
+}
+
+export type PltTransferExecutionOutcomeV1 =
+  | "finalized_success"
+  | "finalized_failure"
+  | "submitted_unknown";
+
+export type PltTransferExecutionResultV1 = {
+  readonly ok: boolean;
+  readonly outcome: PltTransferExecutionOutcomeV1;
+  readonly txHash: string | null;
+  readonly transactionHashObserved: boolean;
+  readonly paymentSubmissionAttempts: 1;
+  readonly signingOperations: 1;
+  readonly transactionsConstructed: 1;
+  readonly automaticRetry: false;
+  readonly finalized: boolean;
+  readonly diagnostic: string | null;
+};
+
+function pltExecutionResult(
+  ok: boolean,
+  outcome: PltTransferExecutionOutcomeV1,
+  txHash: string | null,
+  finalized: boolean,
+  diagnostic: string | null,
+): PltTransferExecutionResultV1 {
+  return {
+    ok,
+    outcome,
+    txHash,
+    transactionHashObserved:
+      typeof txHash === "string" &&
+      txHash.length > 0,
+    paymentSubmissionAttempts: 1,
+    signingOperations: 1,
+    transactionsConstructed: 1,
+    automaticRetry: false,
+    finalized,
+    diagnostic,
+  };
+}
+
+export async function preflightPltTransferV1(
+  input: PltTransferPreflightInputV1,
+): Promise<PltTransferPreparedV1> {
+  const walletPath = input.walletPath;
+  const toAddr = input.to;
+  const tokenIdStr = input.tokenId;
+  const amountStr = input.amount;
+
+  if (
+    typeof walletPath !== "string" ||
+    walletPath.length === 0
+  ) {
+    throw new Error(
+      "plt_payer_wallet_path_invalid",
+    );
+  }
+
+  if (!existsSync(walletPath)) {
+    throw new Error(
+      "plt_payer_wallet_file_not_found",
+    );
+  }
+
+  if (
+    typeof toAddr !== "string" ||
+    toAddr.length === 0 ||
+    typeof tokenIdStr !== "string" ||
+    tokenIdStr.length === 0 ||
+    typeof amountStr !== "string" ||
+    amountStr.length === 0
+  ) {
+    throw new Error(
+      "plt_payer_transfer_tuple_invalid",
+    );
+  }
+
+  const grpcHost =
+    input.grpcHost ??
+    "grpc.testnet.concordium.com";
+
+  const grpcPort =
+    input.grpcPort ??
+    20000;
+
+  if (
+    !Number.isSafeInteger(grpcPort) ||
+    grpcPort <= 0
+  ) {
+    throw new Error(
+      "plt_payer_grpc_port_invalid",
+    );
+  }
+
+  const webSdk =
+    await import(
+      "@concordium/web-sdk"
+    );
+
+  const pltSdk =
+    await import(
+      "@concordium/web-sdk/plt"
+    );
+
+  const nodeSdk =
+    await import(
+      "@concordium/web-sdk/nodejs"
+    );
+
+  const grpc =
+    await import(
+      "@grpc/grpc-js"
+    );
 
   const {
     AccountAddress,
     parseWallet,
-    buildAccountSigner,
-    isKnown,
-    TransactionSummaryType,
-    TransactionKindString,
-    RejectReasonTag,
   } = webSdk;
 
-  const { TokenId, TokenAmount, Token, TokenHolder, Cbor } = pltSdk;
-  const { ConcordiumGRPCNodeClient } = nodeSdk;
-  const { credentials } = grpc;
+  const {
+    TokenId,
+    TokenAmount,
+    Token,
+    TokenHolder,
+  } = pltSdk;
 
-  const client = new ConcordiumGRPCNodeClient(grpcHost, grpcPort, credentials.createSsl());
+  const {
+    ConcordiumGRPCNodeClient,
+  } = nodeSdk;
 
-  const walletFile = readFileSync(walletPath, "utf8");
-  const walletExport = parseWallet(walletFile);
-  const sender = AccountAddress.fromBase58(walletExport.value.address);
-  const signer = buildAccountSigner(walletExport);
+  const {
+    credentials,
+  } = grpc;
 
-  const tokenId = TokenId.fromString(tokenIdStr);
+  const client =
+    new ConcordiumGRPCNodeClient(
+      grpcHost,
+      grpcPort,
+      credentials.createSsl(),
+    );
 
-  // Resolve token decimals from chain, then compute raw amount correctly.
-  const token = await Token.fromId(client, tokenId);
-  const decimals = token.info.state.decimals;
+  /*
+   * Exactly one wallet-file read occurs here.
+   * No signer is created and no transfer is invoked during preflight.
+   */
+  const walletFile =
+    readFileSync(
+      walletPath,
+      "utf8",
+    );
 
-  const amount = TokenAmount.fromDecimal(amountStr, decimals);
-  const recipient = TokenHolder.fromAccountAddress(AccountAddress.fromBase58(toAddr)).address;
+  const walletExport =
+    parseWallet(
+      walletFile,
+    );
 
-  // Memo is optional and best-effort. The docs show CborMemo.fromString, but don’t import it explicitly.
-  // We’ll only set it if the runtime exposes it.
-  let memo: unknown = undefined;
-  if (memoStr) {
-    const maybeCborMemo = (pltSdk as any).CborMemo;
-    if (maybeCborMemo && typeof maybeCborMemo.fromString === "function") {
-      memo = maybeCborMemo.fromString(memoStr);
-    } else {
-      // Don’t fail the payment if memo support isn’t present.
-      console.error("WARN: memo requested but CborMemo.fromString not available in this SDK build; skipping memo.");
+  const sender =
+    AccountAddress.fromBase58(
+      walletExport.value.address,
+    );
+
+  const tokenId =
+    TokenId.fromString(
+      tokenIdStr,
+    );
+
+  /*
+   * Read-only chain lookup: resolve canonical token decimals.
+   */
+  const token =
+    await Token.fromId(
+      client,
+      tokenId,
+    );
+
+  const decimals =
+    token.info.state.decimals;
+
+  const amountValue =
+    TokenAmount.fromDecimal(
+      amountStr,
+      decimals,
+    );
+
+  /*
+   * Read-only finalized account lookup. This proves that the payer account
+   * actually holds enough of the requested PLT before any signer exists.
+   */
+  const accountInfo =
+    await client
+      .getAccountInfo(
+        sender,
+      );
+
+  /*
+   * The AccountInfo overload is a local extraction from the account state
+   * already returned above; it does not perform an additional network call.
+   */
+  const payerTokenBalance =
+    pltSdk.Token.balanceOf(
+      token,
+      accountInfo,
+    );
+
+  if (!payerTokenBalance) {
+    throw new Error(
+      "plt_payer_token_balance_not_found",
+    );
+  }
+
+  const balanceReadiness =
+    assessPltTransferBalanceReadinessV1({
+      payerTokenBalanceRaw:
+        payerTokenBalance.value,
+
+      payerTokenBalanceDecimals:
+        payerTokenBalance.decimals,
+
+      requiredAmountRaw:
+        amountValue.value,
+
+      requiredAmountDecimals:
+        amountValue.decimals,
+    });
+
+  if (!balanceReadiness.ok) {
+    throw new Error(
+      balanceReadiness.reason,
+    );
+  }
+
+  const recipient =
+    TokenHolder
+      .fromAccountAddress(
+        AccountAddress.fromBase58(
+          toAddr,
+        ),
+      )
+      .address;
+
+  let memo:
+    unknown =
+    undefined;
+
+  if (input.memo) {
+    const maybeCborMemo =
+      (pltSdk as any).CborMemo;
+
+    if (
+      maybeCborMemo &&
+      typeof maybeCborMemo.fromString ===
+        "function"
+    ) {
+      memo =
+        maybeCborMemo.fromString(
+          input.memo,
+        );
     }
   }
 
-  const transfer: any = { recipient, amount, memo };
+  return {
+    walletPath,
+    to:
+      toAddr,
+    tokenId:
+      tokenIdStr,
+    amount:
+      amountStr,
+    grpcHost,
+    grpcPort,
+    senderAddress:
+      walletExport.value.address,
+    decimals,
+    walletReadCount:
+      1,
+    tokenNetworkReads:
+      1,
+    accountInfoNetworkReads:
+      1,
+    payerTokenBalanceRaw:
+      balanceReadiness.payerTokenBalanceRaw,
+    requiredAmountRaw:
+      balanceReadiness.requiredAmountRaw,
+    balanceSufficient:
+      true,
+    transactionConstructed:
+      false,
+    transactionSubmitted:
+      false,
+    runtime: {
+      webSdk,
+      pltSdk,
+      client,
+      walletExport,
+      sender,
+      token,
+      amountValue,
+      recipient,
+      memo,
+    },
+  };
+}
 
-  console.error(
-    `[payer:plt] tokenId=${tokenIdStr} decimals=${decimals} amount=${amountStr} to=${toAddr} sender=${walletExport.value.address} wait=${wait}`
-  );
+export async function executePreparedPltTransferV1(
+  input: {
+    readonly prepared:
+      PltTransferPreparedV1;
+    readonly waitForFinalization?:
+      boolean;
+    readonly onSubmitted?:
+      (
+        txHash:
+          string,
+      ) => void;
+  },
+): Promise<PltTransferExecutionResultV1> {
+  const prepared =
+    input.prepared;
 
-  const txHash = await Token.transfer(token, sender, transfer, signer);
+  const waitForFinalization =
+    input.waitForFinalization !==
+      false;
 
-  // Machine-friendly: stdout gets ONLY the hash
-  process.stdout.write(String(txHash) + "\n");
+  const {
+    webSdk,
+    pltSdk,
+    client,
+    walletExport,
+    sender,
+    token,
+    amountValue,
+    recipient,
+    memo,
+  } =
+    prepared.runtime;
 
-  if (!wait) return;
+  /*
+   * Payment-attempt accounting belongs to the caller and must be consumed
+   * before this function is invoked. This function itself never retries.
+   */
+  const signer =
+    webSdk.buildAccountSigner(
+      walletExport,
+    );
 
-  const result = await client.waitForTransactionFinalization(txHash);
+  const transfer:
+    any = {
+      recipient,
+      amount:
+        amountValue,
+      memo,
+    };
 
-  if (!isKnown(result.summary)) {
-    console.error("ERROR: unexpected transaction outcome (unknown summary)");
-    process.exit(1);
+  let txHash:
+    string |
+    null =
+    null;
+
+  try {
+    const submittedHash =
+      await pltSdk.Token.transfer(
+        token,
+        sender,
+        transfer,
+        signer,
+      );
+
+    txHash =
+      String(
+        submittedHash,
+      );
+
+    input.onSubmitted?.(
+      txHash,
+    );
+  } catch {
+    return pltExecutionResult(
+      false,
+      "submitted_unknown",
+      null,
+      false,
+      "plt_transfer_invocation_outcome_ambiguous",
+    );
   }
-  if (result.summary.type !== TransactionSummaryType.AccountTransaction) {
-    console.error(`ERROR: unexpected summary type: ${result.summary.type}`);
-    process.exit(1);
+
+  if (!waitForFinalization) {
+    return pltExecutionResult(
+      true,
+      "submitted_unknown",
+      txHash,
+      false,
+      "plt_transfer_submitted_finalization_not_requested",
+    );
   }
 
-  switch (result.summary.transactionType) {
-    case TransactionKindString.TokenUpdate:
-      console.error("[payer:plt] finalized: TokenUpdate");
-      break;
-    case TransactionKindString.Failed: {
-      console.error("[payer:plt] finalized: FAILED");
-      if (result.summary.rejectReason?.tag === RejectReasonTag.TokenUpdateTransactionFailed) {
-        const details = Cbor.decode(result.summary.rejectReason.contents.details);
-        console.error(result.summary.rejectReason.contents, details);
-      } else {
-        console.error(result.summary.rejectReason);
-      }
-      process.exit(1);
-      break;
-    }
+  let result:
+    any;
+
+  try {
+    result =
+      await client
+        .waitForTransactionFinalization(
+          txHash,
+        );
+  } catch {
+    return pltExecutionResult(
+      false,
+      "submitted_unknown",
+      txHash,
+      false,
+      "plt_transfer_finalization_outcome_ambiguous",
+    );
+  }
+
+  if (
+    !webSdk.isKnown(
+      result.summary,
+    )
+  ) {
+    return pltExecutionResult(
+      false,
+      "submitted_unknown",
+      txHash,
+      false,
+      "plt_transfer_unknown_transaction_summary",
+    );
+  }
+
+  if (
+    result.summary.type !==
+      webSdk.TransactionSummaryType
+        .AccountTransaction
+  ) {
+    return pltExecutionResult(
+      false,
+      "submitted_unknown",
+      txHash,
+      false,
+      "plt_transfer_unexpected_summary_type",
+    );
+  }
+
+  switch (
+    result.summary.transactionType
+  ) {
+    case webSdk
+      .TransactionKindString
+      .TokenUpdate:
+      return pltExecutionResult(
+        true,
+        "finalized_success",
+        txHash,
+        true,
+        null,
+      );
+
+    case webSdk
+      .TransactionKindString
+      .Failed:
+      return pltExecutionResult(
+        false,
+        "finalized_failure",
+        txHash,
+        true,
+        "plt_transfer_finalized_failed",
+      );
+
     default:
-      console.error(`ERROR: unexpected transaction kind: ${result.summary.transactionType}`);
-      process.exit(1);
+      return pltExecutionResult(
+        false,
+        "submitted_unknown",
+        txHash,
+        true,
+        "plt_transfer_unexpected_transaction_kind",
+      );
   }
 }
 
-main().catch((e) => {
-  console.error("ERROR:", e?.stack || e);
+async function main() {
+  const args =
+    parseArgs(
+      process.argv.slice(2),
+    );
+
+  if (args.help) {
+    usage(0);
+  }
+
+  const walletPath =
+    reqStr(
+      args,
+      "wallet",
+    );
+
+  const toAddr =
+    reqStr(
+      args,
+      "to",
+    );
+
+  const tokenIdStr =
+    reqStr(
+      args,
+      "tokenId",
+    );
+
+  const amountStr =
+    reqStr(
+      args,
+      "amount",
+    );
+
+  const grpcHost =
+    (
+      args.grpcHost as
+        string
+    ) ||
+    "grpc.testnet.concordium.com";
+
+  const grpcPort =
+    Number(
+      (
+        args.grpcPort as
+          string
+      ) ||
+      "20000",
+    );
+
+  const wait =
+    args["no-wait"] ===
+      true
+      ? false
+      : true;
+
+  const memoStr =
+    typeof args.memo ===
+      "string"
+      ? args.memo as
+          string
+      : undefined;
+
+  /*
+   * Preserve the historical CLI error contract for a missing wallet.
+   */
+  if (!existsSync(walletPath)) {
+    console.error(
+      `ERROR: wallet file not found: ${walletPath}`,
+    );
+
+    process.exit(2);
+  }
+
+  const prepared =
+    await preflightPltTransferV1({
+      walletPath,
+      to:
+        toAddr,
+      tokenId:
+        tokenIdStr,
+      amount:
+        amountStr,
+      grpcHost,
+      grpcPort,
+      memo:
+        memoStr,
+    });
+
+  console.error(
+    `[payer:plt] tokenId=${prepared.tokenId} decimals=${prepared.decimals} amount=${prepared.amount} to=${prepared.to} sender=${prepared.senderAddress} wait=${wait}`,
+  );
+
+  const execution =
+    await executePreparedPltTransferV1({
+      prepared,
+      waitForFinalization:
+        wait,
+
+      onSubmitted:
+        (
+          txHash,
+        ) => {
+          /*
+           * Preserve machine-friendly CLI behavior:
+           * stdout receives only the submitted transaction hash.
+           */
+          process.stdout.write(
+            String(
+              txHash,
+            ) +
+              "\n",
+          );
+        },
+    });
+
+  if (
+    !wait &&
+    execution
+      .transactionHashObserved
+  ) {
+    return;
+  }
+
+  if (
+    execution.outcome ===
+      "finalized_success"
+  ) {
+    console.error(
+      "[payer:plt] finalized: TokenUpdate",
+    );
+
+    return;
+  }
+
+  if (
+    execution.outcome ===
+      "finalized_failure"
+  ) {
+    console.error(
+      "[payer:plt] finalized: FAILED",
+    );
+  } else {
+    console.error(
+      `ERROR: ${execution.diagnostic ?? "plt_transfer_outcome_unknown"}`,
+    );
+  }
+
   process.exit(1);
-});
+}
+
+if (require.main === module) {
+  void main().catch(
+    (
+      e,
+    ) => {
+      console.error(
+        "ERROR:",
+        e?.stack ||
+          e,
+      );
+
+      process.exit(1);
+    },
+  );
+}
