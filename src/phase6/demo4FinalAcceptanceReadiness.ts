@@ -65,7 +65,7 @@ export const DEMO4_D4_3_LIVE_REGISTERED_AGENT_PROFILE =
           }),
 
         moduleReference:
-          "33e6e42b9d6610acc6c556aaba003cbc4d0de3c6089eab434ef9f7024b72d833",
+          "4195e865dc2e4d0da10fc4b2315efedc068b932d050c60f2947dbb5c886f33ac",
 
         tokenId:
           "287",

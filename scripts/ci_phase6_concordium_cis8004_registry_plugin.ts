@@ -415,6 +415,14 @@ function makeRecord(
   };
 }
 
+const BASE_CONFIG:
+  ConcordiumCis8004TrustedRegistryConfigV1 = {
+    ...CONCORDIUM_CIS8004_TESTNET_TRUSTED_REGISTRY_CONFIG,
+
+    moduleReference:
+      MODULE_REFERENCE,
+  };
+
 function makeReference(
   overrides:
     Partial<AgentRegistryReferenceV1>,
@@ -445,7 +453,7 @@ async function run(
     new ConcordiumCis8004RegistryPluginV1(
       transport,
       options.config ??
-        CONCORDIUM_CIS8004_TESTNET_TRUSTED_REGISTRY_CONFIG,
+        BASE_CONFIG,
       fixedClock,
     );
 
@@ -766,6 +774,30 @@ async function liveSmoke():
       new ConcordiumGrpcCis8004ReadTransportV1(),
     );
 
+  const liveModuleReference =
+    CONCORDIUM_CIS8004_TESTNET_TRUSTED_REGISTRY_CONFIG
+      .moduleReference;
+
+  const liveRequirement:
+    AgentRegistryRequirementV1 = {
+    ...BASE_REQUIREMENT,
+
+    trustedRegistries: [
+      {
+        network:
+          CONCORDIUM_CIS8004_TESTNET_TRUSTED_REGISTRY_CONFIG
+            .network,
+
+        contract:
+          CONCORDIUM_CIS8004_TESTNET_TRUSTED_REGISTRY_CONFIG
+            .contract,
+
+        moduleReference:
+          liveModuleReference,
+      },
+    ],
+  };
+
   const sdkBigintHashBytes =
     Array.from(
       Buffer.from(
@@ -893,7 +925,7 @@ async function liveSmoke():
   const active =
     await resolveAgentRegistryTrustForGatewayV1({
       requirement:
-        BASE_REQUIREMENT,
+        liveRequirement,
 
       reference:
         BASE_REFERENCE,
@@ -938,7 +970,7 @@ async function liveSmoke():
 
   assert.equal(
     activeTrust.identity.moduleReference,
-    MODULE_REFERENCE,
+    liveModuleReference,
   );
 
   assert.equal(
@@ -984,7 +1016,7 @@ async function liveSmoke():
   const missing =
     await resolveAgentRegistryTrustForGatewayV1({
       requirement:
-        BASE_REQUIREMENT,
+        liveRequirement,
 
       reference:
         missingReference,
@@ -1062,7 +1094,7 @@ async function liveSmoke():
           REGISTRY_CONTRACT,
 
         moduleReference:
-          MODULE_REFERENCE,
+          liveModuleReference,
 
         active: {
           tokenId:
@@ -1706,7 +1738,7 @@ async function main():
 
   const timeoutConfig:
     ConcordiumCis8004TrustedRegistryConfigV1 = {
-      ...CONCORDIUM_CIS8004_TESTNET_TRUSTED_REGISTRY_CONFIG,
+      ...BASE_CONFIG,
 
       timeoutMs:
         20,
