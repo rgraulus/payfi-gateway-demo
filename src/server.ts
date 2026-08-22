@@ -529,6 +529,30 @@ const phase5CryptographicBuyerVerificationKey =
 const phase3GatewayProductionReleaseDryRunEnabled =
   String(process.env.PHASE3_GATEWAY_PRODUCTION_RELEASE_DRY_RUN_ENABLED ?? '').toLowerCase() === 'true';
 
+// Demo4 historical-timeliness recovery seam.
+//
+// OFF by default. This exists only for a delayed same-lifecycle recovery after
+// one Testnet payment was already finalized before the original challenge
+// expiry but synchronous payer observation failed.
+//
+// It must never create a new challenge, refresh the original expiry, send a
+// new payment, or broaden ordinary receipt expiry semantics.
+const demo4HistoricalTimelinessRecoveryEnabled =
+  String(
+    process.env.DEMO4_HISTORICAL_TIMELINESS_RECOVERY_ENABLED ?? '',
+  ).toLowerCase() === 'true';
+
+const demo4HistoricalTimelinessRecoveryAuthorized =
+  String(
+    process.env.DEMO4_HISTORICAL_TIMELINESS_RECOVERY_AUTHORIZED ?? '',
+  ).toLowerCase() === 'true';
+
+const DEMO4_HISTORICAL_TIMELINESS_RECOVERY_MAX_AGE_SEC =
+  6 * 60 * 60;
+
+const DEMO4_HISTORICAL_TIMELINESS_RECOVERY_REPLAY_TTL_SEC =
+  5 * 60;
+
 // Phase 4 real CRP fulfill invocation boundary.
 // OFF by default. This harness-only seam may observe/attempt CRP fulfill,
 // but must not authorize production release, emit PAYMENT-RESPONSE, mutate replay,
@@ -1722,7 +1746,27 @@ function replyPhase3GatewayPolicyGateDisabled(res: express.Response) {
 }
 
 async function handleX402(req: express.Request, res: express.Response, resourcePathname: string) {
-  if (isPhase3GatewayPolicyGatePath(resourcePathname) && !phase3GatewayPolicyGateEnabled) {
+  const demo4HistoricalTimelinessRecoveryHeader =
+    req.headers['x-demo4-historical-timeliness-recovery'];
+
+  const demo4HistoricalTimelinessRecoveryRequested =
+    (
+      Array.isArray(demo4HistoricalTimelinessRecoveryHeader)
+        ? demo4HistoricalTimelinessRecoveryHeader[0]
+        : demo4HistoricalTimelinessRecoveryHeader
+    ) === 'true';
+
+  const demo4HistoricalTimelinessRecoveryPhase3PolicyGateBypass =
+    demo4HistoricalTimelinessRecoveryRequested === true &&
+    demo4HistoricalTimelinessRecoveryEnabled === true &&
+    demo4HistoricalTimelinessRecoveryAuthorized === true &&
+    resourcePathname === '/paid-gated';
+
+  if (
+    isPhase3GatewayPolicyGatePath(resourcePathname) &&
+    !phase3GatewayPolicyGateEnabled &&
+    demo4HistoricalTimelinessRecoveryPhase3PolicyGateBypass !== true
+  ) {
     return replyPhase3GatewayPolicyGateDisabled(res);
   }
 
@@ -1781,6 +1825,12 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       ? Math.floor(Number(paymentSignature.networkGenesisIndex))
       : null;
 
+  const demo4HistoricalTimelinessRecoveryActive =
+    demo4HistoricalTimelinessRecoveryPhase3PolicyGateBypass === true &&
+    contract.network === 'concordium:testnet' &&
+    contract.chain_id ===
+      'ccd:4221332d34e1694168c2a0c0b3fd0f27';
+
   // We may override this nonce if we successfully verify a client-provided receipt.
   let nonce = nonceFromQuery ?? nonceFromSig ?? `demo-${randomUUID()}`;
 
@@ -1820,10 +1870,47 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   // Build it initially with current nonce (may be replaced if receipt verifies).
   rebuildPaymentRequired(nonce);
 
+  if (
+    demo4HistoricalTimelinessRecoveryRequested === true &&
+    demo4HistoricalTimelinessRecoveryActive !== true
+  ) {
+    return res.status(403).json({
+      ok: false,
+      paid: false,
+      reason:
+        'demo4_historical_timeliness_recovery_not_authorized',
+      error:
+        'Demo4 historical-timeliness recovery is not enabled and authorized for this Testnet resource',
+    });
+  }
+
+  if (
+    demo4HistoricalTimelinessRecoveryActive === true &&
+    (
+      (!nonceFromQuery && !nonceFromSig) ||
+      typeof txHashFromSig !== 'string' ||
+      txHashFromSig.length !== 64 ||
+      networkGenesisIndexFromSig !== 7
+    )
+  ) {
+    return res.status(400).json({
+      ok: false,
+      paid: false,
+      reason:
+        'demo4_historical_timeliness_recovery_binding_missing',
+      error:
+        'Historical recovery requires existing nonce, exact txHash, and Concordium Testnet genesis index 7',
+    });
+  }
+
   let issuedPersistStarted = false;
   let issuedPersistPromise: Promise<void> | null = null;
 
   const persistIssuedChallengeIfNeeded = (): Promise<void> => {
+    if (demo4HistoricalTimelinessRecoveryActive === true) {
+      return Promise.resolve();
+    }
+
     if (issuedPersistStarted && issuedPersistPromise) return issuedPersistPromise;
 
     issuedPersistStarted = true;
@@ -1864,6 +1951,10 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     submittedReasonCode = 'proof_submitted',
     pendingReasonCode = 'source_verify_pending',
   ): Promise<void> => {
+    if (demo4HistoricalTimelinessRecoveryActive === true) {
+      return Promise.resolve();
+    }
+
     if (proofWorkflowPersistStarted && proofWorkflowPersistPromise) {
       return proofWorkflowPersistPromise;
     }
@@ -1936,14 +2027,16 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
   if (!paymentSignatureParseError && paymentSignatureB64 && (nonceFromQuery || nonceFromSig)) {
     await persistIssuedChallengeIfNeeded();
 
-    void sendProofToOrchestrator({
-      challengeId: nonce,
-      nonce: nonce,
-      proofType: 'payment_signature',
-      proofPayload: {
-        paymentSignature: paymentSignatureB64,
-      },
-    });
+    if (demo4HistoricalTimelinessRecoveryActive !== true) {
+      void sendProofToOrchestrator({
+        challengeId: nonce,
+        nonce: nonce,
+        proofType: 'payment_signature',
+        proofPayload: {
+          paymentSignature: paymentSignatureB64,
+        },
+      });
+    }
 
     await persistProofWorkflowForCurrentNonceIfNeeded(
       'payment_signature_submitted',
@@ -2073,14 +2166,36 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
     proof: any;
     match?: any;
     fulfill?: any;
+    recoveryReplayExpSec?: number;
   }): Promise<{ ok: true; tupleKey: string } | { ok: false }> => {
-    // Hardening: derive expSec from the tightest available bounds.
-    const expSec = deriveReplayExpSec({
-      nowSec,
-      ttlSec,
-      paymentRequiredExpSec: paymentRequiredHeaderPayload.expiresAt,
-      proof: args.proof,
-    });
+    // Historical recovery is allowed to use a short CURRENT redemption/replay
+    // window only after the signed historical settlement deadline has been
+    // independently checked against the canonical challenge.
+    //
+    // Ordinary paths retain the original tightest-bound calculation.
+    const recoveryReplayExpSec =
+      typeof args.recoveryReplayExpSec === 'number' &&
+      Number.isFinite(args.recoveryReplayExpSec)
+        ? Math.floor(args.recoveryReplayExpSec)
+        : null;
+
+    const expSec =
+      recoveryReplayExpSec !== null
+        ? minDefined(
+            typeof args.proof?.exp === 'number' &&
+            Number.isFinite(args.proof.exp)
+              ? args.proof.exp
+              : null,
+            recoveryReplayExpSec,
+            nowSec + ttlSec,
+          ) ?? recoveryReplayExpSec
+        : deriveReplayExpSec({
+            nowSec,
+            ttlSec,
+            paymentRequiredExpSec:
+              paymentRequiredHeaderPayload.expiresAt,
+            proof: args.proof,
+          });
 
     // If receipt is already expired by our derived bound, treat it as invalid/expired.
     if (expSec <= nowSec) {
@@ -8279,6 +8394,351 @@ async function handleX402(req: express.Request, res: express.Response, resourceP
       ? { networkGenesisIndex: networkGenesisIndexFromSig }
       : {}),
   };
+
+  // ---------------------------------------------------------------------------
+  // Demo4 historical-timeliness recovery.
+  //
+  // This is intentionally narrower than the normal release path:
+  // - Testnet only;
+  // - explicit enable + explicit authorization + explicit request header;
+  // - original canonical challenge must already exist;
+  // - original policy must already be satisfied;
+  // - resource must still be NOT_RELEASED;
+  // - challenge must already be expired, but by no more than six hours;
+  // - signed settlement must prove payment occurred within the ORIGINAL
+  //   challenge window;
+  // - signed settlement expiry must equal the ORIGINAL canonical expiry;
+  // - exact transaction / token / amount / payee bindings are mandatory;
+  // - no new challenge, intent, proof workflow, or payment is created.
+  // ---------------------------------------------------------------------------
+  if (demo4HistoricalTimelinessRecoveryActive === true) {
+    const failHistoricalRecovery = (
+      httpStatus: number,
+      reason: string,
+      error: string,
+    ) =>
+      res.status(httpStatus).json({
+        ok: false,
+        paid: false,
+        reason,
+        error,
+        historicalTimelinessRecovery: {
+          requested: true,
+          enabled: true,
+          authorized: true,
+          testnetOnly: true,
+          newChallengeCreated: false,
+          newIntentSent: false,
+          paymentSubmitted: false,
+          paymentRetryAllowed: false,
+          resourceReleased: false,
+        },
+      });
+
+    let recoveryCanonicalChallenge: any;
+
+    try {
+      recoveryCanonicalChallenge =
+        await getCanonicalChallengeBindingByNonce(nonce);
+    } catch (err: any) {
+      return failHistoricalRecovery(
+        500,
+        'demo4_historical_recovery_canonical_lookup_failed',
+        String(err?.message ?? err),
+      );
+    }
+
+    if (recoveryCanonicalChallenge?.found !== true) {
+      return failHistoricalRecovery(
+        409,
+        'demo4_historical_recovery_missing_canonical_challenge',
+        'Historical recovery requires the original canonical Gateway challenge',
+      );
+    }
+
+    if (recoveryCanonicalChallenge.status !== 'POLICY_SATISFIED') {
+      return failHistoricalRecovery(
+        409,
+        'demo4_historical_recovery_policy_not_satisfied',
+        'Original canonical challenge is not POLICY_SATISFIED',
+      );
+    }
+
+    if (recoveryCanonicalChallenge.releaseStatus !== 'NOT_RELEASED') {
+      return failHistoricalRecovery(
+        409,
+        'demo4_historical_recovery_already_released',
+        'Original canonical challenge is not in NOT_RELEASED state',
+      );
+    }
+
+    const recoveryCanonicalAsset =
+      typeof recoveryCanonicalChallenge.asset === 'object' &&
+      recoveryCanonicalChallenge.asset !== null &&
+      !Array.isArray(recoveryCanonicalChallenge.asset)
+        ? recoveryCanonicalChallenge.asset
+        : null;
+
+    const recoveryCanonicalBindingExact =
+      recoveryCanonicalChallenge.merchantId === 'demo-merchant' &&
+      recoveryCanonicalChallenge.contractId === contract.contractId &&
+      recoveryCanonicalChallenge.contractVersion === contract.contractVersion &&
+      recoveryCanonicalChallenge.network === 'concordium:testnet' &&
+      recoveryCanonicalChallenge.amount === '0.050101' &&
+      recoveryCanonicalChallenge.payTo ===
+        '4jPLfUuSeFeP5SFLrf2eDeZEnT7ixbqXyQp9bg6qrgXyHReDfZ' &&
+      recoveryCanonicalAsset?.type === 'PLT' &&
+      recoveryCanonicalAsset?.tokenId === 'EUDemo' &&
+      Number(recoveryCanonicalAsset?.decimals) === 6 &&
+      contract.merchantId === 'demo-merchant' &&
+      contract.resource.method.toUpperCase() === 'GET' &&
+      contract.resource.path === '/paid-gated' &&
+      contract.network === 'concordium:testnet' &&
+      contract.asset.type === 'PLT' &&
+      contract.asset.tokenId === 'EUDemo' &&
+      Number(contract.asset.decimals) === 6 &&
+      String(contract.amount) === '0.050101' &&
+      contract.payTo ===
+        '4jPLfUuSeFeP5SFLrf2eDeZEnT7ixbqXyQp9bg6qrgXyHReDfZ';
+
+    if (!recoveryCanonicalBindingExact) {
+      return failHistoricalRecovery(
+        409,
+        'demo4_historical_recovery_canonical_binding_mismatch',
+        'Original canonical challenge does not match the frozen Demo4 Testnet payment tuple',
+      );
+    }
+
+    const recoveryIssuedAtSec =
+      Number(recoveryCanonicalChallenge.issuedAtSec);
+
+    const recoveryOriginalExpiresAtSec =
+      Number(recoveryCanonicalChallenge.expiresAtSec);
+
+    if (
+      !Number.isFinite(recoveryIssuedAtSec) ||
+      !Number.isFinite(recoveryOriginalExpiresAtSec) ||
+      recoveryIssuedAtSec >= recoveryOriginalExpiresAtSec
+    ) {
+      return failHistoricalRecovery(
+        409,
+        'demo4_historical_recovery_invalid_canonical_timestamps',
+        'Original canonical challenge timestamps are invalid',
+      );
+    }
+
+    if (recoveryOriginalExpiresAtSec >= nowSec) {
+      return failHistoricalRecovery(
+        409,
+        'demo4_historical_recovery_not_historical',
+        'Historical recovery may only be used after the original challenge has expired',
+      );
+    }
+
+    const recoveryAgeSec =
+      nowSec - recoveryOriginalExpiresAtSec;
+
+    if (
+      recoveryAgeSec >
+      DEMO4_HISTORICAL_TIMELINESS_RECOVERY_MAX_AGE_SEC
+    ) {
+      return failHistoricalRecovery(
+        410,
+        'demo4_historical_recovery_window_expired',
+        'Historical recovery window has expired',
+      );
+    }
+
+    let recoveryFulfill: any;
+
+    try {
+      recoveryFulfill =
+        await crpClient.fulfillPayment(matchReq);
+    } catch (err: any) {
+      return failHistoricalRecovery(
+        502,
+        'demo4_historical_recovery_crp_fulfill_failed',
+        String(err?.message ?? err),
+      );
+    }
+
+    const recoveryReceiptJws =
+      typeof recoveryFulfill?.match?.receipt?.jws === 'string'
+        ? recoveryFulfill.match.receipt.jws
+        : typeof recoveryFulfill?.receipt?.jws === 'string'
+          ? recoveryFulfill.receipt.jws
+          : typeof recoveryFulfill?.receiptJws === 'string'
+            ? recoveryFulfill.receiptJws
+            : null;
+
+    const recoveryFulfilledMatch =
+      recoveryFulfill?.match ?? null;
+
+    const recoveryFulfillSucceeded =
+      recoveryFulfill?.ok === true &&
+      Number(recoveryFulfill?.count ?? 0) >= 1 &&
+      recoveryFulfilledMatch?.status === 'fulfilled' &&
+      typeof recoveryReceiptJws === 'string' &&
+      recoveryReceiptJws.length > 0;
+
+    if (!recoveryFulfillSucceeded) {
+      return failHistoricalRecovery(
+        409,
+        'demo4_historical_recovery_fulfill_not_confirmed',
+        'CRP did not return one fulfilled exact payment with a receipt',
+      );
+    }
+
+    let recoveryVerify: any;
+    let recoveryProof: any;
+
+    try {
+      recoveryVerify =
+        await verifyReceiptJwsLocal(recoveryReceiptJws!);
+
+      recoveryProof =
+        recoveryVerify.payload;
+
+      assertCcdPltProofV1(recoveryProof);
+    } catch (err: any) {
+      return failHistoricalRecovery(
+        409,
+        'demo4_historical_recovery_receipt_invalid',
+        String(err?.message ?? err),
+      );
+    }
+
+    const recoveryProofContract =
+      recoveryProof.contract;
+
+    const recoverySettlement =
+      recoveryProof.settlement;
+
+    const recoveryChain =
+      recoveryProof.chain;
+
+    const recoveryPaymentEvent =
+      recoveryProof.paymentEvent;
+
+    const recoverySettledAt =
+      Number(recoverySettlement?.settledAt);
+
+    const recoveryReceiptExpiresAt =
+      Number(recoverySettlement?.expiresAt);
+
+    const recoveryReceiptTxHash =
+      typeof recoveryChain?.transactionHash === 'string'
+        ? recoveryChain.transactionHash.toLowerCase()
+        : '';
+
+    const recoveryProofBindingExact =
+      recoveryProof.nonce === nonce &&
+      recoveryProofContract?.merchantId === 'demo-merchant' &&
+      recoveryProofContract?.contractId === contract.contractId &&
+      recoveryProofContract?.contractVersion === contract.contractVersion &&
+      recoveryProofContract?.isFrozen === true &&
+      recoveryProofContract?.resource?.method === 'GET' &&
+      recoveryProofContract?.resource?.path === '/paid-gated' &&
+      recoveryProofContract?.chain_id ===
+        'ccd:4221332d34e1694168c2a0c0b3fd0f27' &&
+      recoveryProofContract?.network === 'concordium:testnet' &&
+      recoveryProofContract?.asset?.type === 'PLT' &&
+      recoveryProofContract?.asset?.tokenId === 'EUDemo' &&
+      Number(recoveryProofContract?.asset?.decimals) === 6 &&
+      String(recoveryProofContract?.amount) === '0.050101' &&
+      recoveryProofContract?.payTo ===
+        '4jPLfUuSeFeP5SFLrf2eDeZEnT7ixbqXyQp9bg6qrgXyHReDfZ' &&
+      recoverySettlement?.status === 'finalized' &&
+      Number.isFinite(recoverySettledAt) &&
+      Number.isFinite(recoveryReceiptExpiresAt) &&
+      Math.trunc(recoveryReceiptExpiresAt) ===
+        Math.trunc(recoveryOriginalExpiresAtSec) &&
+      recoverySettledAt >= recoveryIssuedAtSec &&
+      recoverySettledAt <= recoveryOriginalExpiresAtSec &&
+      recoveryReceiptTxHash ===
+        String(txHashFromSig).toLowerCase() &&
+      recoveryPaymentEvent?.kind === 'plt.transfer' &&
+      recoveryPaymentEvent?.tokenId === 'EUDemo' &&
+      recoveryPaymentEvent?.amountRaw === '50101' &&
+      recoveryPaymentEvent?.to ===
+        '4jPLfUuSeFeP5SFLrf2eDeZEnT7ixbqXyQp9bg6qrgXyHReDfZ';
+
+    if (!recoveryProofBindingExact) {
+      return failHistoricalRecovery(
+        409,
+        'demo4_historical_recovery_signed_binding_mismatch',
+        'Signed CRP receipt does not prove exact historical timeliness and frozen Demo4 tuple binding',
+      );
+    }
+
+    const recoveryReplayExpSec =
+      nowSec +
+      Math.min(
+        ttlSec,
+        DEMO4_HISTORICAL_TIMELINESS_RECOVERY_REPLAY_TTL_SEC,
+      );
+
+    const recoveryReplay =
+      await enforceReplay({
+        receiptJws: recoveryReceiptJws!,
+        verify: recoveryVerify,
+        proof: recoveryProof,
+        fulfill: recoveryFulfill,
+        recoveryReplayExpSec,
+      });
+
+    if (!recoveryReplay.ok) {
+      return;
+    }
+
+    void sendReleaseCheckToOrchestrator({
+      challengeId: nonce,
+      nonce,
+    });
+
+    const recoveryCanonicalPersistence =
+      await finalizeSuccessfulSettlementAndRelease({
+        receiptJws: recoveryReceiptJws!,
+        settlementReasonMessage:
+          'Gateway accepted historically timely finalized settlement during explicit Demo4 same-lifecycle recovery',
+      });
+
+    if (
+      recoveryCanonicalPersistence
+        .canonicalReleasePersisted !== true
+    ) {
+      return failHistoricalRecovery(
+        409,
+        'demo4_historical_recovery_canonical_release_failed',
+        recoveryCanonicalPersistence.reason,
+      );
+    }
+
+    maybeSetPaymentResponseHeader(
+      true,
+      recoveryReceiptJws!,
+      recoveryProof,
+    );
+
+    return res.status(200).json({
+      ok: true,
+      paid: true,
+      nonce,
+      resource: 'secret-data',
+      historicalTimelinessRecovery: {
+        recovered: true,
+        originalChallengePreserved: true,
+        originalExpiryPreserved: true,
+        paymentOccurredBeforeOriginalExpiry: true,
+        exactTransactionBound: true,
+        testnetOnly: true,
+        paymentSubmitted: false,
+        paymentRetryAllowed: false,
+        canonicalReleasePersisted: true,
+        resourceReleased: true,
+      },
+    });
+  }
 
   if (
     resourcePathname === '/paid-gated' &&
